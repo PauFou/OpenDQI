@@ -68,6 +68,66 @@ pub fn within_decimal_bounds(d: &rust_decimal::Decimal, max_int: u32, max_scale:
     s.len() as u32 <= max_int
 }
 
+/// Currency → maximum decimal places per ISO 4217 (sample of the
+/// most widely used codes plus a few illustrative non-ISO codes for
+/// crypto and precious metals). When a currency is not listed,
+/// `currency_max_scale` returns `None` and currency-specific checks
+/// fall back to the generic `decimal:18.5` precision.
+pub const CURRENCY_DECIMALS: &[(&str, u32)] = &[
+    // Common 2-decimal currencies
+    ("USD", 2),
+    ("EUR", 2),
+    ("GBP", 2),
+    ("CHF", 2),
+    ("CAD", 2),
+    ("AUD", 2),
+    ("NZD", 2),
+    ("SEK", 2),
+    ("NOK", 2),
+    ("DKK", 2),
+    ("PLN", 2),
+    ("CZK", 2),
+    ("HUF", 2),
+    ("ZAR", 2),
+    ("HKD", 2),
+    ("SGD", 2),
+    ("CNY", 2),
+    ("INR", 2),
+    ("MXN", 2),
+    ("BRL", 2),
+    // Zero-decimal currencies (no minor unit)
+    ("JPY", 0),
+    ("KRW", 0),
+    ("CLP", 0),
+    ("ISK", 0),
+    ("VND", 0),
+    // Three-decimal currencies
+    ("BHD", 3),
+    ("JOD", 3),
+    ("KWD", 3),
+    ("OMR", 3),
+    ("TND", 3),
+    // Four-decimal currencies
+    ("CLF", 4),
+    ("UYW", 4),
+    // Crypto / precious metals (illustrative, not ISO 4217)
+    ("BTC", 8),
+    ("ETH", 18),
+    ("XAU", 6),
+    ("XAG", 6),
+];
+
+/// Returns the maximum number of fractional digits expected for an
+/// amount in the given currency code (case-insensitive). Returns
+/// `None` when the currency is not in [`CURRENCY_DECIMALS`].
+pub fn currency_max_scale(ccy: &str) -> Option<u32> {
+    let ccy = ccy.trim();
+    CURRENCY_DECIMALS
+        .iter()
+        .find(|(code, _)| code.eq_ignore_ascii_case(ccy))
+        .map(|(_, scale)| *scale)
+}
+
 /// Returns true if `s` matches the ISO 6166 ISIN shape: 12 characters
 /// total — 2 uppercase letters (country code), 9 alphanumeric, and 1
 /// numeric check digit.
@@ -188,6 +248,20 @@ mod tests {
         // 19 digits before the decimal point.
         let big = Decimal::from_str("1234567890123456789").unwrap();
         assert!(!within_decimal_bounds(&big, 18, 5));
+    }
+
+    #[test]
+    fn currency_max_scale_known_codes() {
+        assert_eq!(currency_max_scale("JPY"), Some(0));
+        assert_eq!(currency_max_scale("usd"), Some(2));
+        assert_eq!(currency_max_scale("BHD"), Some(3));
+        assert_eq!(currency_max_scale("BTC"), Some(8));
+    }
+
+    #[test]
+    fn currency_max_scale_unknown_returns_none() {
+        assert_eq!(currency_max_scale("XYZ"), None);
+        assert_eq!(currency_max_scale(""), None);
     }
 
     #[test]

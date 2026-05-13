@@ -8,6 +8,7 @@ use crate::model::{
 };
 
 mod abnormal_maturity;
+mod action_event_compatibility;
 mod action_type_enum;
 mod asset_class_enum;
 mod asset_class_missing;
@@ -16,10 +17,12 @@ mod clearing_status_enum;
 mod clearing_status_missing;
 mod collateral_portfolio_required_for_full;
 mod collateralisation_category_enum;
+mod commodity_base_enum;
 mod commodity_requires_product_id;
 mod counterparty_1_missing;
 mod counterparty_2_missing;
 mod cr_requires_underlying;
+mod credit_sector_enum;
 mod currency_notional;
 mod currency_valuation;
 mod duplicate_uti;
@@ -55,6 +58,7 @@ mod master_agreement_version_missing;
 mod maturity_in_past;
 mod missing_uti;
 mod missing_valuation;
+mod modi_preserves_uti;
 mod mtm_change_requires_valuation;
 mod nature_enum;
 mod nature_missing;
@@ -66,11 +70,14 @@ mod negative_variation_margin_collected;
 mod negative_variation_margin_posted;
 mod newt_forbids_prior_uti;
 mod newt_forbids_termination_date;
+mod notional_abnormal_magnitude;
 mod notional_currency_missing;
 mod notional_precision;
+mod notional_precision_by_currency;
 mod notional_val_currency_mismatch;
 mod posc_requires_portfolio;
 mod price_precision;
+mod price_precision_by_currency;
 mod price_requires_currency;
 mod price_val_currency_mismatch;
 mod product_id_missing;
@@ -84,6 +91,7 @@ mod valuation_after_reporting;
 mod valuation_after_termination;
 mod valuation_currency_missing;
 mod valuation_precision;
+mod valuation_precision_by_currency;
 mod valuation_timestamp_missing;
 mod valuation_type_enum;
 mod variation_margin_missing_for_full;
@@ -91,6 +99,7 @@ mod vm_needs_collateral_portfolio;
 mod zero_notional;
 
 pub use abnormal_maturity::AbnormalMaturity;
+pub use action_event_compatibility::ActionEventCompatibility;
 pub use action_type_enum::ActionTypeEnum;
 pub use asset_class_enum::AssetClassEnum;
 pub use asset_class_missing::AssetClassMissing;
@@ -99,10 +108,12 @@ pub use clearing_status_enum::ClearingStatusEnum;
 pub use clearing_status_missing::ClearingStatusMissing;
 pub use collateral_portfolio_required_for_full::CollateralPortfolioRequiredForFull;
 pub use collateralisation_category_enum::CollateralisationCategoryEnum;
+pub use commodity_base_enum::CommodityBaseEnum;
 pub use commodity_requires_product_id::CommodityRequiresProductId;
 pub use counterparty_1_missing::Counterparty1Missing;
 pub use counterparty_2_missing::Counterparty2Missing;
 pub use cr_requires_underlying::CrRequiresUnderlying;
+pub use credit_sector_enum::CreditSectorEnum;
 pub use currency_notional::CurrencyNotional;
 pub use currency_valuation::CurrencyValuation;
 pub use duplicate_uti::DuplicateUti;
@@ -137,6 +148,7 @@ pub use master_agreement_version_missing::MasterAgreementVersionMissing;
 pub use maturity_in_past::MaturityInPast;
 pub use missing_uti::MissingUti;
 pub use missing_valuation::MissingValuation;
+pub use modi_preserves_uti::ModiPreservesUti;
 pub use mtm_change_requires_valuation::MtmChangeRequiresValuation;
 pub use nature_enum::NatureEnum;
 pub use nature_missing::NatureMissing;
@@ -148,11 +160,14 @@ pub use negative_variation_margin_collected::NegativeVariationMarginCollected;
 pub use negative_variation_margin_posted::NegativeVariationMarginPosted;
 pub use newt_forbids_prior_uti::NewtForbidsPriorUti;
 pub use newt_forbids_termination_date::NewtForbidsTerminationDate;
+pub use notional_abnormal_magnitude::NotionalAbnormalMagnitude;
 pub use notional_currency_missing::NotionalCurrencyMissing;
 pub use notional_precision::NotionalPrecision;
+pub use notional_precision_by_currency::NotionalPrecisionByCurrency;
 pub use notional_val_currency_mismatch::NotionalValCurrencyMismatch;
 pub use posc_requires_portfolio::PoscRequiresPortfolio;
 pub use price_precision::PricePrecision;
+pub use price_precision_by_currency::PricePrecisionByCurrency;
 pub use price_requires_currency::PriceRequiresCurrency;
 pub use price_val_currency_mismatch::PriceValCurrencyMismatch;
 pub use product_id_missing::ProductIdMissing;
@@ -166,6 +181,7 @@ pub use valuation_after_reporting::ValuationAfterReporting;
 pub use valuation_after_termination::ValuationAfterTermination;
 pub use valuation_currency_missing::ValuationCurrencyMissing;
 pub use valuation_precision::ValuationPrecision;
+pub use valuation_precision_by_currency::ValuationPrecisionByCurrency;
 pub use valuation_timestamp_missing::ValuationTimestampMissing;
 pub use valuation_type_enum::ValuationTypeEnum;
 pub use variation_margin_missing_for_full::VariationMarginMissingForFull;
@@ -311,6 +327,19 @@ pub fn default_checks() -> Vec<Box<dyn Check>> {
         Box::new(MaruRequiresPortfolio),
         Box::new(NewtForbidsTerminationDate),
         Box::new(EtrmRequiresValuation),
+        // ---- Tier 3 additions (8) ----
+        // Validity (currency-aware precision)
+        Box::new(NotionalPrecisionByCurrency),
+        Box::new(ValuationPrecisionByCurrency),
+        Box::new(PricePrecisionByCurrency),
+        // Validity (asset-class deep)
+        Box::new(CommodityBaseEnum),
+        Box::new(CreditSectorEnum),
+        // Accuracy (magnitude sanity)
+        Box::new(NotionalAbnormalMagnitude),
+        // Consistency (action × event matrix + UTI semantics)
+        Box::new(ActionEventCompatibility),
+        Box::new(ModiPreservesUti),
     ]
 }
 

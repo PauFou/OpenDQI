@@ -73,6 +73,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The pre-existing `examples/emir/extended-checks.csv` now produces ~87 issues (up from 17) because the new completeness/enum checks correctly flag many fields that fixture leaves unpopulated. This is expected — the fixture is preserved as-is so the additional coverage is visible.
 
+### Added (EMIR tier 3 — currency precision + action×event matrix + asset-class deep)
+
+- **8 new EMIR single-batch checks**, bringing the EMIR single-batch catalog from 81 to **89** and the OpenDQI total to **129 single-batch + 8 lifecycle + 8 feedback + 6 reconciliation = 151 checks**.
+  - `EMIR.VLD.NOTIONAL_PRECISION_BY_CURRENCY` / `VALUATION_PRECISION_BY_CURRENCY` / `PRICE_PRECISION_BY_CURRENCY` (Validity / Warning) — each amount must respect the natural decimal scale of its currency (JPY=0, USD/EUR=2, BHD=3, BTC=8, …). Falls back to no-op when the currency is not in the bundled table.
+  - `EMIR.CON.ACTION_EVENT_COMPATIBILITY` (Consistency / High) — `event_type` must be compatible with `action_type` per the ESMA action×event matrix (NEWT → TRAD/NOVA/INCP, MODI → TRAD/NOVA/COMP/PTNG/CLRG/UPDT/CREV, ETRM → ETRM/UPDT, VALU → UPDT/MODI, MARU → UPDT, POSC → COMP/UPDT; CORR / OTHR accept anything).
+  - `EMIR.VLD.COMMODITY_BASE_ENUM` (Validity / Warning) — for commodity-class trades, `product_id` must start with one of the ESMA base codes (AG / EN / FR / IN / OT / EX).
+  - `EMIR.VLD.CREDIT_SECTOR_ENUM` (Validity / Warning) — for credit-class trades, `underlying_id` must be a valid ISIN or a recognised credit index family (iTraxx / CDX).
+  - `EMIR.ACC.NOTIONAL_ABNORMAL_MAGNITUDE` (Accuracy / Warning) — notional exceeding 10^15 flagged as likely data-entry error.
+  - `EMIR.CON.MODI_PRESERVES_UTI` (Consistency / Warning) — MODI/CORR with `prior_uti` identical to current `uti` is a no-op.
+- New `CURRENCY_DECIMALS` table + `currency_max_scale()` helper in `crates/opendqi-core/src/dq/formats.rs`. Covers the 25 most-used ISO 4217 currencies plus illustrative crypto / precious metal codes.
+
+### Changed (EMIR tier 3 side effects)
+
+- The pre-existing `examples/emir/tier2.csv` now produces 46 issues (up from 41). The 5 additional issues come from the new tier 3 checks correctly flagging defects the fixture already contained (notably a notional with too many decimals for its currency, mismatched action×event pairs, and an outsized notional). The fixture is preserved as-is so the additional coverage is visible.
+
 ### Added (TR reconciliation ingestion + 6 `*.REC.*` checks)
 
 - New canonical type `ReconciliationRecord` in `opendqi-core::model`. Captures UTI, both counterparty LEIs, pairing status, reconciliation status, list of mismatched fields, and timestamp.

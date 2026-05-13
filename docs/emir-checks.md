@@ -1,10 +1,11 @@
 # EMIR data-quality checks
 
-OpenDQI currently ships **81 EMIR data-quality checks** covering all
-six DQ dimensions. Most are aligned with the official ESMA EMIR
-Refit Validation Rules (`EMIR-VR-*`). Each check is a pure function
-from a slice of `EmirRecord` to a list of `DqIssue`. The full
-registry is exposed through [`opendqi_core::dq::default_checks`].
+OpenDQI currently ships **89 EMIR single-batch data-quality checks**
+covering all six DQ dimensions. Most are aligned with the official
+ESMA EMIR Refit Validation Rules (`EMIR-VR-*`). Each check is a
+pure function from a slice of `EmirRecord` to a list of `DqIssue`.
+The full registry is exposed through
+[`opendqi_core::dq::default_checks`].
 
 The catalog is layered:
 
@@ -16,8 +17,16 @@ The catalog is layered:
   inspected together (e.g. FX requires a second-leg currency,
   notional/valuation currency mismatch, decimal precision per ESMA's
   `decimal:18.5`).
-- **Tier 3 (roadmap)** — checks requiring historical lookback (MODI
-  without prior NEWT, conflict UTI cross-file).
+- **Tier 3** — 8 checks: currency-aware decimal precision (JPY=0,
+  USD/EUR=2, BTC=8…), the ESMA action × event compatibility matrix,
+  asset-class deep validation (commodity base codes / credit index
+  families), magnitude sanity (notional > 10^15), and MODI/CORR
+  UTI-preservation consistency.
+
+Beyond single-batch checks, OpenDQI also ships **8 lifecycle**,
+**8 feedback**, and **6 reconciliation** checks — see the dedicated
+docs. Total catalog: **89 + 8 + 8 + 6 = 111 EMIR checks**, plus the
+SFTR counterparts.
 
 Severity scale: `info` < `warning` < `high` < `critical`.
 
