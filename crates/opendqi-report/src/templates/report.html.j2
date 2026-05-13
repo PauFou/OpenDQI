@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>OpenDQI report — {{ summary.regime }}</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --fg: #1f2933;
+    --muted: #6b7280;
+    --accent: #2563eb;
+    --critical: #b91c1c;
+    --high: #b45309;
+    --warning: #a16207;
+    --info: #1d4ed8;
+    --good: #15803d;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    margin: 0;
+    padding: 0;
+  }
+  main { max-width: 960px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+  h1 { margin: 0 0 0.25rem 0; font-size: 1.85rem; }
+  h2 { margin-top: 2.5rem; font-size: 1.25rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.5rem; }
+  .subtitle { color: var(--muted); margin-bottom: 2rem; }
+  .score-card {
+    background: white;
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+  }
+  .score-value {
+    font-size: 3.25rem;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--good);
+  }
+  .score-value.warn { color: var(--high); }
+  .score-value.bad { color: var(--critical); }
+  .score-label { color: var(--muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-top: 1.5rem; }
+  .kpi {
+    background: white;
+    border-radius: 0.5rem;
+    padding: 0.85rem 1rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .kpi .label { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .kpi .value { font-size: 1.4rem; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; background: white; border-radius: 0.5rem; overflow: hidden; }
+  th, td { text-align: left; padding: 0.55rem 0.75rem; border-bottom: 1px solid #f1f5f9; font-size: 0.875rem; }
+  th { background: #f8fafc; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.72rem; }
+  .sev { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; text-transform: uppercase; }
+  .sev.critical { background: #fee2e2; color: var(--critical); }
+  .sev.high { background: #fef3c7; color: var(--high); }
+  .sev.warning { background: #fef9c3; color: var(--warning); }
+  .sev.info { background: #dbeafe; color: var(--info); }
+  .muted { color: var(--muted); }
+  ul.bare { padding: 0; list-style: none; margin: 0; }
+  ul.bare li { padding: 0.25rem 0; }
+  footer { color: var(--muted); font-size: 0.8rem; margin-top: 3rem; border-top: 1px solid #e5e7eb; padding-top: 1rem; }
+  code { background: #f1f5f9; padding: 0.1rem 0.35rem; border-radius: 0.25rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>OpenDQI report</h1>
+  <p class="subtitle">Regime: <strong>{{ summary.regime|upper }}</strong> — generated {{ generated_at }}</p>
+
+  <h2>Executive summary</h2>
+  <div class="score-card">
+    <div>
+      <div class="score-label">Quality score</div>
+      <div class="score-value{% if summary.quality_score < 60 %} bad{% elif summary.quality_score < 85 %} warn{% endif %}">
+        {{ "%.1f"|format(summary.quality_score) }}
+      </div>
+      <div class="muted">out of 100</div>
+    </div>
+    <div style="flex:1">
+      <div class="kpis">
+        <div class="kpi"><div class="label">Files</div><div class="value">{{ summary.files_processed }}</div></div>
+        <div class="kpi"><div class="label">Records</div><div class="value">{{ summary.records_processed }}</div></div>
+        <div class="kpi"><div class="label">Issues</div><div class="value">{{ summary.issues_total }}</div></div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Files processed</h2>
+  {% if sources|length == 0 %}
+    <p class="muted">No source files recorded.</p>
+  {% else %}
+    <ul class="bare">
+      {% for s in sources %}<li><code>{{ s }}</code></li>{% endfor %}
+    </ul>
+  {% endif %}
+
+  <h2>Issues by severity</h2>
+  {% if by_severity|length == 0 %}
+    <p class="muted">No issues detected.</p>
+  {% else %}
+    <table>
+      <thead><tr><th>Severity</th><th>Count</th></tr></thead>
+      <tbody>
+        {% for row in by_severity %}
+        <tr>
+          <td><span class="sev {{ row[0] }}">{{ row[0] }}</span></td>
+          <td>{{ row[1] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+
+  <h2>Issues by dimension</h2>
+  {% if by_dimension|length == 0 %}
+    <p class="muted">No issues detected.</p>
+  {% else %}
+    <table>
+      <thead><tr><th>Dimension</th><th>Count</th></tr></thead>
+      <tbody>
+        {% for row in by_dimension %}
+        <tr><td>{{ row[0] }}</td><td>{{ row[1] }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+
+  <h2>Top issues</h2>
+  {% if top_issues|length == 0 %}
+    <p class="muted">No issues to display.</p>
+  {% else %}
+    <table>
+      <thead>
+        <tr>
+          <th>Severity</th><th>Check</th><th>Dimension</th><th>UTI</th>
+          <th>Record</th><th>Field</th><th>Message</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for i in top_issues %}
+        <tr>
+          <td><span class="sev {{ i.severity }}">{{ i.severity }}</span></td>
+          <td><code>{{ i.check_id }}</code></td>
+          <td>{{ i.dimension }}</td>
+          <td>{{ i.uti }}</td>
+          <td class="muted">{{ i.record_id }}</td>
+          <td>{{ i.field }}</td>
+          <td>{{ i.message }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+
+  <footer>
+    OpenDQI {{ summary.regime|upper }} report — synthetic local-first data quality engine.
+    Quality score is indicative and should be calibrated against your firm's controls.
+  </footer>
+</main>
+</body>
+</html>

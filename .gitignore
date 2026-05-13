@@ -1,0 +1,38 @@
+# Local AI / agent tooling
+CLAUDE.md
+.claude/
+.claude.json
+claude-session.*
+claude-notes.*
+agent-notes/
+prompts/
+scratchpad.md
+TODO_INTERNAL.md
+planning_internal.md
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Rust
+/target/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated reports
+/report/
+reports/
+*.html.tmp
+*.parquet.tmp
+
+# Test data that may contain confidential information
+private-data/
+client-data/
+samples/private/

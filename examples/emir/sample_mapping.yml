@@ -1,0 +1,28 @@
+# OpenDQI CSV mapping for the synthetic EMIR fixture.
+#
+# Keys are canonical EMIR record field names; values are the header
+# names found in the CSV. Any field that is not listed here is left
+# unset (None) on each record.
+
+fields:
+  uti: trade_uti
+  action_type: action
+  event_type: event
+  entity_responsible_for_reporting: err_lei
+  counterparty_1: cpty1_lei
+  counterparty_2: cpty2_lei
+  asset_class: asset_class
+  notional_amount: notional
+  notional_currency: notional_ccy
+  execution_timestamp: exec_ts
+  event_timestamp: event_ts
+  reporting_timestamp: report_ts
+  effective_date: effective
+  maturity_date: maturity
+  termination_date: terminated_on
+  valuation_amount: valuation
+  valuation_currency: valuation_ccy
+  valuation_timestamp: valuation_ts
+
+date_format: "%Y-%m-%d"
+datetime_format: "%Y-%m-%dT%H:%M:%S%.fZ"

@@ -1,0 +1,18 @@
+[package]
+name = "opendqi-report"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "OpenDQI reporting: JSON, CSV, and HTML outputs."
+
+[dependencies]
+opendqi-core = { path = "../opendqi-core" }
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+csv.workspace = true
+chrono.workspace = true
+minijinja.workspace = true

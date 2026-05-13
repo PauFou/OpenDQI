@@ -1,0 +1,23 @@
+//! OpenDQI core domain model and data-quality engine.
+//!
+//! This crate is intentionally framework-free. It exposes:
+//!
+//! - the canonical domain model (`Regime`, `Severity`, `DqDimension`,
+//!   `DqIssue`, `EmirRecord`, `ScanSummary`);
+//! - a `Thresholds` configuration struct;
+//! - a `Check` trait and a registry of MVP EMIR checks via
+//!   [`dq::default_checks`];
+//! - a deterministic scoring function (see [`scoring::quality_score`]).
+
+#![forbid(unsafe_code)]
+#![warn(missing_docs)]
+
+pub mod config;
+pub mod dq;
+pub mod model;
+pub mod scoring;
+
+pub use config::Thresholds;
+pub use dq::{default_checks, Check};
+pub use model::{DqDimension, DqIssue, EmirRecord, Regime, ScanSummary, Severity};
+pub use scoring::quality_score;

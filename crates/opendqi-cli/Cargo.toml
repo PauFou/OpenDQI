@@ -1,0 +1,24 @@
+[package]
+name = "opendqi-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "OpenDQI command-line interface."
+
+[[bin]]
+name = "opendqi"
+path = "src/main.rs"
+
+[dependencies]
+opendqi-core = { path = "../opendqi-core" }
+opendqi-io = { path = "../opendqi-io" }
+opendqi-report = { path = "../opendqi-report" }
+anyhow.workspace = true
+clap.workspace = true
+chrono.workspace = true
+serde_yaml.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

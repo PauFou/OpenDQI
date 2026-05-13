@@ -1,0 +1,16 @@
+[package]
+name = "opendqi-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "OpenDQI core: domain model, DQ checks, scoring, and shared types."
+
+[dependencies]
+serde.workspace = true
+serde_yaml.workspace = true
+chrono.workspace = true
+rust_decimal.workspace = true
+thiserror.workspace = true

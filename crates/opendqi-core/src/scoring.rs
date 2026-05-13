@@ -1,0 +1,97 @@
+//! Deterministic quality score.
+//!
+//! The formula is intentionally simple and tunable; it will be
+//! refined as more checks come online.
+
+use crate::model::{DqIssue, Severity};
+
+/// Compute the 0–100 quality score for a scan.
+///
+/// ```text
+/// score = 100
+///         - 25.0 * (critical_count / records)
+///         - 10.0 * (high_count     / records)
+///         -  3.0 * (warning_count  / records)
+///         -  0.5 * (info_count     / records)
+/// clamp [0.0, 100.0]
+/// ```
+///
+/// When `records_processed == 0` the score is `100.0`.
+pub fn quality_score(records_processed: u32, issues: &[DqIssue]) -> f32 {
+    if records_processed == 0 {
+        return 100.0;
+    }
+    let n = records_processed as f32;
+    let mut critical = 0u32;
+    let mut high = 0u32;
+    let mut warning = 0u32;
+    let mut info = 0u32;
+    for issue in issues {
+        match issue.severity {
+            Severity::Critical => critical += 1,
+            Severity::High => high += 1,
+            Severity::Warning => warning += 1,
+            Severity::Info => info += 1,
+        }
+    }
+    let penalty = 25.0 * (critical as f32 / n)
+        + 10.0 * (high as f32 / n)
+        + 3.0 * (warning as f32 / n)
+        + 0.5 * (info as f32 / n);
+    (100.0 - penalty).clamp(0.0, 100.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{DqDimension, Regime};
+
+    fn issue(sev: Severity) -> DqIssue {
+        DqIssue {
+            check_id: "X".into(),
+            regime: Regime::Emir,
+            severity: sev,
+            dimension: DqDimension::Completeness,
+            record_id: None,
+            uti: None,
+            field: None,
+            value: None,
+            message: String::new(),
+            source_file: None,
+        }
+    }
+
+    #[test]
+    fn zero_records_yields_perfect_score() {
+        assert!((quality_score(0, &[]) - 100.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn perfect_dataset_is_100() {
+        assert!((quality_score(10, &[]) - 100.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn one_critical_per_record_clamps_to_75() {
+        let issues = vec![issue(Severity::Critical); 1];
+        // 100 - 25 * (1/1) = 75
+        assert!((quality_score(1, &issues) - 75.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn many_critical_clamps_to_zero() {
+        let issues = vec![issue(Severity::Critical); 100];
+        assert!(quality_score(1, &issues).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn mixed_severities() {
+        let mut issues = vec![issue(Severity::Critical)];
+        issues.push(issue(Severity::High));
+        issues.push(issue(Severity::Warning));
+        issues.push(issue(Severity::Info));
+        // records=4, penalty = 25*0.25 + 10*0.25 + 3*0.25 + 0.5*0.25 = 9.625
+        let s = quality_score(4, &issues);
+        assert!((s - 90.375).abs() < 1e-3, "got {s}");
+    }
+}
