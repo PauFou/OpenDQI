@@ -153,18 +153,45 @@ fn sort_issues(issues: &mut [DqIssue]) {
 mod sftr;
 
 pub use sftr::{
-    SftrCheck, SftrCollateralValueMissing, SftrDuplicateUti, SftrHaircutMissing, SftrLateReporting,
-    SftrMissingUti,
+    SftrCheck, SftrCollateralCurrencyMissing, SftrCollateralValueMissing, SftrCounterparty1Missing,
+    SftrCounterparty2Missing, SftrCurrencyCollateral, SftrCurrencyLoan, SftrDuplicateUti,
+    SftrHaircutMissing, SftrHaircutOutOfRange, SftrIsinCollateral, SftrLateReporting,
+    SftrLeiFormatErr, SftrLeiFormatOc, SftrLeiFormatRc, SftrLoanCurrencyMissing,
+    SftrMaturityBeforeEffective, SftrMissingUti, SftrNegativeCollateral, SftrNegativeLoan,
+    SftrSettlementBeforeExecution,
 };
 
-/// Default SFTR check registry. 5 MVP checks in a stable order.
+/// Default SFTR check registry. 20 checks total covering all six DQ
+/// dimensions; severity ranges from `Warning` to `Critical`. See
+/// `docs/sftr-checks.md` for the full catalog.
 pub fn default_sftr_checks() -> Vec<Box<dyn SftrCheck>> {
     vec![
+        // Completeness
         Box::new(SftrMissingUti),
         Box::new(SftrCollateralValueMissing),
         Box::new(SftrHaircutMissing),
-        Box::new(SftrLateReporting),
+        Box::new(SftrCounterparty1Missing),
+        Box::new(SftrCounterparty2Missing),
+        Box::new(SftrLoanCurrencyMissing),
+        Box::new(SftrCollateralCurrencyMissing),
+        // Validity
+        Box::new(SftrLeiFormatRc),
+        Box::new(SftrLeiFormatOc),
+        Box::new(SftrLeiFormatErr),
+        Box::new(SftrCurrencyLoan),
+        Box::new(SftrCurrencyCollateral),
+        Box::new(SftrIsinCollateral),
+        // Accuracy
+        Box::new(SftrNegativeLoan),
+        Box::new(SftrNegativeCollateral),
+        Box::new(SftrHaircutOutOfRange),
+        // Uniqueness
         Box::new(SftrDuplicateUti),
+        // Timeliness
+        Box::new(SftrLateReporting),
+        // Consistency
+        Box::new(SftrSettlementBeforeExecution),
+        Box::new(SftrMaturityBeforeEffective),
     ]
 }
 

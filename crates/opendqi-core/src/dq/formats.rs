@@ -42,6 +42,41 @@ pub fn is_valid_currency_code(s: &str) -> bool {
     s.bytes().all(|b| b.is_ascii_uppercase())
 }
 
+/// Returns true if `s` matches the ISO 6166 ISIN shape: 12 characters
+/// total — 2 uppercase letters (country code), 9 alphanumeric, and 1
+/// numeric check digit.
+///
+/// The ISIN Luhn-variant check-digit is **not** verified for MVP — it
+/// is enforced upstream by every reputable security identifier
+/// provider.
+pub fn is_valid_isin(s: &str) -> bool {
+    if s.len() != 12 {
+        return false;
+    }
+    let bytes = s.as_bytes();
+    for (i, b) in bytes.iter().enumerate() {
+        match i {
+            0 | 1 => {
+                if !b.is_ascii_uppercase() {
+                    return false;
+                }
+            }
+            2..=10 => {
+                if !(b.is_ascii_uppercase() || b.is_ascii_digit()) {
+                    return false;
+                }
+            }
+            11 => {
+                if !b.is_ascii_digit() {
+                    return false;
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -87,5 +122,23 @@ mod tests {
         assert!(!is_valid_currency_code("eur"));
         assert!(!is_valid_currency_code("E0R"));
         assert!(!is_valid_currency_code(""));
+    }
+
+    #[test]
+    fn valid_isin_passes() {
+        // Real-shaped ISINs (check digits not verified)
+        assert!(is_valid_isin("DE0001135275"));
+        assert!(is_valid_isin("US1234567890"));
+        assert!(is_valid_isin("FR0000120628"));
+    }
+
+    #[test]
+    fn invalid_isin_fails() {
+        assert!(!is_valid_isin("DE000113527")); // 11 chars
+        assert!(!is_valid_isin("DE00011352755")); // 13 chars
+        assert!(!is_valid_isin("de0001135275")); // lowercase country
+        assert!(!is_valid_isin("12DE01135275")); // digits in country
+        assert!(!is_valid_isin("DE000113527A")); // letter check digit
+        assert!(!is_valid_isin(""));
     }
 }

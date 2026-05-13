@@ -49,3 +49,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CLI**: `opendqi sftr scan <path> --out <dir>` is now a real command (previously a placeholder). XML-only ingestion for this milestone.
 - Synthetic fixture `examples/sftr/iso20022/sample.xml` (10 SFTs hand-authored covering Repo / BSB / SLEB and all DQ patterns) plus integration test `crates/opendqi-xml/tests/sftr_integration.rs`.
 - Documentation: new `docs/sftr-checks.md` and `docs/iso20022-sftr.md`.
+
+### Added (SFTR parity with EMIR)
+
+- **15 additional SFTR data-quality checks**, bringing the SFTR catalog from 5 to **20** (same dimension coverage as EMIR). Highlights: LEI shape on the three party LEIs, ISO 4217 shape on loan / collateral currencies, ISO 6166 shape on collateral ISIN, missing-counterparty checks, missing-currency checks, negative loan / collateral, haircut out-of-range, settlement-before-execution, maturity-before-effective.
+- **`opendqi sftr scan --xsd <xsd>`** is now active: schema violations surface as `SFTR.FMT.XSD_VIOLATION` (high) issues, a dedicated `xsd_errors.csv` is written alongside the standard reports.
+- **`opendqi sftr validate <input> --xsd <xsd>`** is a real command (well-formedness + XSD validation, exits non-zero on any defect).
+- New ISIN shape validator `is_valid_isin` in `opendqi-core/src/dq/formats.rs`.
+- Extended SFTR fixture `examples/sftr/iso20022/extended.xml` exercising one positive case per new check.

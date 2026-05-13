@@ -43,10 +43,7 @@ fn main() -> Result<ExitCode> {
     let cli = Cli::parse();
     match cli.command {
         TopLevel::Emir { action } => emir::run(action),
-        TopLevel::Sftr { action } => {
-            sftr::run(action)?;
-            Ok(ExitCode::SUCCESS)
-        }
+        TopLevel::Sftr { action } => sftr::run(action),
         TopLevel::Desktop(args) => {
             desktop::run(args)?;
             Ok(ExitCode::SUCCESS)

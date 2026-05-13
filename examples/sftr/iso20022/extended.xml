@@ -1,0 +1,386 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic ISO 20022 auth.052.001.02 extended fixture for OpenDQI tests.
+  Hand-authored — not derived from any ESMA or SWIFT example.
+  Each Rpt below intentionally triggers one of the 15 new SFTR checks
+  added in this milestone. Row 1 is the clean baseline.
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.052.001.02">
+  <SctiesFincgRptgTxRpt>
+    <TradData>
+
+      <!-- 1. CLEAN baseline (all good). -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>ABCDEFGHIJKLMNOPQR01</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-EXT-CLEAN-0001</UnqTxIdr>
+            <EvtTp>NEWT</EvtTp>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T18:00:00Z</RptgDtTm>
+            <SttlmDt>2026-04-02</SttlmDt>
+            <EvntDt>2026-04-02</EvntDt>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1050000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+            <Sctys><Id>DE0001135275</Id></Sctys>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 2. LEI_FORMAT_RC: counterparty_1 LEI malformed. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>ABCDEFGHIJKLMNOPQR01</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>FAKE_LEI</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-EXT-BADRC-0002</UnqTxIdr>
+            <EvtTp>NEWT</EvtTp>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T18:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1050000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 3. LEI_FORMAT_OC: counterparty_2 LEI malformed. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>ABCDEFGHIJKLMNOPQR01</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABC</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-EXT-BADOC-0003</UnqTxIdr>
+            <EvtTp>NEWT</EvtTp>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T18:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1050000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 4. LEI_FORMAT_ERR: entity_responsible LEI malformed. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>INVALID_LEI</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-EXT-BADERR-0004</UnqTxIdr>
+            <EvtTp>NEWT</EvtTp>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T18:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1050000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 5. CURRENCY_LOAN: bad loan currency. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>ABCDEFGHIJKLMNOPQR01</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-EXT-BADCCY-LOAN-0005</UnqTxIdr>
+            <EvtTp>NEWT</EvtTp>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T18:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="eur">1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1050000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 6. CURRENCY_COLLATERAL: bad collateral currency. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>ABCDEFGHIJKLMNOPQR01</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-EXT-BADCCY-COLL-0006</UnqTxIdr>
+            <EvtTp>NEWT</EvtTp>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T18:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EU">1050000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 7. ISIN_COLLATERAL: bad ISIN. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>ABCDEFGHIJKLMNOPQR01</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-EXT-BADISIN-0007</UnqTxIdr>
+            <EvtTp>NEWT</EvtTp>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T18:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1050000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+            <Sctys><Id>NOTANISIN</Id></Sctys>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 8. COUNTERPARTY_1_MISSING. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>ABCDEFGHIJKLMNOPQR01</LEI></NttyRspnsblForRpt>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-EXT-NORC-0008</UnqTxIdr>
+            <EvtTp>NEWT</EvtTp>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T18:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1050000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 9. COUNTERPARTY_2_MISSING. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>ABCDEFGHIJKLMNOPQR01</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-EXT-NOOC-0009</UnqTxIdr>
+            <EvtTp>NEWT</EvtTp>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T18:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1050000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 10. LOAN_CURRENCY_MISSING (Amt without Ccy). -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>ABCDEFGHIJKLMNOPQR01</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-EXT-NOLOAN-CCY-0010</UnqTxIdr>
+            <EvtTp>NEWT</EvtTp>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T18:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt>1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1050000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 11. COLLATERAL_CURRENCY_MISSING. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>ABCDEFGHIJKLMNOPQR01</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-EXT-NOCOLL-CCY-0011</UnqTxIdr>
+            <EvtTp>NEWT</EvtTp>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T18:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt>1050000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 12. NEGATIVE_LOAN. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>ABCDEFGHIJKLMNOPQR01</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-EXT-NEGLOAN-0012</UnqTxIdr>
+            <EvtTp>NEWT</EvtTp>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T18:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">-1000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1050000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 13. NEGATIVE_COLLATERAL. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>ABCDEFGHIJKLMNOPQR01</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-EXT-NEGCOLL-0013</UnqTxIdr>
+            <EvtTp>NEWT</EvtTp>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T18:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">-100</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 14. HAIRCUT_OUT_OF_RANGE (> 1.0). -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>ABCDEFGHIJKLMNOPQR01</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-EXT-HRCUT-0014</UnqTxIdr>
+            <EvtTp>NEWT</EvtTp>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T18:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1050000</Amt></CollVal>
+            <Hrcut>1.5</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 15. SETTLEMENT_BEFORE_EXECUTION. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>ABCDEFGHIJKLMNOPQR01</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-EXT-SETTLE-0015</UnqTxIdr>
+            <EvtTp>NEWT</EvtTp>
+            <ExctnDtTm>2026-04-10T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-10T18:00:00Z</RptgDtTm>
+            <SttlmDt>2026-04-05</SttlmDt>
+            <MtrtyDt>2026-07-10</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1050000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 16. MATURITY_BEFORE_EFFECTIVE. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>ABCDEFGHIJKLMNOPQR01</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-EXT-INVDATE-0016</UnqTxIdr>
+            <EvtTp>NEWT</EvtTp>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T18:00:00Z</RptgDtTm>
+            <EvntDt>2026-07-01</EvntDt>
+            <MtrtyDt>2026-04-01</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1050000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+    </TradData>
+  </SctiesFincgRptgTxRpt>
+</Document>
