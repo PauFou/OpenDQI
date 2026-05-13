@@ -769,3 +769,64 @@ pub fn run_all_tr_state(
     sort_issues(&mut issues);
     issues
 }
+
+// ---- Trade Activity Report (TR auth.030 returns) checks ----------
+//
+// Activity-oriented checks: distributions, spikes, repeated
+// corrections, duplicate NEWTs in batch, and TAR↔TSR coherence
+// when both files are provided. See `docs/tr-activity-checks.md`.
+
+mod tr_activity;
+
+pub use tr_activity::{
+    EmirDuplicateNewtInBatch, EmirNewtNotInTsr, EmirRepeatedCorrection, EmirSpikeModi,
+    EmirSpikeTerm,
+};
+
+/// A Trade Activity Report (TAR) EMIR check.
+pub trait TrActivityCheck: Send + Sync {
+    /// Stable identifier, e.g. `EMIR.TRA.SPIKE_TERM`.
+    fn id(&self) -> &'static str;
+    /// The DQ dimension this check belongs to.
+    fn dimension(&self) -> DqDimension;
+    /// Default severity for issues raised by this check.
+    fn severity(&self) -> Severity;
+    /// Execute the check against the TAR batch, prior submission
+    /// history, and the optional companion TSR for cross-layer
+    /// coherence.
+    fn run(
+        &self,
+        records: &[EmirRecord],
+        prior: &[EmirRecord],
+        tsr: Option<&[TrStateRecord]>,
+        ctx: &CheckContext,
+    ) -> Vec<DqIssue>;
+}
+
+/// Default EMIR TAR check registry (5 checks).
+pub fn default_tr_activity_checks() -> Vec<Box<dyn TrActivityCheck>> {
+    vec![
+        Box::new(EmirRepeatedCorrection),
+        Box::new(EmirSpikeTerm),
+        Box::new(EmirSpikeModi),
+        Box::new(EmirDuplicateNewtInBatch),
+        Box::new(EmirNewtNotInTsr),
+    ]
+}
+
+/// Run every EMIR TAR check and return the concatenated, sorted
+/// issues.
+pub fn run_all_tr_activity(
+    checks: &[Box<dyn TrActivityCheck>],
+    records: &[EmirRecord],
+    prior: &[EmirRecord],
+    tsr: Option<&[TrStateRecord]>,
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    let mut issues: Vec<DqIssue> = checks
+        .iter()
+        .flat_map(|c| c.run(records, prior, tsr, ctx))
+        .collect();
+    sort_issues(&mut issues);
+    issues
+}

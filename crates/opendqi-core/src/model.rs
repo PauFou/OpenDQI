@@ -408,6 +408,19 @@ impl Default for FeedbackRecord {
     }
 }
 
+/// Action-type / event-type distributions over a TR Trade Activity
+/// Report batch. Embedded in the activity scan's `summary.json` so
+/// the report can render histogram tables without re-scanning.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TrActivitySummary {
+    /// Number of records in the batch.
+    pub total_records: u32,
+    /// Counts of records by `action_type` (e.g. `NEWT` → 12).
+    pub action_distribution: BTreeMap<String, u32>,
+    /// Counts of records by `event_type`.
+    pub event_distribution: BTreeMap<String, u32>,
+}
+
 /// One line from a Trade Repository Trade State Report (TSR):
 /// the TR's view of one outstanding trade at a given point in time
 /// (ISO 20022 `auth.107` for EMIR; `auth.079` for SFTR is on the

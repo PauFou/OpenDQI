@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (EMIR TAR activity intelligence) — Phase 2
+
+- New canonical `TrActivitySummary` in `opendqi-core::model`: action / event distributions over a TAR batch (`action_distribution`, `event_distribution`, `total_records`).
+- New `TrActivityCheck` trait in `opendqi-core::dq` (signature `(records, prior, tsr, ctx) -> Vec<DqIssue>`, parallel to the existing TSR / feedback / reconciliation traits).
+- **5 new EMIR.TRA.* checks** on top of the reused `auth.030` adapter:
+  - `EMIR.TRA.REPEATED_CORRECTION` (Accuracy / Warning) — same UTI carries ≥ 3 CORR/MODI rows in the batch.
+  - `EMIR.TRA.SPIKE_TERM` (Accuracy / High) — ETRM/TERM proportion > 25%.
+  - `EMIR.TRA.SPIKE_MODI` (Accuracy / Warning) — MODI proportion > 40%.
+  - `EMIR.TRA.DUPLICATE_NEWT_IN_BATCH` (Uniqueness / Critical) — same UTI NEWT'd twice in the same batch.
+  - `EMIR.TRA.NEWT_NOT_IN_TSR` (Consistency / High) — UTI NEWT'd in TAR but absent from the companion TSR; fires only when `--tsr` is provided.
+- New CLI subcommand `opendqi emir tr-activity-scan <auth.030.xml> [--store <PATH>] [--tsr <auth.107.xml>] --out <DIR>`. Outputs `summary.json`, `tr_activity_summary.json` (distributions sidecar), `tr_activity_issues.csv`, `tr_activity_report.html`.
+- Synthetic fixture `examples/emir/tr_activity/auth030-sample.xml` (20 records calibrated to trigger all 4 batch-level checks; with `--tsr`, also triggers `NEWT_NOT_IN_TSR`).
+- New `docs/tr-activity-checks.md`. `docs/auth-messages.md` updated to mark `auth.030` as dual-use.
+- Catalog after Phase 2: **129 + 8 lifecycle + 8 feedback + 6 reconciliation + 7 TSR + 5 TRA = 163 checks**.
+
 ### Added (EMIR TSR / `auth.107`) — Phase 1
 
 - New canonical type `TrStateRecord` in `opendqi-core::model`: represents one outstanding-trade line from a Trade Repository Trade State Report, carrying UTI, both counterparty LEIs, TR-side status, notional, valuation amount / currency / timestamp, effective / maturity / termination dates, collateral portfolio code, plus a `state_as_of` header timestamp propagated to every record for deterministic staleness checks.

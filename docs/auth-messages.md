@@ -27,7 +27,7 @@ parsers' leaf tables are designed to be edited in one place.
 
 | auth id | ISO/ESMA name (best-effort) | Direction | Coverage | Parser / command |
 |---|---|---|---|---|
-| `auth.030.001.03` | Derivatives Trade Report (TAR) | firm → TR (and TR → firm replays) | verified | `opendqi emir scan` via `crates/opendqi-xml/src/emir/iso20022.rs`. Phase 2 will add a dedicated TR-output mode (`tr-activity-scan`). |
+| `auth.030.001.03` | Derivatives Trade Report (TAR) | firm → TR (and TR → firm replays) | verified | Dual-use: `opendqi emir scan` for firm submissions, `opendqi emir tr-activity-scan` for TR replays. Same adapter `crates/opendqi-xml/src/emir/iso20022.rs`. |
 | `auth.092.001.NN` | Trade Reports Rejected / Missing / Inaccurate (feedback) | TR → firm | partial | `opendqi emir feedback` via `crates/opendqi-xml/src/feedback.rs`. Phase 3 will deepen analytics (top causes, ageing, rejected → accepted). |
 | `auth.107.001.NN` | Trade State Report (TSR) | TR → firm | **verified (synthetic schema)** | `opendqi emir tr-state-scan` via `crates/opendqi-xml/src/tr_state.rs`. Leaf table documented in [`tr-state-checks.md`](tr-state-checks.md); designed to be edited when the real XSD is available. |
 | `auth.108.001.NN` | Margin Activity | firm → TR / TR → firm | not yet | Roadmap. |

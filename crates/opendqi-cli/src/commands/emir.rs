@@ -9,10 +9,13 @@ use chrono::Utc;
 use clap::Subcommand;
 use opendqi_core::dq::{
     default_checks, default_feedback_checks, default_lifecycle_checks,
-    default_reconciliation_checks, default_tr_state_checks, run_all, run_all_feedback,
-    run_all_lifecycle, run_all_reconciliation, run_all_tr_state, CheckContext,
+    default_reconciliation_checks, default_tr_activity_checks, default_tr_state_checks, run_all,
+    run_all_feedback, run_all_lifecycle, run_all_reconciliation, run_all_tr_activity,
+    run_all_tr_state, CheckContext,
 };
-use opendqi_core::{DqDimension, DqIssue, EmirRecord, Regime, ScanSummary, Severity, Thresholds};
+use opendqi_core::{
+    DqDimension, DqIssue, EmirRecord, Regime, ScanSummary, Severity, Thresholds, TrActivitySummary,
+};
 use opendqi_io::{discover_emir_inputs, has_extension, read_emir_csv, CsvMapping};
 use opendqi_report::{write_issues_csv, write_report_html, write_summary_json};
 use opendqi_xml::{
@@ -74,6 +77,28 @@ pub enum EmirAction {
         /// prior scans.
         #[arg(long)]
         store: PathBuf,
+        /// Directory where reports are written.
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// Ingest an EMIR Trade Activity Report (TR replay of
+    /// `auth.030`) and produce `EMIR.TRA.*` issues: distribution
+    /// histograms, repeated correction detection, NEWT/MODI/TERM
+    /// spikes, duplicate NEWT in batch. With `--tsr <auth.107>`
+    /// also runs TAR↔TSR coherence checks. Outputs
+    /// `summary.json`, `tr_activity_issues.csv`,
+    /// `tr_activity_report.html`.
+    TrActivityScan {
+        /// Path to the `auth.030` XML file (firm-submitted or TR
+        /// replay) — directory accepted.
+        input: PathBuf,
+        /// Optional path to the SQLite history store.
+        #[arg(long)]
+        store: Option<PathBuf>,
+        /// Optional companion TSR (`auth.107`). When set, triggers
+        /// the TAR↔TSR coherence check.
+        #[arg(long)]
+        tsr: Option<PathBuf>,
         /// Directory where reports are written.
         #[arg(long)]
         out: PathBuf,
@@ -155,6 +180,15 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
         }
         EmirAction::TrStateScan { input, store, out } => {
             run_tr_state_scan(&input, store.as_deref(), &out)?;
+            Ok(ExitCode::SUCCESS)
+        }
+        EmirAction::TrActivityScan {
+            input,
+            store,
+            tsr,
+            out,
+        } => {
+            run_tr_activity_scan(&input, store.as_deref(), tsr.as_deref(), &out)?;
             Ok(ExitCode::SUCCESS)
         }
         EmirAction::Normalize { .. } => {
@@ -659,6 +693,140 @@ fn run_tr_state_scan(input: &Path, store_path: Option<&Path>, out: &Path) -> Res
         summary.records_processed, summary.issues_total, critical, high, summary.quality_score
     );
     println!("Report: {}", out.join("tr_state_report.html").display());
+    Ok(())
+}
+
+fn run_tr_activity_scan(
+    input: &Path,
+    store_path: Option<&Path>,
+    tsr_path: Option<&Path>,
+    out: &Path,
+) -> Result<()> {
+    let started_at = Utc::now();
+    let inputs = discover_emir_inputs(input)?;
+    if inputs.is_empty() {
+        return Err(anyhow!("no XML inputs found at {}", input.display()));
+    }
+    info!(count = inputs.len(), "discovered TAR inputs");
+
+    let mut records: Vec<EmirRecord> = Vec::new();
+    let mut format_issues: Vec<DqIssue> = Vec::new();
+    let mut sources: Vec<String> = Vec::with_capacity(inputs.len());
+
+    for path in &inputs {
+        sources.push(path.to_string_lossy().into_owned());
+        if has_extension(path, "xml") {
+            let mut outcome = read_emir_xml(path)?;
+            info!(
+                file = %path.display(),
+                trades = outcome.records.len(),
+                "loaded TAR XML",
+            );
+            records.append(&mut outcome.records);
+            format_issues.append(&mut outcome.issues);
+        } else {
+            warn!(path = %path.display(), "unsupported file extension; only XML supported by tr-activity-scan");
+        }
+    }
+
+    // Optional store enrichment (prior submission history).
+    let prior: Vec<EmirRecord> = if let Some(store_path) = store_path {
+        let store = opendqi_store::open_store(store_path)
+            .with_context(|| format!("opening history store at {}", store_path.display()))?;
+        let utis: Vec<&str> = records
+            .iter()
+            .filter_map(|r| r.uti.as_deref())
+            .map(str::trim)
+            .filter(|u| !u.is_empty())
+            .collect();
+        let prior = store
+            .load_prior_emir(&utis, i64::MAX)
+            .context("loading prior EMIR records from history store")?;
+        info!(prior_records = prior.len(), "loaded prior records");
+        prior
+    } else {
+        Vec::new()
+    };
+
+    // Optional companion TSR for TAR↔TSR coherence.
+    let tsr_records = if let Some(tsr_path) = tsr_path {
+        let outcome = opendqi_xml::read_emir_tr_state_xml(tsr_path)
+            .with_context(|| format!("reading companion TSR {}", tsr_path.display()))?;
+        info!(records = outcome.records.len(), "loaded companion TSR");
+        Some(outcome.records)
+    } else {
+        None
+    };
+
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+
+    // Activity distributions.
+    let mut action_distribution: BTreeMap<String, u32> = BTreeMap::new();
+    let mut event_distribution: BTreeMap<String, u32> = BTreeMap::new();
+    for r in &records {
+        let action = r.action_type.as_deref().unwrap_or("(missing)").to_owned();
+        *action_distribution.entry(action).or_insert(0) += 1;
+        let event = r.event_type.as_deref().unwrap_or("(missing)").to_owned();
+        *event_distribution.entry(event).or_insert(0) += 1;
+    }
+    let activity_summary = TrActivitySummary {
+        total_records: records.len() as u32,
+        action_distribution,
+        event_distribution,
+    };
+
+    let activity_issues = run_all_tr_activity(
+        &default_tr_activity_checks(),
+        &records,
+        &prior,
+        tsr_records.as_deref(),
+        &ctx,
+    );
+    info!(activity_issues = activity_issues.len(), "TAR checks run");
+
+    let mut issues: Vec<DqIssue> = format_issues;
+    issues.extend(activity_issues);
+    sort_issues(&mut issues);
+
+    let summary = build_summary(&records, &issues, &inputs, started_at, Utc::now());
+
+    std::fs::create_dir_all(out)
+        .with_context(|| format!("creating output directory {}", out.display()))?;
+    write_summary_json(&out.join("summary.json"), &summary)?;
+    // Activity-specific summary embedding distributions (sibling
+    // file so the standard `summary.json` remains regime-uniform).
+    let activity_json =
+        serde_json::to_string_pretty(&activity_summary).context("serialising TrActivitySummary")?;
+    std::fs::write(out.join("tr_activity_summary.json"), activity_json)
+        .context("writing tr_activity_summary.json")?;
+    write_issues_csv(&out.join("tr_activity_issues.csv"), &issues)?;
+    write_report_html(
+        &out.join("tr_activity_report.html"),
+        &summary,
+        &issues,
+        &sources,
+    )?;
+
+    let critical = summary
+        .issues_by_severity
+        .get(&Severity::Critical)
+        .copied()
+        .unwrap_or(0);
+    let high = summary
+        .issues_by_severity
+        .get(&Severity::High)
+        .copied()
+        .unwrap_or(0);
+    println!(
+        "Scanned {} TAR record(s). {} issues ({} critical, {} high). Score: {:.1}/100.",
+        summary.records_processed, summary.issues_total, critical, high, summary.quality_score
+    );
+    println!("Report: {}", out.join("tr_activity_report.html").display());
     Ok(())
 }
 

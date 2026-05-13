@@ -30,7 +30,11 @@ impl TrStateCheck for EmirPlaceholderMaturity {
             .iter()
             .filter_map(|r| {
                 let maturity = r.maturity_date?;
-                let is_placeholder = ctx.thresholds.maturity.placeholder_dates.contains(&maturity);
+                let is_placeholder = ctx
+                    .thresholds
+                    .maturity
+                    .placeholder_dates
+                    .contains(&maturity);
                 if !is_placeholder {
                     return None;
                 }
