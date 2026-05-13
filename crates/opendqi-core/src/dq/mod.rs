@@ -83,6 +83,7 @@ mod price_requires_currency;
 mod price_val_currency_mismatch;
 mod product_id_missing;
 mod reporting_before_execution;
+mod risk_mitigation;
 mod self_dealing;
 mod termination_after_maturity;
 mod trading_capacity_enum;
@@ -173,6 +174,13 @@ pub use price_requires_currency::PriceRequiresCurrency;
 pub use price_val_currency_mismatch::PriceValCurrencyMismatch;
 pub use product_id_missing::ProductIdMissing;
 pub use reporting_before_execution::ReportingBeforeExecution;
+pub use risk_mitigation::{
+    is_uncleared, EmirRmtCollateralCategoryRequired, EmirRmtDailyValuationMissing,
+    EmirRmtInitialMarginThreshold, EmirRmtIntragroupNeedsIndicator, EmirRmtLateConfirmation,
+    EmirRmtMasterAgreementRequired, EmirRmtNfcAboveClearingThreshold,
+    EmirRmtPortfolioReconciliationMissing, EmirRmtUnclearedNeedsConfirmation,
+    EmirRmtVariationMarginMissing,
+};
 pub use self_dealing::SelfDealing;
 pub use termination_after_maturity::TerminationAfterMaturity;
 pub use trading_capacity_enum::TradingCapacityEnum;
@@ -341,6 +349,17 @@ pub fn default_checks() -> Vec<Box<dyn Check>> {
         // Consistency (action × event matrix + UTI semantics)
         Box::new(ActionEventCompatibility),
         Box::new(ModiPreservesUti),
+        // ---- Article 11 risk-mitigation for non-cleared OTC (10) ----
+        Box::new(EmirRmtUnclearedNeedsConfirmation),
+        Box::new(EmirRmtLateConfirmation),
+        Box::new(EmirRmtPortfolioReconciliationMissing),
+        Box::new(EmirRmtDailyValuationMissing),
+        Box::new(EmirRmtVariationMarginMissing),
+        Box::new(EmirRmtInitialMarginThreshold),
+        Box::new(EmirRmtCollateralCategoryRequired),
+        Box::new(EmirRmtNfcAboveClearingThreshold),
+        Box::new(EmirRmtIntragroupNeedsIndicator),
+        Box::new(EmirRmtMasterAgreementRequired),
     ]
 }
 

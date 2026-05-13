@@ -1,0 +1,740 @@
+//! EMIR Article 11 — risk-mitigation checks for non-cleared OTC
+//! derivatives. Each check first filters on `clearing_status` and only
+//! runs when the trade is non-cleared. Cleared trades are skipped.
+//!
+//! See [`docs/emir-risk-mitigation.md`].
+//!
+//! v1 thresholds (notional `NFC_ABOVE_CLEARING_THRESHOLD` and
+//! `INITIAL_MARGIN_THRESHOLD`) are compile-time constants; future work
+//! will migrate them to the `Thresholds` configuration.
+
+use chrono::Duration;
+use rust_decimal::Decimal;
+
+use crate::dq::{Check, CheckContext};
+use crate::model::{DqDimension, DqIssue, EmirRecord, Regime, Severity};
+
+/// Returns `true` when the trade is reported as non-cleared.
+///
+/// Accepts EMIR's `clearing_status` codes (`NCLR`, `NCMP`) as well as
+/// human shorthand: `non-cleared`, `uncleared`, `false`, `n`, `no`.
+pub fn is_uncleared(clearing_status: Option<&str>) -> bool {
+    match clearing_status {
+        None => false,
+        Some(s) => {
+            let upper = s.trim().to_uppercase();
+            matches!(
+                upper.as_str(),
+                "NCLR" | "NCMP" | "NON-CLEARED" | "UNCLEARED" | "FALSE" | "N" | "NO"
+            )
+        }
+    }
+}
+
+fn issue(
+    check_id: &str,
+    severity: Severity,
+    dimension: DqDimension,
+    r: &EmirRecord,
+    field: Option<&str>,
+    value: Option<String>,
+    message: String,
+) -> DqIssue {
+    DqIssue {
+        check_id: check_id.into(),
+        regime: Regime::Emir,
+        severity,
+        dimension,
+        record_id: r.record_id.clone(),
+        uti: r.uti.clone(),
+        field: field.map(String::from),
+        value,
+        message,
+        source_file: r.source_file.clone(),
+    }
+}
+
+fn is_outstanding(r: &EmirRecord) -> bool {
+    r.termination_date.is_none()
+}
+
+const NFC_NOTIONAL_THRESHOLD_EUR: i64 = 1_000_000_000;
+const AANA_NOTIONAL_THRESHOLD_EUR: i64 = 8_000_000_000;
+
+// -------- EMIR.RMT.UNCLEARED_NEEDS_CONFIRMATION --------------------
+
+/// Check implementation.
+pub struct EmirRmtUnclearedNeedsConfirmation;
+
+impl Check for EmirRmtUnclearedNeedsConfirmation {
+    fn id(&self) -> &'static str {
+        "EMIR.RMT.UNCLEARED_NEEDS_CONFIRMATION"
+    }
+    fn dimension(&self) -> DqDimension {
+        DqDimension::Completeness
+    }
+    fn severity(&self) -> Severity {
+        Severity::High
+    }
+    fn run(&self, records: &[EmirRecord], _ctx: &CheckContext) -> Vec<DqIssue> {
+        records
+            .iter()
+            .filter(|r| is_uncleared(r.clearing_status.as_deref()))
+            .filter(|r| {
+                r.confirmation_method
+                    .as_deref()
+                    .map(|s| s.trim().is_empty())
+                    .unwrap_or(true)
+            })
+            .map(|r| {
+                issue(
+                    self.id(),
+                    self.severity(),
+                    self.dimension(),
+                    r,
+                    Some("confirmation_method"),
+                    None,
+                    "Non-cleared OTC derivative is missing confirmation_method (EMIR Article 11(1)(a)).".into(),
+                )
+            })
+            .collect()
+    }
+}
+
+// -------- EMIR.RMT.LATE_CONFIRMATION -------------------------------
+
+/// Check implementation.
+pub struct EmirRmtLateConfirmation;
+
+impl Check for EmirRmtLateConfirmation {
+    fn id(&self) -> &'static str {
+        "EMIR.RMT.LATE_CONFIRMATION"
+    }
+    fn dimension(&self) -> DqDimension {
+        DqDimension::Timeliness
+    }
+    fn severity(&self) -> Severity {
+        Severity::High
+    }
+    fn run(&self, records: &[EmirRecord], _ctx: &CheckContext) -> Vec<DqIssue> {
+        let mut out = Vec::new();
+        for r in records
+            .iter()
+            .filter(|r| is_uncleared(r.clearing_status.as_deref()))
+        {
+            let (Some(exec), Some(rep)) = (r.execution_timestamp, r.reporting_timestamp) else {
+                continue;
+            };
+            if rep <= exec {
+                continue;
+            }
+            let is_nfc = r
+                .nature
+                .as_deref()
+                .map(|n| n.trim().to_uppercase().starts_with("NFC"))
+                .unwrap_or(false);
+            let max = if is_nfc {
+                Duration::days(2)
+            } else {
+                Duration::days(1)
+            };
+            if rep - exec > max {
+                out.push(issue(
+                    self.id(),
+                    self.severity(),
+                    self.dimension(),
+                    r,
+                    Some("reporting_timestamp"),
+                    Some(rep.to_rfc3339()),
+                    format!(
+                        "Confirmation reported {}h after execution, exceeds Article 11(1)(a) deadline ({}h for {}).",
+                        (rep - exec).num_hours(),
+                        max.num_hours(),
+                        if is_nfc { "NFC" } else { "FC" }
+                    ),
+                ));
+            }
+        }
+        out
+    }
+}
+
+// -------- EMIR.RMT.PORTFOLIO_RECONCILIATION_MISSING ---------------
+
+/// Check implementation.
+pub struct EmirRmtPortfolioReconciliationMissing;
+
+impl Check for EmirRmtPortfolioReconciliationMissing {
+    fn id(&self) -> &'static str {
+        "EMIR.RMT.PORTFOLIO_RECONCILIATION_MISSING"
+    }
+    fn dimension(&self) -> DqDimension {
+        DqDimension::Completeness
+    }
+    fn severity(&self) -> Severity {
+        Severity::Warning
+    }
+    fn run(&self, records: &[EmirRecord], _ctx: &CheckContext) -> Vec<DqIssue> {
+        records
+            .iter()
+            .filter(|r| is_uncleared(r.clearing_status.as_deref()))
+            .filter(|r| {
+                r.initial_margin_posted.is_some()
+                    || r.initial_margin_collected.is_some()
+                    || r.variation_margin_posted.is_some()
+                    || r.variation_margin_collected.is_some()
+            })
+            .filter(|r| {
+                r.collateral_portfolio_code
+                    .as_deref()
+                    .map(|s| s.trim().is_empty())
+                    .unwrap_or(true)
+            })
+            .map(|r| {
+                issue(
+                    self.id(),
+                    self.severity(),
+                    self.dimension(),
+                    r,
+                    Some("collateral_portfolio_code"),
+                    None,
+                    "Non-cleared OTC derivative has margin posted/collected but no collateral_portfolio_code — required for Article 11(1)(b) portfolio reconciliation.".into(),
+                )
+            })
+            .collect()
+    }
+}
+
+// -------- EMIR.RMT.DAILY_VALUATION_MISSING -------------------------
+
+/// Check implementation.
+pub struct EmirRmtDailyValuationMissing;
+
+impl Check for EmirRmtDailyValuationMissing {
+    fn id(&self) -> &'static str {
+        "EMIR.RMT.DAILY_VALUATION_MISSING"
+    }
+    fn dimension(&self) -> DqDimension {
+        DqDimension::Timeliness
+    }
+    fn severity(&self) -> Severity {
+        Severity::High
+    }
+    fn run(&self, records: &[EmirRecord], ctx: &CheckContext) -> Vec<DqIssue> {
+        let max = Duration::days(1);
+        let mut out = Vec::new();
+        for r in records
+            .iter()
+            .filter(|r| is_uncleared(r.clearing_status.as_deref()))
+        {
+            if !is_outstanding(r) {
+                continue;
+            }
+            match r.valuation_timestamp {
+                None => {
+                    out.push(issue(
+                        self.id(),
+                        self.severity(),
+                        self.dimension(),
+                        r,
+                        Some("valuation_timestamp"),
+                        None,
+                        "Non-cleared outstanding OTC derivative has no valuation_timestamp (Article 11(2) daily valuation).".into(),
+                    ));
+                }
+                Some(vts) if ctx.now - vts > max => {
+                    out.push(issue(
+                        self.id(),
+                        self.severity(),
+                        self.dimension(),
+                        r,
+                        Some("valuation_timestamp"),
+                        Some(vts.to_rfc3339()),
+                        format!(
+                            "Valuation is {}h old, exceeds Article 11(2) daily threshold.",
+                            (ctx.now - vts).num_hours()
+                        ),
+                    ));
+                }
+                _ => {}
+            }
+        }
+        out
+    }
+}
+
+// -------- EMIR.RMT.VARIATION_MARGIN_MISSING -----------------------
+
+/// Check implementation.
+pub struct EmirRmtVariationMarginMissing;
+
+impl Check for EmirRmtVariationMarginMissing {
+    fn id(&self) -> &'static str {
+        "EMIR.RMT.VARIATION_MARGIN_MISSING"
+    }
+    fn dimension(&self) -> DqDimension {
+        DqDimension::Completeness
+    }
+    fn severity(&self) -> Severity {
+        Severity::High
+    }
+    fn run(&self, records: &[EmirRecord], _ctx: &CheckContext) -> Vec<DqIssue> {
+        records
+            .iter()
+            .filter(|r| is_uncleared(r.clearing_status.as_deref()))
+            .filter(|r| is_outstanding(r))
+            .filter(|r| r.variation_margin_posted.is_none() && r.variation_margin_collected.is_none())
+            .map(|r| {
+                issue(
+                    self.id(),
+                    self.severity(),
+                    self.dimension(),
+                    r,
+                    Some("variation_margin"),
+                    None,
+                    "Non-cleared outstanding OTC derivative has no variation margin posted or collected (Article 11(3)).".into(),
+                )
+            })
+            .collect()
+    }
+}
+
+// -------- EMIR.RMT.INITIAL_MARGIN_THRESHOLD -----------------------
+
+/// Check implementation.
+pub struct EmirRmtInitialMarginThreshold;
+
+impl Check for EmirRmtInitialMarginThreshold {
+    fn id(&self) -> &'static str {
+        "EMIR.RMT.INITIAL_MARGIN_THRESHOLD"
+    }
+    fn dimension(&self) -> DqDimension {
+        DqDimension::Completeness
+    }
+    fn severity(&self) -> Severity {
+        Severity::Warning
+    }
+    fn run(&self, records: &[EmirRecord], _ctx: &CheckContext) -> Vec<DqIssue> {
+        let threshold = Decimal::from(AANA_NOTIONAL_THRESHOLD_EUR);
+        records
+            .iter()
+            .filter(|r| is_uncleared(r.clearing_status.as_deref()))
+            .filter(|r| r.notional_amount.map(|n| n > threshold).unwrap_or(false))
+            .filter(|r| r.initial_margin_posted.is_none() && r.initial_margin_collected.is_none())
+            .map(|r| {
+                issue(
+                    self.id(),
+                    self.severity(),
+                    self.dimension(),
+                    r,
+                    Some("initial_margin"),
+                    Some(format!(
+                        "notional={}",
+                        r.notional_amount.map(|n| n.to_string()).unwrap_or_default()
+                    )),
+                    format!(
+                        "Non-cleared OTC derivative with notional > {AANA_NOTIONAL_THRESHOLD_EUR} EUR has no initial margin posted or collected (Article 11(3) AANA-threshold heuristic)."
+                    ),
+                )
+            })
+            .collect()
+    }
+}
+
+// -------- EMIR.RMT.COLLATERAL_CATEGORY_REQUIRED -------------------
+
+/// Check implementation.
+pub struct EmirRmtCollateralCategoryRequired;
+
+impl Check for EmirRmtCollateralCategoryRequired {
+    fn id(&self) -> &'static str {
+        "EMIR.RMT.COLLATERAL_CATEGORY_REQUIRED"
+    }
+    fn dimension(&self) -> DqDimension {
+        DqDimension::Completeness
+    }
+    fn severity(&self) -> Severity {
+        Severity::Warning
+    }
+    fn run(&self, records: &[EmirRecord], _ctx: &CheckContext) -> Vec<DqIssue> {
+        records
+            .iter()
+            .filter(|r| is_uncleared(r.clearing_status.as_deref()))
+            .filter(|r| {
+                r.initial_margin_posted.is_some()
+                    || r.initial_margin_collected.is_some()
+                    || r.variation_margin_posted.is_some()
+                    || r.variation_margin_collected.is_some()
+            })
+            .filter(|r| {
+                r.collateralisation_category
+                    .as_deref()
+                    .map(|s| s.trim().is_empty())
+                    .unwrap_or(true)
+            })
+            .map(|r| {
+                issue(
+                    self.id(),
+                    self.severity(),
+                    self.dimension(),
+                    r,
+                    Some("collateralisation_category"),
+                    None,
+                    "Non-cleared OTC derivative carries margin but no collateralisation_category — required for risk-mitigation classification.".into(),
+                )
+            })
+            .collect()
+    }
+}
+
+// -------- EMIR.RMT.NFC_ABOVE_CLEARING_THRESHOLD -------------------
+
+/// Check implementation.
+pub struct EmirRmtNfcAboveClearingThreshold;
+
+impl Check for EmirRmtNfcAboveClearingThreshold {
+    fn id(&self) -> &'static str {
+        "EMIR.RMT.NFC_ABOVE_CLEARING_THRESHOLD"
+    }
+    fn dimension(&self) -> DqDimension {
+        DqDimension::Accuracy
+    }
+    fn severity(&self) -> Severity {
+        Severity::Warning
+    }
+    fn run(&self, records: &[EmirRecord], _ctx: &CheckContext) -> Vec<DqIssue> {
+        let threshold = Decimal::from(NFC_NOTIONAL_THRESHOLD_EUR);
+        records
+            .iter()
+            .filter(|r| is_uncleared(r.clearing_status.as_deref()))
+            .filter(|r| {
+                r.nature
+                    .as_deref()
+                    .map(|n| n.trim().eq_ignore_ascii_case("NFC"))
+                    .unwrap_or(false)
+            })
+            .filter(|r| {
+                r.asset_class
+                    .as_deref()
+                    .map(|c| {
+                        let u = c.trim().to_uppercase();
+                        u == "IR" || u == "CR" || u == "INTR" || u == "CRDT"
+                    })
+                    .unwrap_or(false)
+            })
+            .filter(|r| r.notional_amount.map(|n| n > threshold).unwrap_or(false))
+            .map(|r| {
+                issue(
+                    self.id(),
+                    self.severity(),
+                    self.dimension(),
+                    r,
+                    Some("nature"),
+                    Some(format!(
+                        "notional={}",
+                        r.notional_amount.map(|n| n.to_string()).unwrap_or_default()
+                    )),
+                    format!(
+                        "NFC counterparty trading IR/CR uncleared above the {NFC_NOTIONAL_THRESHOLD_EUR} EUR clearing threshold — verify EMIR Article 10 clearing obligation."
+                    ),
+                )
+            })
+            .collect()
+    }
+}
+
+// -------- EMIR.RMT.INTRAGROUP_NEEDS_INDICATOR ---------------------
+
+/// Check implementation.
+pub struct EmirRmtIntragroupNeedsIndicator;
+
+impl Check for EmirRmtIntragroupNeedsIndicator {
+    fn id(&self) -> &'static str {
+        "EMIR.RMT.INTRAGROUP_NEEDS_INDICATOR"
+    }
+    fn dimension(&self) -> DqDimension {
+        DqDimension::Completeness
+    }
+    fn severity(&self) -> Severity {
+        Severity::Warning
+    }
+    fn run(&self, records: &[EmirRecord], _ctx: &CheckContext) -> Vec<DqIssue> {
+        records
+            .iter()
+            .filter(|r| is_uncleared(r.clearing_status.as_deref()))
+            .filter(|r| {
+                let err = r.entity_responsible_for_reporting.as_deref().map(str::trim);
+                let c1 = r.counterparty_1.as_deref().map(str::trim);
+                let c2 = r.counterparty_2.as_deref().map(str::trim);
+                matches!(err.zip(c1), Some((a, b)) if !a.is_empty() && a == b)
+                    || matches!(err.zip(c2), Some((a, b)) if !a.is_empty() && a == b)
+            })
+            .filter(|r| r.intragroup_indicator.is_none())
+            .map(|r| {
+                issue(
+                    self.id(),
+                    self.severity(),
+                    self.dimension(),
+                    r,
+                    Some("intragroup_indicator"),
+                    None,
+                    "Reporting entity equals one of the counterparties on a non-cleared OTC derivative but intragroup_indicator is missing.".into(),
+                )
+            })
+            .collect()
+    }
+}
+
+// -------- EMIR.RMT.MASTER_AGREEMENT_REQUIRED ----------------------
+
+/// Check implementation.
+pub struct EmirRmtMasterAgreementRequired;
+
+impl Check for EmirRmtMasterAgreementRequired {
+    fn id(&self) -> &'static str {
+        "EMIR.RMT.MASTER_AGREEMENT_REQUIRED"
+    }
+    fn dimension(&self) -> DqDimension {
+        DqDimension::Completeness
+    }
+    fn severity(&self) -> Severity {
+        Severity::Warning
+    }
+    fn run(&self, records: &[EmirRecord], _ctx: &CheckContext) -> Vec<DqIssue> {
+        records
+            .iter()
+            .filter(|r| is_uncleared(r.clearing_status.as_deref()))
+            .filter(|r| {
+                r.master_agreement_type
+                    .as_deref()
+                    .map(|s| s.trim().is_empty())
+                    .unwrap_or(true)
+            })
+            .map(|r| {
+                issue(
+                    self.id(),
+                    self.severity(),
+                    self.dimension(),
+                    r,
+                    Some("master_agreement_type"),
+                    None,
+                    "Non-cleared OTC derivative has no master_agreement_type — Article 11 risk mitigation expects a documented agreement.".into(),
+                )
+            })
+            .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::{DateTime, NaiveDate, Utc};
+
+    fn ctx_at(now_iso: &str) -> CheckContext {
+        let now = DateTime::parse_from_rfc3339(now_iso)
+            .unwrap()
+            .with_timezone(&Utc);
+        CheckContext {
+            thresholds: Default::default(),
+            today: now.date_naive(),
+            now,
+        }
+    }
+
+    fn ctx() -> CheckContext {
+        ctx_at("2026-05-13T08:00:00Z")
+    }
+
+    fn uncleared() -> EmirRecord {
+        EmirRecord {
+            clearing_status: Some("NCLR".into()),
+            ..Default::default()
+        }
+    }
+
+    fn ts(s: &str) -> Option<DateTime<Utc>> {
+        Some(DateTime::parse_from_rfc3339(s).unwrap().with_timezone(&Utc))
+    }
+
+    // --- helpers ---
+
+    #[test]
+    fn uncleared_codes() {
+        for s in ["NCLR", "non-cleared", "false", "NCMP", "no", "uncleared"] {
+            assert!(is_uncleared(Some(s)), "{s}");
+        }
+        for s in ["CLRD", "cleared", "true"] {
+            assert!(!is_uncleared(Some(s)), "{s}");
+        }
+        assert!(!is_uncleared(None));
+    }
+
+    // --- 10 paired tests (flag / accept) ---
+
+    #[test]
+    fn confirmation_missing_flags_and_accepts() {
+        let mut r = uncleared();
+        assert_eq!(
+            EmirRmtUnclearedNeedsConfirmation
+                .run(&[r.clone()], &ctx())
+                .len(),
+            1
+        );
+        r.confirmation_method = Some("electronic".into());
+        assert!(EmirRmtUnclearedNeedsConfirmation
+            .run(&[r], &ctx())
+            .is_empty());
+    }
+
+    #[test]
+    fn late_confirmation_flags_and_accepts() {
+        let mut r = uncleared();
+        r.nature = Some("FC".into());
+        r.execution_timestamp = ts("2026-05-10T08:00:00Z");
+        r.reporting_timestamp = ts("2026-05-13T08:00:00Z");
+        assert_eq!(EmirRmtLateConfirmation.run(&[r.clone()], &ctx()).len(), 1);
+        r.execution_timestamp = ts("2026-05-13T06:00:00Z");
+        assert!(EmirRmtLateConfirmation.run(&[r], &ctx()).is_empty());
+    }
+
+    #[test]
+    fn portfolio_reconciliation_missing_flags_and_accepts() {
+        let mut r = uncleared();
+        r.initial_margin_posted = Some(Decimal::from(100));
+        assert_eq!(
+            EmirRmtPortfolioReconciliationMissing
+                .run(&[r.clone()], &ctx())
+                .len(),
+            1
+        );
+        r.collateral_portfolio_code = Some("P".into());
+        assert!(EmirRmtPortfolioReconciliationMissing
+            .run(&[r], &ctx())
+            .is_empty());
+    }
+
+    #[test]
+    fn daily_valuation_missing_flags_and_accepts() {
+        let mut r = uncleared();
+        assert_eq!(
+            EmirRmtDailyValuationMissing.run(&[r.clone()], &ctx()).len(),
+            1
+        );
+        r.valuation_timestamp = ts("2026-05-13T07:00:00Z");
+        assert!(EmirRmtDailyValuationMissing.run(&[r], &ctx()).is_empty());
+    }
+
+    #[test]
+    fn variation_margin_missing_flags_and_accepts() {
+        let mut r = uncleared();
+        assert_eq!(
+            EmirRmtVariationMarginMissing
+                .run(&[r.clone()], &ctx())
+                .len(),
+            1
+        );
+        r.variation_margin_posted = Some(Decimal::from(100));
+        assert!(EmirRmtVariationMarginMissing.run(&[r], &ctx()).is_empty());
+    }
+
+    #[test]
+    fn initial_margin_threshold_flags_and_accepts() {
+        let mut r = uncleared();
+        r.notional_amount = Some(Decimal::from(10_000_000_000i64));
+        assert_eq!(
+            EmirRmtInitialMarginThreshold
+                .run(&[r.clone()], &ctx())
+                .len(),
+            1
+        );
+        r.initial_margin_posted = Some(Decimal::from(1));
+        assert!(EmirRmtInitialMarginThreshold.run(&[r], &ctx()).is_empty());
+    }
+
+    #[test]
+    fn collateral_category_required_flags_and_accepts() {
+        let mut r = uncleared();
+        r.variation_margin_posted = Some(Decimal::from(100));
+        assert_eq!(
+            EmirRmtCollateralCategoryRequired
+                .run(&[r.clone()], &ctx())
+                .len(),
+            1
+        );
+        r.collateralisation_category = Some("FCOL".into());
+        assert!(EmirRmtCollateralCategoryRequired
+            .run(&[r], &ctx())
+            .is_empty());
+    }
+
+    #[test]
+    fn nfc_above_threshold_flags_and_accepts() {
+        let mut r = uncleared();
+        r.nature = Some("NFC".into());
+        r.asset_class = Some("IR".into());
+        r.notional_amount = Some(Decimal::from(2_000_000_000i64));
+        assert_eq!(
+            EmirRmtNfcAboveClearingThreshold
+                .run(&[r.clone()], &ctx())
+                .len(),
+            1
+        );
+        r.notional_amount = Some(Decimal::from(500_000_000i64));
+        assert!(EmirRmtNfcAboveClearingThreshold
+            .run(&[r], &ctx())
+            .is_empty());
+    }
+
+    #[test]
+    fn intragroup_needs_indicator_flags_and_accepts() {
+        let mut r = uncleared();
+        r.entity_responsible_for_reporting = Some("LEI-X".into());
+        r.counterparty_1 = Some("LEI-X".into());
+        assert_eq!(
+            EmirRmtIntragroupNeedsIndicator
+                .run(&[r.clone()], &ctx())
+                .len(),
+            1
+        );
+        r.intragroup_indicator = Some(true);
+        assert!(EmirRmtIntragroupNeedsIndicator.run(&[r], &ctx()).is_empty());
+    }
+
+    #[test]
+    fn master_agreement_required_flags_and_accepts() {
+        let mut r = uncleared();
+        assert_eq!(
+            EmirRmtMasterAgreementRequired
+                .run(&[r.clone()], &ctx())
+                .len(),
+            1
+        );
+        r.master_agreement_type = Some("ISDA".into());
+        assert!(EmirRmtMasterAgreementRequired.run(&[r], &ctx()).is_empty());
+    }
+
+    #[test]
+    fn cleared_trades_are_skipped() {
+        let mut r = EmirRecord {
+            clearing_status: Some("CLRD".into()),
+            ..Default::default()
+        };
+        r.master_agreement_type = None;
+        // None of the 10 checks should fire on a cleared trade.
+        assert!(EmirRmtUnclearedNeedsConfirmation
+            .run(&[r.clone()], &ctx())
+            .is_empty());
+        assert!(EmirRmtMasterAgreementRequired
+            .run(&[r.clone()], &ctx())
+            .is_empty());
+        assert!(EmirRmtCollateralCategoryRequired
+            .run(&[r], &ctx())
+            .is_empty());
+    }
+
+    // unused imports silenced
+    #[allow(dead_code)]
+    fn _unused_date_import() -> Option<NaiveDate> {
+        None
+    }
+}

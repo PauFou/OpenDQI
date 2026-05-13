@@ -1,0 +1,37 @@
+# Mapping for the Article 11 risk-mitigation fixture. Each row in
+# rmt_sample.csv is non-cleared (clearing_status=NCLR) and triggers at
+# least one EMIR.RMT.* check; the docs/emir-risk-mitigation.md table
+# tells which check goes with which row.
+
+fields:
+  uti: trade_uti
+  action_type: action
+  event_type: event
+  entity_responsible_for_reporting: err_lei
+  counterparty_1: cpty1_lei
+  counterparty_2: cpty2_lei
+  asset_class: asset_class
+  notional_amount: notional
+  notional_currency: notional_ccy
+  execution_timestamp: exec_ts
+  reporting_timestamp: report_ts
+  effective_date: effective
+  maturity_date: maturity
+  termination_date: terminated_on
+  valuation_amount: valuation
+  valuation_currency: valuation_ccy
+  valuation_timestamp: valuation_ts
+  initial_margin_posted: im_posted
+  initial_margin_collected: im_collected
+  variation_margin_posted: vm_posted
+  variation_margin_collected: vm_collected
+  collateral_portfolio_code: portfolio_code
+  clearing_status: clearing_status
+  collateralisation_category: coll_category
+  nature: nature
+  master_agreement_type: ma_type
+  intragroup_indicator: intragroup
+  confirmation_method: confirmation_method
+
+date_format: "%Y-%m-%d"
+datetime_format: "%Y-%m-%dT%H:%M:%S%.fZ"
