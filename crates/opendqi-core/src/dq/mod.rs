@@ -6,16 +6,49 @@ use crate::config::Thresholds;
 use crate::model::{DqDimension, DqIssue, EmirRecord, Severity};
 
 mod abnormal_maturity;
+mod cleared_requires_ccp;
+mod counterparty_1_missing;
+mod counterparty_2_missing;
+mod currency_notional;
+mod currency_valuation;
 mod duplicate_uti;
+mod formats;
 mod late_reporting;
+mod lei_format_err;
+mod lei_format_oc;
+mod lei_format_rc;
 mod missing_uti;
 mod missing_valuation;
+mod negative_notional;
+mod notional_currency_missing;
+mod reporting_before_execution;
+mod valuation_after_reporting;
+mod valuation_after_termination;
+mod valuation_currency_missing;
+mod valuation_timestamp_missing;
+mod zero_notional;
 
 pub use abnormal_maturity::AbnormalMaturity;
+pub use cleared_requires_ccp::ClearedRequiresCcp;
+pub use counterparty_1_missing::Counterparty1Missing;
+pub use counterparty_2_missing::Counterparty2Missing;
+pub use currency_notional::CurrencyNotional;
+pub use currency_valuation::CurrencyValuation;
 pub use duplicate_uti::DuplicateUti;
 pub use late_reporting::LateReporting;
+pub use lei_format_err::LeiFormatErr;
+pub use lei_format_oc::LeiFormatOc;
+pub use lei_format_rc::LeiFormatRc;
 pub use missing_uti::MissingUti;
 pub use missing_valuation::MissingValuation;
+pub use negative_notional::NegativeNotional;
+pub use notional_currency_missing::NotionalCurrencyMissing;
+pub use reporting_before_execution::ReportingBeforeExecution;
+pub use valuation_after_reporting::ValuationAfterReporting;
+pub use valuation_after_termination::ValuationAfterTermination;
+pub use valuation_currency_missing::ValuationCurrencyMissing;
+pub use valuation_timestamp_missing::ValuationTimestampMissing;
+pub use zero_notional::ZeroNotional;
 
 /// Read-only context passed to every check.
 ///
@@ -56,14 +89,41 @@ pub trait Check: Send + Sync {
     fn run(&self, records: &[EmirRecord], ctx: &CheckContext) -> Vec<DqIssue>;
 }
 
-/// The five MVP EMIR checks, returned in a stable order.
+/// The default EMIR check registry. Returned in a stable order so
+/// that issue lists remain reproducible across runs.
+///
+/// Currently 21 checks covering all six DQ dimensions and 16 of them
+/// aligned with ESMA EMIR Refit Validation Rules (`EMIR-VR-*`). See
+/// `docs/emir-checks.md` for the full catalog.
 pub fn default_checks() -> Vec<Box<dyn Check>> {
     vec![
+        // Completeness
         Box::new(MissingUti),
         Box::new(MissingValuation),
+        Box::new(Counterparty1Missing),
+        Box::new(Counterparty2Missing),
+        Box::new(NotionalCurrencyMissing),
+        Box::new(ValuationCurrencyMissing),
+        Box::new(ValuationTimestampMissing),
+        // Validity
+        Box::new(LeiFormatRc),
+        Box::new(LeiFormatOc),
+        Box::new(LeiFormatErr),
+        Box::new(CurrencyNotional),
+        Box::new(CurrencyValuation),
+        // Accuracy
         Box::new(AbnormalMaturity),
+        Box::new(ZeroNotional),
+        Box::new(NegativeNotional),
+        // Uniqueness
         Box::new(DuplicateUti),
+        // Timeliness
         Box::new(LateReporting),
+        Box::new(ValuationAfterReporting),
+        // Consistency
+        Box::new(ReportingBeforeExecution),
+        Box::new(ClearedRequiresCcp),
+        Box::new(ValuationAfterTermination),
     ]
 }
 

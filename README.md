@@ -11,7 +11,7 @@ It helps regulatory reporting, compliance, operations, and data teams validate f
 - XML well-formedness checks (planned)
 - XSD validation integration (planned)
 - CSV input with configurable mapping
-- Data quality checks for valuations, margins, timeliness, maturity dates, UTIs, and lifecycle consistency
+- **21 EMIR data-quality checks** (16 aligned with the official ESMA EMIR Refit Validation Rules) covering completeness, validity, accuracy, uniqueness, timeliness and consistency — see [`docs/emir-checks.md`](docs/emir-checks.md)
 - HTML, JSON, and CSV outputs
 - CLI batch mode
 - Local web UI with drag-and-drop (planned)

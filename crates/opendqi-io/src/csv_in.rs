@@ -96,6 +96,7 @@ pub fn read_emir_csv(path: &Path, mapping: &CsvMapping) -> Result<Vec<EmirRecord
             collateral_portfolio_code: pick("collateral_portfolio_code"),
             clearing_status: pick("clearing_status"),
             collateralisation_category: pick("collateralisation_category"),
+            clearing_ccp_lei: pick("clearing_ccp_lei"),
             ..Default::default()
         };
         out.push(record);

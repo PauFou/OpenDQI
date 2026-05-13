@@ -32,3 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `EmirRecord` extended with leg-2 notional, margin posted/collected pairs, clearing CCP LEI, master agreement metadata, intragroup / hedging indicators, valuation type, option greeks, and a `raw_fields: BTreeMap<String, String>` catch-all for any auth.030 leaf not in the typed-routing table.
 - Synthetic fixture `examples/emir/iso20022/sample.xml` (10 trades, all 8 action types, hand-authored — not derived from ESMA/SWIFT examples).
 - Documentation: new `docs/iso20022-emir.md` (mapping table + how to obtain the official SWIFT-licensed XSD).
+- **16 new EMIR data-quality checks driven by the ESMA EMIR Refit Validation Rules**, bringing the catalog to 21 checks total. New checks: counterparty / entity LEI shape (3 checks), ISO 4217 currency shape (2 checks), counterparty / currency / valuation completeness (5 checks), zero / negative notional (2 checks), valuation-after-reporting timeliness, reporting-before-execution / cleared-requires-CCP / valuation-after-termination consistency. See [`docs/emir-checks.md`](docs/emir-checks.md) for the full catalog with ESMA-VR references.
+- Synthetic fixture `examples/emir/extended-checks.csv` + `extended-checks.yml` exercising one positive case per new check.
+- `opendqi-core/src/dq/formats.rs`: shared ISO 17442 LEI shape and ISO 4217 currency shape validators.
+- `opendqi-io/src/csv_in.rs`: now ingests the `clearing_ccp_lei` column when present in the mapping.
+
+### Changed
+
+- Existing fixtures (`examples/emir/sample.csv`, `sample.xml`, `iso20022/sample.xml`) intentionally exhibit LEI shapes that end with `AA` and valuation timestamps later than reporting timestamps; the new checks correctly flag these as defects. Issue counts for those fixtures rise from 7/7/8 to ~38/38/47. This is expected and demonstrates the new coverage in action — the fixtures are not yet rewritten to be defect-free.
