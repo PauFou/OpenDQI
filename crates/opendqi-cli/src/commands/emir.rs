@@ -78,9 +78,14 @@ pub enum EmirAction {
         #[arg(long)]
         out: PathBuf,
     },
-    /// Ingest an EMIR Trade Repository reconciliation report (ISO
-    /// 20022 `auth.106`) and produce `EMIR.REC.*` issues for
-    /// UNPAIRED / UNRECONCILED trades and field-level mismatches.
+    /// Ingest a TR pairing / matching report and produce
+    /// `EMIR.REC.*` issues for UNPAIRED / UNRECONCILED trades and
+    /// field-level mismatches.
+    ///
+    /// Naming caveat: this command reads a synthetic structure
+    /// documented as `auth.106` v1; ESMA's official `auth.106` is
+    /// a data-quality warning message and is on the Phase 3
+    /// roadmap. See `docs/auth-messages.md`.
     Reconcile {
         /// Path to the `auth.106` XML file received from the TR.
         input: PathBuf,

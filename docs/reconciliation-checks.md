@@ -1,10 +1,23 @@
 # Reconciliation (TR ↔ counterparty) checks
 
-OpenDQI's "reconciliation" checks ingest Trade Repository pairing /
-reconciliation reports (ISO 20022 `auth.106` for EMIR, `auth.083` for
-SFTR). Each report lists, per UTI, whether the TR has been able to
-pair the firm's submission with the counterparty's, and whether the
-two submissions agree on the reported fields.
+> **Naming caveat.** The official ESMA `auth.106` (EMIR) and
+> `auth.083` (SFTR) messages appear in the ISO 20022 catalog as
+> data-quality warning messages, **not** as pairing / matching
+> reports. The OpenDQI parser today reads a synthetic pairing /
+> matching structure with `<Rcncltn>` blocks; the 6 `*.REC.*` checks
+> documented below operate on that shape. This is a useful
+> placeholder if a firm receives a matching-style file from its TR,
+> but it diverges semantically from the official message. The
+> resolution is on the roadmap (Phase 3 — Rejection analytics): we
+> will either extend this parser or add a dedicated `tr-warnings`
+> parser alongside it. See [`auth-messages.md`](auth-messages.md)
+> for the canonical message catalog.
+
+OpenDQI's "reconciliation" checks ingest TR pairing / matching
+reports following the synthetic structure described above. Each
+report lists, per UTI, whether the TR has been able to pair the
+firm's submission with the counterparty's, and whether the two
+submissions agree on the reported fields.
 
 Reconciliation checks run via the `reconcile` subcommand on each
 regime:

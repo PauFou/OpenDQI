@@ -1,14 +1,23 @@
 # TR reconciliation ingestion
 
-OpenDQI reads the Trade Repository's pairing / reconciliation
-reports — the files a TR sends back to a firm summarising whether
-its submitted trades have been paired with the counterparty's, and
-which fields disagree.
+> **Naming caveat.** The OpenDQI parser today reads a synthetic
+> pairing / matching structure with `<Rcncltn>` blocks. This
+> diverges from the documented semantic of ESMA's official
+> `auth.106` / `auth.083` messages, which appear to carry
+> data-quality warnings rather than counterparty matching results.
+> The parser remains useful as a stand-in for matching-style files
+> a firm may receive from its TR, but the naming should not be
+> taken as authoritative. See [`auth-messages.md`](auth-messages.md)
+> for the canonical message catalog and roadmap.
 
-Two regimes are supported:
+OpenDQI reads TR pairing / matching reports — the files a TR sends
+back to a firm summarising whether its submitted trades have been
+paired with the counterparty's, and which fields disagree.
 
-- EMIR: ISO 20022 `auth.106`.
-- SFTR: ISO 20022 `auth.083`.
+Two regimes are supported (with the above caveat):
+
+- EMIR: synthetic structure documented as `auth.106` v1.
+- SFTR: synthetic structure documented as `auth.083` v1.
 
 See [`reconciliation-checks.md`](reconciliation-checks.md) for the
 catalog of `*.REC.*` checks fired by these messages.

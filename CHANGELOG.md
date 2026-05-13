@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (positioning + naming discipline) — Phase 0
+
+- README pivoted: OpenDQI is now positioned as a **post-TR intelligence engine** (activity / state / rejection analytics). New one-liner: *"OpenDQI turns EMIR/SFTR Trade Repository activity, state, and rejection files into actionable data quality intelligence."*
+- README "Why OpenDQI?" rewritten around the operational questions a firm needs to answer: what did the TR accept, reject, miss, or flag; what is the current TR state; which outstanding trades are stale; how does the TR state compare with internal books (planned).
+- README "Features" reordered: TR layer commands (`scan`, `feedback`, the planned `tr-state-scan`) lead; the 151 checks become a supporting statistic rather than the headline.
+- New `docs/positioning.md`: 3-layer product semantics (Activity / State / Rejection) + public roadmap Phase 0 → Phase 7.
+- New `docs/auth-messages.md`: canonical catalog of all ISO 20022 `auth.*` messages we parse, with direction (firm → TR / TR → firm), coverage level (`verified` / `partial` / `placeholder` / `not yet`), and per-message parser links.
+- **Naming caveat on `auth.106` / `auth.083` reconciliation**: the current OpenDQI parser reads a synthetic pairing / matching structure. ESMA's official `auth.106` is a data-quality warning message — the existing parser remains useful for matching-style files but its name will be revisited in Phase 3. Caveat surfaced in `docs/reconciliation-checks.md`, `docs/tr-reconciliation.md`, and the CLI help-text of `opendqi {emir,sftr} reconcile`.
+- No code behaviour changed in this commit. 371 tests still green, clippy still clean.
+
 ### Added
 
 - Initial Cargo workspace with crates: `opendqi-core`, `opendqi-io`, `opendqi-report`, `opendqi-cli`, plus `opendqi-xml` and `opendqi-server` stubs.

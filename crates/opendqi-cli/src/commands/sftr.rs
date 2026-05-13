@@ -71,9 +71,13 @@ pub enum SftrAction {
         #[arg(long)]
         out: PathBuf,
     },
-    /// Ingest an SFTR Trade Repository reconciliation report (ISO
-    /// 20022 `auth.083`) and produce `SFTR.REC.*` issues for
-    /// UNPAIRED / UNRECONCILED trades and field-level mismatches.
+    /// Ingest a TR pairing / matching report and produce
+    /// `SFTR.REC.*` issues for UNPAIRED / UNRECONCILED trades and
+    /// field-level mismatches.
+    ///
+    /// Naming caveat: this command reads a synthetic structure
+    /// documented as `auth.083` v1; the official ESMA message may
+    /// carry different semantics. See `docs/auth-messages.md`.
     Reconcile {
         /// Path to the `auth.083` XML file received from the TR.
         input: PathBuf,

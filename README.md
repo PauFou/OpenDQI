@@ -1,31 +1,46 @@
 # OpenDQI
 
-OpenDQI is a local-first data quality engine for EMIR and SFTR regulatory reporting files.
+**OpenDQI turns EMIR/SFTR Trade Repository activity, state, and rejection files into actionable data quality intelligence.**
 
-It helps regulatory reporting, compliance, operations, and data teams validate file structure, normalize reporting data, detect data quality issues, and generate actionable reports before or after submission to a Trade Repository.
-
-## Features
-
-- EMIR reporting file scanning
-- SFTR support planned
-- XML well-formedness checks (planned)
-- XSD validation integration (planned)
-- CSV input with configurable mapping (EMIR)
-- **89 EMIR single-batch data-quality checks** aligned with the official ESMA EMIR Refit Validation Rules, covering completeness, validity, accuracy, uniqueness, timeliness and consistency — see [`docs/emir-checks.md`](docs/emir-checks.md). Includes tier 3: currency-aware decimal precision (JPY=0, USD/EUR=2, …), the ESMA action × event compatibility matrix, commodity / credit deep validation, and magnitude sanity
-- **40 SFTR data-quality checks** ([`docs/sftr-checks.md`](docs/sftr-checks.md)) on top of the ISO 20022 `auth.052.001.02` adapter ([`docs/iso20022-sftr.md`](docs/iso20022-sftr.md)), with `--xsd` schema validation for both `scan` and `validate`
-- **8 cross-batch lifecycle checks** (5 EMIR + 3 SFTR) on top of an opt-in local SQLite history store — see [`docs/lifecycle-checks.md`](docs/lifecycle-checks.md) and [`docs/history-store.md`](docs/history-store.md). Detects MODI/ETRM without a prior NEWT, duplicate NEWT for a UTI already known, valuation regression and valuation-after-termination across scans
-- **8 TR feedback checks** (4 EMIR + 4 SFTR) — ingest ISO 20022 `auth.092` / `auth.080` files returned by the Trade Repository and cross-reference each UTI against the local history store. Confirms genuine gaps, exposes ingestion failures, surfaces rejection codes and inaccuracy reports. See [`docs/feedback-checks.md`](docs/feedback-checks.md) and [`docs/tr-feedback.md`](docs/tr-feedback.md). Feedback rows are persisted in the store with an Open / Resolved / Stale workflow driven by `opendqi feedback list/resolve/stale`
-- **6 TR reconciliation checks** (3 EMIR + 3 SFTR) — ingest ISO 20022 `auth.106` / `auth.083` pairing reports and produce `*.REC.*` issues for UNPAIRED / UNRECONCILED trades and field-level mismatches. See [`docs/reconciliation-checks.md`](docs/reconciliation-checks.md) and [`docs/tr-reconciliation.md`](docs/tr-reconciliation.md)
-- HTML, JSON, and CSV outputs
-- CLI batch mode
-- Local web UI with drag-and-drop (planned)
-- Runs locally by default
+A local-first engine that ingests both the reports a firm submits to its Trade Repository and the files the TR sends back, and converts them into reproducible HTML, JSON, CSV (and planned Parquet) outputs.
 
 ## Why OpenDQI?
 
-Trade Repositories can validate and process regulatory reports, but firms often need independent controls over data quality, timeliness, completeness, consistency, and accepted-but-risky reports.
+Trade Repositories process regulatory reports and return activity, state, rejection, and other feedback files. These files are essential, but they are not always easy to analyse operationally.
 
-OpenDQI focuses on local, transparent, reproducible data quality scanning.
+OpenDQI turns raw EMIR/SFTR submissions and TR feedback files into actionable data quality intelligence.
+
+It helps teams answer:
+
+- What did the TR accept?
+- What did the TR reject?
+- Which rejection causes are recurring?
+- What is the current TR state?
+- Which outstanding trades have stale or missing valuations?
+- Which trades look active at the TR but should not be?
+- Which accepted records still look risky from a data quality perspective?
+- How does the TR state compare with internal booking data? *(planned)*
+
+OpenDQI runs locally by default and produces reproducible HTML, JSON, CSV, and Parquet outputs.
+
+## Product layers
+
+OpenDQI organises its work around the three layers of a TR-firm conversation. See [`docs/positioning.md`](docs/positioning.md) for the full picture.
+
+1. **Activity layer (TAR)** — what was submitted or processed during a period. Today: `opendqi emir scan` for firm submissions. Planned: `tr-activity-scan` over the TR's `auth.030` activity returns.
+2. **State layer (TSR)** — what the TR currently believes is outstanding. Planned (Phase 1): `opendqi emir tr-state-scan <auth.107>` with stale/missing-valuation, active-past-maturity, placeholder-date, duplicate-active-UTI, valuation-after-termination checks.
+3. **Rejection layer** — what failed and why. Today: `opendqi emir feedback <auth.092>` plus the top-level `opendqi feedback list/resolve/stale` workflow over the local SQLite store. Planned (Phase 3): top rejection causes, ageing, rejected-then-accepted analytics.
+
+The auth.* message catalog and our parser coverage are tracked in [`docs/auth-messages.md`](docs/auth-messages.md).
+
+## Features
+
+- **EMIR and SFTR submission scanning** (`opendqi {emir,sftr} scan`) over CSV (with YAML mapping) or ISO 20022 XML (`auth.030.001.03` for EMIR, `auth.052.001.02` for SFTR), with optional `--xsd` validation via `xmllint`.
+- **TR feedback ingestion** (`opendqi {emir,sftr} feedback`) over `auth.092` / `auth.080` files, cross-referenced against the local history store, with a top-level Open/Resolved/Stale workflow (`opendqi feedback list/resolve/stale`).
+- **Local SQLite history store** (opt-in via `--store`) that persists submissions, feedback rows, and reconciliation rows, and enables cross-batch lifecycle checks (MODI/ETRM without a prior NEWT, duplicate NEWT, valuation regression / after-termination across scans).
+- **151 reproducible data-quality checks** today, layered as 129 single-batch (89 EMIR + 40 SFTR) + 8 lifecycle + 8 feedback + 6 reconciliation. Catalogues: [`docs/emir-checks.md`](docs/emir-checks.md), [`docs/sftr-checks.md`](docs/sftr-checks.md), [`docs/lifecycle-checks.md`](docs/lifecycle-checks.md), [`docs/feedback-checks.md`](docs/feedback-checks.md), [`docs/reconciliation-checks.md`](docs/reconciliation-checks.md).
+- **Deterministic outputs**: `summary.json`, `issues.csv`, `report.html`, and dedicated artefacts per layer (e.g. `tr_state_issues.csv` planned for TSR scans).
+- **Runs locally by default**; no network calls, no cloud dependency, no SWIFT-licensed XSD redistribution.
 
 ## Quick start
 
@@ -35,7 +50,7 @@ Build from source (requires Rust stable):
 cargo build --release
 ```
 
-Scan a CSV file against the EMIR canonical model:
+Scan a firm's EMIR submission (CSV):
 
 ```bash
 ./target/release/opendqi emir scan ./examples/emir/sample.csv \
@@ -51,46 +66,65 @@ report/summary.json
 report/issues.csv
 ```
 
-## Example checks
+Open a history store and ingest a TR rejection file:
 
-OpenDQI can detect issues such as:
+```bash
+opendqi emir scan ./reports/april/ --mapping ./mapping.yml \
+  --store ./opendqi-history.db --out ./report-april/
 
-- missing UTI
-- duplicate UTI
-- missing valuation
-- abnormal maturity dates (including placeholder dates like 2099-12-31)
-- late reporting
-- lifecycle inconsistencies (planned)
-- valuation after termination (planned)
-- inconsistent collateral fields (planned)
+opendqi emir feedback ./trade-repo/april/auth092.xml \
+  --store ./opendqi-history.db --out ./feedback-april/
+
+opendqi feedback list --store ./opendqi-history.db --status open
+opendqi feedback resolve --store ./opendqi-history.db --uti <UTI>
+```
 
 ## Input formats
 
-Supported:
+Supported today:
 
-- CSV with mapping YAML
-- OpenDQI v0.1 simplified XML (see [`docs/xml-format.md`](docs/xml-format.md))
-- Official **ISO 20022 `auth.030.001.03`** EMIR Refit XML (see [`docs/iso20022-emir.md`](docs/iso20022-emir.md))
-- Directories of mixed CSV/XML files
-- Optional XSD validation via `xmllint` (see [`docs/xsd-validation.md`](docs/xsd-validation.md))
+- CSV with mapping YAML (EMIR).
+- ISO 20022 `auth.030.001.03` (EMIR TAR submissions) — see [`docs/iso20022-emir.md`](docs/iso20022-emir.md).
+- ISO 20022 `auth.052.001.02` (SFTR submissions) — see [`docs/iso20022-sftr.md`](docs/iso20022-sftr.md).
+- ISO 20022 `auth.092` / `auth.080` (TR feedback to firm).
+- A matching-style placeholder for `auth.106` / `auth.083` (see naming caveat in [`docs/auth-messages.md`](docs/auth-messages.md)).
+- OpenDQI v0.1 simplified XML ([`docs/xml-format.md`](docs/xml-format.md)).
+- Directories of mixed CSV/XML files.
+- Optional XSD validation via `xmllint` ([`docs/xsd-validation.md`](docs/xsd-validation.md)).
 
 Planned:
 
-- SFTR `auth.108` ISO 20022 reports
-- ZIP/GZIP archives
-- Parquet
-- Trade Repository feedback files
+- ISO 20022 `auth.107` (EMIR TSR — Phase 1).
+- TR-output mode for `auth.030` (Phase 2).
+- ISO 20022 `auth.079` (SFTR TSR — Phase 6).
+- ZIP/GZIP archives.
+- Parquet output.
+
+## Roadmap
+
+Public summary; see [`docs/positioning.md`](docs/positioning.md) for context.
+
+- **Phase 0** — stabilise current engine, audit auth.* naming, pivot positioning.
+- **Phase 1** — EMIR TSR health (`tr-state-scan` over `auth.107`).
+- **Phase 2** — EMIR TAR activity intelligence (`tr-activity-scan`).
+- **Phase 3** — Rejection analytics (deepened `auth.092`).
+- **Phase 4** — Combined `tr-audit` command.
+- **Phase 5** — Book vs TSR reconciliation.
+- **Phase 6** — SFTR equivalent modules.
+- **Phase 7** — Local web UI.
 
 ## Status
 
-OpenDQI is in early development. The first supported regime is EMIR (CLI MVP). SFTR support and the local web UI are planned.
+OpenDQI is in early development. The first supported regime is EMIR (CLI). SFTR is implemented for submission scanning and feedback; full TSR/TAR coverage is on the SFTR roadmap.
 
 See [`CHANGELOG.md`](CHANGELOG.md) for release notes.
 
 ## Documentation
 
-- CLI reference: `opendqi --help`, `opendqi emir --help`
-- CSV mapping guide: see `examples/emir/sample_mapping.yml`
+- Positioning & roadmap: [`docs/positioning.md`](docs/positioning.md).
+- auth.* message catalog: [`docs/auth-messages.md`](docs/auth-messages.md).
+- CLI reference: `opendqi --help`, `opendqi emir --help`.
+- CSV mapping guide: see `examples/emir/sample_mapping.yml`.
 
 ## Contributing
 
