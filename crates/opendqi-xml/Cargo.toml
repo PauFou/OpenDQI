@@ -11,6 +11,7 @@ description = "OpenDQI XML ingestion: well-formedness checks and simplified EMIR
 [dependencies]
 opendqi-core = { path = "../opendqi-core" }
 anyhow.workspace = true
+thiserror.workspace = true
 quick-xml.workspace = true
 chrono.workspace = true
 rust_decimal.workspace = true

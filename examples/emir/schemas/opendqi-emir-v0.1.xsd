@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  OpenDQI EMIR XML schema, v0.1.
+  Documents in this schema have root <EmirReport xmlns="https://opendqi.org/schemas/emir/v0.1">.
+  See docs/xml-format.md for the human description.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns="https://opendqi.org/schemas/emir/v0.1"
+           targetNamespace="https://opendqi.org/schemas/emir/v0.1"
+           elementFormDefault="qualified">
+
+  <xs:element name="EmirReport">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Header" type="HeaderType" minOccurs="0"/>
+        <xs:element name="Trade"  type="TradeType"  minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:complexType name="HeaderType">
+    <xs:all>
+      <xs:element name="EntityResponsibleForReporting" type="xs:string"   minOccurs="0"/>
+      <xs:element name="ReportingTimestamp"            type="xs:dateTime" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="TradeType">
+    <xs:all>
+      <xs:element name="UTI"                            type="xs:string"   minOccurs="0"/>
+      <xs:element name="PriorUTI"                       type="xs:string"   minOccurs="0"/>
+      <xs:element name="ActionType"                     type="xs:string"   minOccurs="0"/>
+      <xs:element name="EventType"                      type="xs:string"   minOccurs="0"/>
+      <xs:element name="EntityResponsibleForReporting"  type="xs:string"   minOccurs="0"/>
+      <xs:element name="Counterparty1"                  type="xs:string"   minOccurs="0"/>
+      <xs:element name="Counterparty2"                  type="xs:string"   minOccurs="0"/>
+      <xs:element name="AssetClass"                     type="xs:string"   minOccurs="0"/>
+      <xs:element name="ProductId"                      type="xs:string"   minOccurs="0"/>
+      <xs:element name="UnderlyingId"                   type="xs:string"   minOccurs="0"/>
+      <xs:element name="Notional"                       type="DecimalWithCurrencyType" minOccurs="0"/>
+      <xs:element name="Price"                          type="DecimalWithCurrencyType" minOccurs="0"/>
+      <xs:element name="ExecutionTimestamp"             type="xs:dateTime" minOccurs="0"/>
+      <xs:element name="EventTimestamp"                 type="xs:dateTime" minOccurs="0"/>
+      <xs:element name="ReportingTimestamp"             type="xs:dateTime" minOccurs="0"/>
+      <xs:element name="EffectiveDate"                  type="xs:date"     minOccurs="0"/>
+      <xs:element name="MaturityDate"                   type="xs:date"     minOccurs="0"/>
+      <xs:element name="TerminationDate"                type="xs:date"     minOccurs="0"/>
+      <xs:element name="Valuation"                      type="ValuationType" minOccurs="0"/>
+      <xs:element name="CollateralPortfolioCode"        type="xs:string"   minOccurs="0"/>
+      <xs:element name="ClearingStatus"                 type="xs:string"   minOccurs="0"/>
+      <xs:element name="CollateralisationCategory"      type="xs:string"   minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+  <xs:complexType name="DecimalWithCurrencyType">
+    <xs:simpleContent>
+      <xs:extension base="xs:decimal">
+        <xs:attribute name="currency" type="xs:string" use="optional"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
+  <xs:complexType name="ValuationType">
+    <xs:simpleContent>
+      <xs:extension base="xs:decimal">
+        <xs:attribute name="currency"  type="xs:string"   use="optional"/>
+        <xs:attribute name="timestamp" type="xs:dateTime" use="optional"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
+</xs:schema>

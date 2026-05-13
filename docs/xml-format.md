@@ -101,8 +101,14 @@ data-quality patterns as `examples/emir/sample.csv`, and
 `examples/emir/broken/malformed.xml` for the well-formedness error
 path.
 
+## Schema
+
+A canonical XSD for this format ships in
+`examples/emir/schemas/opendqi-emir-v0.1.xsd`. See
+[`xsd-validation.md`](xsd-validation.md) for how to plug it into the
+scan and validate commands.
+
 ## Future work
 
 - ISO 20022 `auth.030.001.xx` adapter (`opendqi-xml::emir::iso20022`).
-- XSD validation via `xmllint` or `libxml2` (milestone 0.3).
 - ZIP / GZIP archive support.

@@ -20,6 +20,7 @@ opendqi-xml = { path = "../opendqi-xml" }
 anyhow.workspace = true
 clap.workspace = true
 chrono.workspace = true
+csv.workspace = true
 serde_yaml.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

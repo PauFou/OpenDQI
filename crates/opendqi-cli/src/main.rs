@@ -4,6 +4,8 @@
 
 mod commands;
 
+use std::process::ExitCode;
+
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use commands::{desktop, emir, sftr};
@@ -36,13 +38,19 @@ enum TopLevel {
     Desktop(desktop::DesktopArgs),
 }
 
-fn main() -> Result<()> {
+fn main() -> Result<ExitCode> {
     init_tracing();
     let cli = Cli::parse();
     match cli.command {
         TopLevel::Emir { action } => emir::run(action),
-        TopLevel::Sftr { action } => sftr::run(action),
-        TopLevel::Desktop(args) => desktop::run(args),
+        TopLevel::Sftr { action } => {
+            sftr::run(action)?;
+            Ok(ExitCode::SUCCESS)
+        }
+        TopLevel::Desktop(args) => {
+            desktop::run(args)?;
+            Ok(ExitCode::SUCCESS)
+        }
     }
 }
 

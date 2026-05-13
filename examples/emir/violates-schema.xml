@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Well-formed XML, but it violates opendqi-emir-v0.1.xsd in three
+  intentional ways:
+    1. <Notional> body is "not_a_number" (xs:decimal violation).
+    2. <MaturityDate> is "not-a-date" (xs:date violation).
+    3. <UnexpectedField> is not allowed inside Trade by the schema.
+  Used to drive the EMIR.FMT.XSD_VIOLATION and emir validate paths.
+-->
+<EmirReport xmlns="https://opendqi.org/schemas/emir/v0.1">
+  <Trade>
+    <UTI>OPENDQI-XSD-BAD-0001</UTI>
+    <Notional currency="EUR">not_a_number</Notional>
+    <MaturityDate>not-a-date</MaturityDate>
+    <UnexpectedField>surprise</UnexpectedField>
+  </Trade>
+</EmirReport>

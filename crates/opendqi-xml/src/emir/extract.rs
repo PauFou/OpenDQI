@@ -109,12 +109,7 @@ pub fn read_emir_xml(path: &Path) -> anyhow::Result<XmlReadOutcome> {
                     },
                     State::InHeader => {
                         if !is_known_header_field(&local) {
-                            push_unknown(
-                                &local,
-                                &mut unknown_elements,
-                                &source_label,
-                                &mut issues,
-                            );
+                            push_unknown(&local, &mut unknown_elements, &source_label, &mut issues);
                         }
                         current_field = Some(local);
                         current_text.clear();
@@ -122,12 +117,7 @@ pub fn read_emir_xml(path: &Path) -> anyhow::Result<XmlReadOutcome> {
                     }
                     State::InTrade => {
                         if !is_known_trade_field(&local) {
-                            push_unknown(
-                                &local,
-                                &mut unknown_elements,
-                                &source_label,
-                                &mut issues,
-                            );
+                            push_unknown(&local, &mut unknown_elements, &source_label, &mut issues);
                         }
                         current_field = Some(local);
                         current_text.clear();
@@ -173,28 +163,13 @@ pub fn read_emir_xml(path: &Path) -> anyhow::Result<XmlReadOutcome> {
                     },
                     State::InHeader => {
                         if !is_known_header_field(&local) {
-                            push_unknown(
-                                &local,
-                                &mut unknown_elements,
-                                &source_label,
-                                &mut issues,
-                            );
+                            push_unknown(&local, &mut unknown_elements, &source_label, &mut issues);
                         }
-                        commit_header_field(
-                            &local,
-                            "",
-                            &mut header_err_lei,
-                            &mut header_report_ts,
-                        );
+                        commit_header_field(&local, "", &mut header_err_lei, &mut header_report_ts);
                     }
                     State::InTrade => {
                         if !is_known_trade_field(&local) {
-                            push_unknown(
-                                &local,
-                                &mut unknown_elements,
-                                &source_label,
-                                &mut issues,
-                            );
+                            push_unknown(&local, &mut unknown_elements, &source_label, &mut issues);
                         }
                         if let Some(rec) = current_record.as_mut() {
                             commit_trade_field(&local, "", &attrs, rec);

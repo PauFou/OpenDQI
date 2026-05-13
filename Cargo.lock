@@ -496,6 +496,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap",
+ "csv",
  "opendqi-core",
  "opendqi-io",
  "opendqi-report",
@@ -560,6 +561,7 @@ dependencies = [
  "opendqi-core",
  "quick-xml",
  "rust_decimal",
+ "thiserror",
  "tracing",
 ]
 
