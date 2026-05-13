@@ -1,10 +1,11 @@
 # SFTR data-quality checks
 
-OpenDQI currently ships **20 SFTR data-quality checks**, exposed
+OpenDQI currently ships **40 SFTR data-quality checks**, exposed
 through [`opendqi_core::default_sftr_checks`] and runnable via
 `opendqi sftr scan`. The catalog mirrors the EMIR check coverage —
 same dimensions, similar logic, SFTR-specific field semantics
-(loan / collateral / haircut / settlement).
+(loan / collateral / haircut / settlement, SFT type, master
+agreement).
 
 Severity scale: `info` < `warning` < `high` < `critical`.
 
@@ -19,12 +20,21 @@ Severity scale: `info` < `warning` < `high` < `critical`.
 | `SFTR.COMP.COUNTERPARTY_2_MISSING` | Completeness | High | Other counterparty LEI absent |
 | `SFTR.COMP.LOAN_CURRENCY_MISSING` | Completeness | High | Loan value present, currency missing |
 | `SFTR.COMP.COLLATERAL_CURRENCY_MISSING` | Completeness | High | Collateral value present, currency missing |
+| `SFTR.COMP.SFT_TYPE_MISSING` | Completeness | High | SFT type (REPO / BSB / SLEB / MGLD) absent |
 | `SFTR.VLD.LEI_FORMAT_RC` | Validity | High | Reporting counterparty LEI not ISO 17442 shape |
 | `SFTR.VLD.LEI_FORMAT_OC` | Validity | High | Other counterparty LEI not ISO 17442 shape |
 | `SFTR.VLD.LEI_FORMAT_ERR` | Validity | High | Entity-responsible-for-reporting LEI not ISO 17442 shape |
 | `SFTR.VLD.CURRENCY_LOAN` | Validity | Warning | Loan currency not three uppercase letters |
 | `SFTR.VLD.CURRENCY_COLLATERAL` | Validity | Warning | Collateral currency not three uppercase letters |
 | `SFTR.VLD.ISIN_COLLATERAL` | Validity | Warning | Collateral ISIN not ISO 6166 shape (2 letters + 9 alphanumeric + 1 digit) |
+| `SFTR.VLD.SFT_TYPE_ENUM` | Validity | High | SFT type outside `{REPO, BSB, SLEB, MGLD}` |
+| `SFTR.VLD.ACTION_TYPE_ENUM` | Validity | High | Action type not in standard SFTR codes |
+| `SFTR.VLD.LOAN_PRECISION` | Validity | Warning | Loan value exceeds ESMA `decimal:18.5` precision |
+| `SFTR.VLD.COLLATERAL_PRECISION` | Validity | Warning | Collateral value exceeds ESMA `decimal:18.5` precision |
+| `SFTR.VLD.HAIRCUT_PRECISION` | Validity | Warning | Haircut exceeds ESMA `decimal:11.10` precision |
+| `SFTR.VLD.RATE_PRECISION` | Validity | Warning | Rebate rate or lending fee exceeds ESMA `decimal:11.10` precision |
+| `SFTR.VLD.MASTER_AGREEMENT_VERSION_FORMAT` | Validity | Warning | Master agreement version is not a 4-digit year |
+| `SFTR.VLD.GMRA_GMSLA_VERSION_PLAUSIBLE` | Validity | Warning | GMRA / GMSLA version is not a publicly known edition |
 | `SFTR.ACC.NEGATIVE_LOAN` | Accuracy | High | Loan value is negative |
 | `SFTR.ACC.NEGATIVE_COLLATERAL` | Accuracy | High | Collateral value is negative |
 | `SFTR.ACC.HAIRCUT_OUT_OF_RANGE` | Accuracy | Warning | Haircut < 0 or > 1.0 |
@@ -32,6 +42,17 @@ Severity scale: `info` < `warning` < `high` < `critical`.
 | `SFTR.TIM.LATE_REPORTING` | Timeliness | High | Reporting delay above the configured threshold |
 | `SFTR.CON.SETTLEMENT_BEFORE_EXECUTION` | Consistency | High | Settlement date precedes execution timestamp |
 | `SFTR.CON.MATURITY_BEFORE_EFFECTIVE` | Consistency | High | Maturity date precedes effective date |
+| `SFTR.CON.SELF_DEALING` | Consistency | High | Counterparty 1 equals counterparty 2 |
+| `SFTR.CON.LOAN_NEEDS_CURRENCY` | Consistency | High | Loan value is reported without a currency |
+| `SFTR.CON.COLL_NEEDS_CURRENCY` | Consistency | High | Collateral value is reported without a currency |
+| `SFTR.CON.LOAN_COLL_CURRENCY_MISMATCH` | Consistency | Warning | Loan and collateral currencies differ |
+| `SFTR.CON.REBATE_REQUIRES_REPO_OR_BSB` | Consistency | Warning | Rebate rate reported on a non-REPO / non-BSB SFT |
+| `SFTR.CON.LENDING_FEE_REQUIRES_SLEB` | Consistency | Warning | Lending fee reported on a non-SLEB SFT |
+| `SFTR.CON.NEWT_FORBIDS_PRIOR_UTI` | Consistency | Warning | NEWT action carries a prior UTI |
+| `SFTR.CON.NEWT_FORBIDS_TERMINATION_DATE` | Consistency | Warning | NEWT action carries a termination date |
+| `SFTR.CON.ETRM_REQUIRES_TERMINATION_DATE` | Consistency | High | ETRM action lacks a termination date |
+| `SFTR.CON.COLU_REQUIRES_PORTFOLIO` | Consistency | High | COLU action lacks a collateral portfolio code |
+| `SFTR.CON.REUU_REQUIRES_REUSE_INDICATOR` | Consistency | High | REUU action lacks the reuse indicator |
 
 ## XSD validation
 

@@ -73,6 +73,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The pre-existing `examples/emir/extended-checks.csv` now produces ~87 issues (up from 17) because the new completeness/enum checks correctly flag many fields that fixture leaves unpopulated. This is expected — the fixture is preserved as-is so the additional coverage is visible.
 
+### Added (SFTR tier 2 — parity with EMIR tier 2)
+
+- **20 additional SFTR data-quality checks**, bringing the SFTR catalog from 20 to **40** (full parity in dimension coverage with the EMIR catalog at this depth).
+  - Cross-field consistency (6): `SELF_DEALING`, `LOAN_NEEDS_CURRENCY`, `COLL_NEEDS_CURRENCY`, `LOAN_COLL_CURRENCY_MISMATCH`, `REBATE_REQUIRES_REPO_OR_BSB`, `LENDING_FEE_REQUIRES_SLEB`.
+  - Action / event semantics (5): `NEWT_FORBIDS_PRIOR_UTI`, `NEWT_FORBIDS_TERMINATION_DATE`, `ETRM_REQUIRES_TERMINATION_DATE`, `COLU_REQUIRES_PORTFOLIO`, `REUU_REQUIRES_REUSE_INDICATOR`.
+  - SFT-type / action enums (3): `SFT_TYPE_MISSING`, `SFT_TYPE_ENUM`, `ACTION_TYPE_ENUM`.
+  - Decimal precision (4): `LOAN_PRECISION`, `COLLATERAL_PRECISION`, `HAIRCUT_PRECISION`, `RATE_PRECISION` (rebate / lending-fee).
+  - Master agreement (2): `MASTER_AGREEMENT_VERSION_FORMAT`, `GMRA_GMSLA_VERSION_PLAUSIBLE`.
+- Synthetic fixture `examples/sftr/iso20022/tier2.xml` exercising 15 of the 20 new check_ids end-to-end. Five checks (`SFT_TYPE_MISSING`, `SFT_TYPE_ENUM`, `ACTION_TYPE_ENUM`, `REBATE_REQUIRES_REPO_OR_BSB`, `LENDING_FEE_REQUIRES_SLEB`) cannot be triggered through the current `auth.052` adapter (which forces `sft_type` and `action_type` from wrappers, and only populates `rebate_rate` / `lending_fee` on canonical XSD paths) and are exercised by unit tests inside each check file.
+
+### Changed (SFTR depth side effects)
+
+- The pre-existing `examples/sftr/iso20022/extended.xml` now produces 18 issues (up from 15). The 3 additional issues come from the new tier-2 consistency checks correctly flagging defects the fixture already contained: `LOAN_NEEDS_CURRENCY` and `COLL_NEEDS_CURRENCY` co-fire with the existing completeness checks on rows 10 / 11, and `LOAN_COLL_CURRENCY_MISMATCH` flags row 6 (loan `EUR`, collateral `EU`). The fixture is preserved as-is so the additional coverage is visible.
+
 ### Added (EMIR tier 2 — cross-field / asset-class / precision / action semantics)
 
 - **30 additional EMIR data-quality checks**, bringing the EMIR catalog from 51 to **81**.

@@ -1,0 +1,406 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic ISO 20022 auth.052.001.02 tier-2 fixture for OpenDQI tests.
+  Hand-authored — not derived from any ESMA or SWIFT example.
+
+  Each Rpt below intentionally exercises one of the SFTR tier-2 checks
+  introduced in this milestone. Row 1 is the clean baseline. Five of
+  the 20 tier-2 checks (SFT_TYPE_MISSING, SFT_TYPE_ENUM,
+  ACTION_TYPE_ENUM, REBATE_REQUIRES_REPO_OR_BSB,
+  LENDING_FEE_REQUIRES_SLEB) cannot be exercised through this XML
+  adapter (which forces sft_type / action_type from wrappers, and only
+  populates rebate_rate / lending_fee on canonical XSD paths). Those
+  five checks are exercised by unit tests inside each check file.
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.052.001.02">
+  <SctiesFincgRptgTxRpt>
+    <TradData>
+
+      <!-- 1. CLEAN baseline (Repo / NEWT / all consistent). -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>12345678901234567890</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>12345678901234567890</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>09876543210987654321</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-T2-CLEAN-0001</UnqTxIdr>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T17:00:00Z</RptgDtTm>
+            <SttlmDt>2026-04-02</SttlmDt>
+            <EvntDt>2026-04-02</EvntDt>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+            <MstrAgrmt><Tp>GMRA</Tp><Vrsn>2011</Vrsn></MstrAgrmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1100000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+            <PrtflCd>PTF-001</PrtflCd>
+            <Sctys><Id>DE0001135275</Id></Sctys>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 2. SELF_DEALING: counterparty_2 == counterparty_1. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>12345678901234567890</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>12345678901234567890</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>12345678901234567890</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-T2-SELF-0002</UnqTxIdr>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T17:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1100000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 3. LOAN_NEEDS_CURRENCY: PrncplAmt without Ccy attribute. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>12345678901234567890</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>12345678901234567890</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>09876543210987654321</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-T2-LOANCCY-0003</UnqTxIdr>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T17:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt>1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1100000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 4. COLL_NEEDS_CURRENCY: CollVal without Ccy attribute. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>12345678901234567890</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>12345678901234567890</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>09876543210987654321</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-T2-COLLCCY-0004</UnqTxIdr>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T17:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt>1100000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 5. LOAN_COLL_CURRENCY_MISMATCH: loan EUR, collat USD. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>12345678901234567890</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>12345678901234567890</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>09876543210987654321</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-T2-CCYMIS-0005</UnqTxIdr>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T17:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="USD">1100000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 6. NEWT_FORBIDS_PRIOR_UTI: New wrapper + PrrUnqTxIdr set. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>12345678901234567890</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>12345678901234567890</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>09876543210987654321</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-T2-NEWTPRI-0006</UnqTxIdr>
+            <PrrUnqTxIdr><UnqTxIdr>SFTR-OLD-0006</UnqTxIdr></PrrUnqTxIdr>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T17:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1100000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 7. NEWT_FORBIDS_TERMINATION_DATE: New wrapper + TermntnDt. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>12345678901234567890</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>12345678901234567890</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>09876543210987654321</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-T2-NEWTTERM-0007</UnqTxIdr>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T17:00:00Z</RptgDtTm>
+            <TermntnDt>2026-05-15</TermntnDt>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1100000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 8. ETRM_REQUIRES_TERMINATION_DATE: EarlyTermntn without TermntnDt. -->
+      <Rpt>
+        <EarlyTermntn>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>12345678901234567890</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>12345678901234567890</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>09876543210987654321</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-T2-ETRM-0008</UnqTxIdr>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T17:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1100000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </EarlyTermntn>
+      </Rpt>
+
+      <!-- 9. COLU_REQUIRES_PORTFOLIO: CollUpd wrapper without PrtflCd. -->
+      <Rpt>
+        <CollUpd>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>12345678901234567890</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>12345678901234567890</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>09876543210987654321</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-T2-COLU-0009</UnqTxIdr>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T17:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1100000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </CollUpd>
+      </Rpt>
+
+      <!-- 10. REUU_REQUIRES_REUSE_INDICATOR: ReuseUpd without AvlblForCollReuse. -->
+      <Rpt>
+        <ReuseUpd>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>12345678901234567890</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>12345678901234567890</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>09876543210987654321</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-T2-REUU-0010</UnqTxIdr>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T17:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1100000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+            <PrtflCd>PTF-010</PrtflCd>
+          </CollData>
+        </ReuseUpd>
+      </Rpt>
+
+      <!-- 11. LOAN_PRECISION: PrncplAmt with 19 integer digits. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>12345678901234567890</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>12345678901234567890</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>09876543210987654321</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-T2-LOANPREC-0011</UnqTxIdr>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T17:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1234567890123456789</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1100000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 12. COLLATERAL_PRECISION: CollVal with 6 fractional digits. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>12345678901234567890</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>12345678901234567890</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>09876543210987654321</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-T2-COLLPREC-0012</UnqTxIdr>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T17:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1100000.123456</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 13. HAIRCUT_PRECISION: 11 fractional digits. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>12345678901234567890</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>12345678901234567890</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>09876543210987654321</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-T2-HRCPREC-0013</UnqTxIdr>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T17:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1100000</Amt></CollVal>
+            <Hrcut>0.12345678901</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 14. RATE_PRECISION: rebate_rate with 11 fractional digits (legal in REPO). -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>12345678901234567890</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>12345678901234567890</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>09876543210987654321</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-T2-RATEPREC-0014</UnqTxIdr>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T17:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+            <RbtRate>0.12345678901</RbtRate>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1100000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 15. MASTER_AGREEMENT_VERSION_FORMAT: non-year string. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>12345678901234567890</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>12345678901234567890</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>09876543210987654321</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-T2-MAFMT-0015</UnqTxIdr>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T17:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+            <MstrAgrmt><Tp>GMRA</Tp><Vrsn>v2.0</Vrsn></MstrAgrmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1100000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 16. GMRA_GMSLA_VERSION_PLAUSIBLE: GMRA 1999 not a published edition. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>12345678901234567890</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>12345678901234567890</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>09876543210987654321</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-T2-MAVER-0016</UnqTxIdr>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T17:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+            <MstrAgrmt><Tp>GMRA</Tp><Vrsn>1999</Vrsn></MstrAgrmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1100000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 17. DUPLICATE_UTI: same UTI as the baseline row. Sanity regression. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>12345678901234567890</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>12345678901234567890</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>09876543210987654321</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-T2-CLEAN-0001</UnqTxIdr>
+            <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-04-01T17:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-07-02</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1100000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+    </TradData>
+  </SctiesFincgRptgTxRpt>
+</Document>

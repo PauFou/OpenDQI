@@ -12,7 +12,7 @@ It helps regulatory reporting, compliance, operations, and data teams validate f
 - XSD validation integration (planned)
 - CSV input with configurable mapping (EMIR)
 - **81 EMIR data-quality checks** aligned with the official ESMA EMIR Refit Validation Rules, covering completeness, validity, accuracy, uniqueness, timeliness and consistency — see [`docs/emir-checks.md`](docs/emir-checks.md)
-- **20 SFTR data-quality checks** ([`docs/sftr-checks.md`](docs/sftr-checks.md)) on top of the ISO 20022 `auth.052.001.02` adapter ([`docs/iso20022-sftr.md`](docs/iso20022-sftr.md)), with `--xsd` schema validation for both `scan` and `validate`
+- **40 SFTR data-quality checks** ([`docs/sftr-checks.md`](docs/sftr-checks.md)) on top of the ISO 20022 `auth.052.001.02` adapter ([`docs/iso20022-sftr.md`](docs/iso20022-sftr.md)), with `--xsd` schema validation for both `scan` and `validate`
 - HTML, JSON, and CSV outputs
 - CLI batch mode
 - Local web UI with drag-and-drop (planned)

@@ -338,15 +338,21 @@ fn sort_issues(issues: &mut [DqIssue]) {
 mod sftr;
 
 pub use sftr::{
-    SftrCheck, SftrCollateralCurrencyMissing, SftrCollateralValueMissing, SftrCounterparty1Missing,
-    SftrCounterparty2Missing, SftrCurrencyCollateral, SftrCurrencyLoan, SftrDuplicateUti,
-    SftrHaircutMissing, SftrHaircutOutOfRange, SftrIsinCollateral, SftrLateReporting,
-    SftrLeiFormatErr, SftrLeiFormatOc, SftrLeiFormatRc, SftrLoanCurrencyMissing,
+    SftrActionTypeEnum, SftrCheck, SftrCollNeedsCurrency, SftrCollateralCurrencyMissing,
+    SftrCollateralPrecision, SftrCollateralValueMissing, SftrColuRequiresPortfolio,
+    SftrCounterparty1Missing, SftrCounterparty2Missing, SftrCurrencyCollateral, SftrCurrencyLoan,
+    SftrDuplicateUti, SftrEtrmRequiresTerminationDate, SftrGmraGmslaVersionPlausible,
+    SftrHaircutMissing, SftrHaircutOutOfRange, SftrHaircutPrecision, SftrIsinCollateral,
+    SftrLateReporting, SftrLeiFormatErr, SftrLeiFormatOc, SftrLeiFormatRc,
+    SftrLendingFeeRequiresSleb, SftrLoanCollCurrencyMismatch, SftrLoanCurrencyMissing,
+    SftrLoanNeedsCurrency, SftrLoanPrecision, SftrMasterAgreementVersionFormat,
     SftrMaturityBeforeEffective, SftrMissingUti, SftrNegativeCollateral, SftrNegativeLoan,
-    SftrSettlementBeforeExecution,
+    SftrNewtForbidsPriorUti, SftrNewtForbidsTerminationDate, SftrRatePrecision,
+    SftrRebateRequiresRepoOrBsb, SftrReuuRequiresReuseIndicator, SftrSelfDealing,
+    SftrSettlementBeforeExecution, SftrSftTypeEnum, SftrSftTypeMissing,
 };
 
-/// Default SFTR check registry. 20 checks total covering all six DQ
+/// Default SFTR check registry. 40 checks total covering all six DQ
 /// dimensions; severity ranges from `Warning` to `Critical`. See
 /// `docs/sftr-checks.md` for the full catalog.
 pub fn default_sftr_checks() -> Vec<Box<dyn SftrCheck>> {
@@ -377,6 +383,30 @@ pub fn default_sftr_checks() -> Vec<Box<dyn SftrCheck>> {
         // Consistency
         Box::new(SftrSettlementBeforeExecution),
         Box::new(SftrMaturityBeforeEffective),
+        // ---- Tier 2 additions (20) ----
+        // Completeness
+        Box::new(SftrSftTypeMissing),
+        // Validity
+        Box::new(SftrSftTypeEnum),
+        Box::new(SftrActionTypeEnum),
+        Box::new(SftrLoanPrecision),
+        Box::new(SftrCollateralPrecision),
+        Box::new(SftrHaircutPrecision),
+        Box::new(SftrRatePrecision),
+        Box::new(SftrMasterAgreementVersionFormat),
+        Box::new(SftrGmraGmslaVersionPlausible),
+        // Consistency
+        Box::new(SftrSelfDealing),
+        Box::new(SftrLoanNeedsCurrency),
+        Box::new(SftrCollNeedsCurrency),
+        Box::new(SftrLoanCollCurrencyMismatch),
+        Box::new(SftrRebateRequiresRepoOrBsb),
+        Box::new(SftrLendingFeeRequiresSleb),
+        Box::new(SftrNewtForbidsPriorUti),
+        Box::new(SftrNewtForbidsTerminationDate),
+        Box::new(SftrEtrmRequiresTerminationDate),
+        Box::new(SftrColuRequiresPortfolio),
+        Box::new(SftrReuuRequiresReuseIndicator),
     ]
 }
 
