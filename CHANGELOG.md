@@ -73,6 +73,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The pre-existing `examples/emir/extended-checks.csv` now produces ~87 issues (up from 17) because the new completeness/enum checks correctly flag many fields that fixture leaves unpopulated. This is expected — the fixture is preserved as-is so the additional coverage is visible.
 
+### Added (History store + cross-batch lifecycle checks)
+
+- New `opendqi-store` crate: SQLite-backed history store (`rusqlite` with `bundled` feature, no system libsqlite dependency). Persists scanned EMIR / SFTR records into `scans` + `emir_records` + `sftr_records` tables, with indexes on `(uti)` and `(uti, action_type)`.
+- New `LifecycleCheck` / `SftrLifecycleCheck` traits in `opendqi-core` — pure functions of `(current, prior, ctx)`. The existing 121 single-batch checks are unchanged and the new traits run in parallel, not in place of them.
+- **8 cross-batch lifecycle checks** (5 EMIR + 3 SFTR), bringing the OpenDQI catalog to **121 single-batch + 8 lifecycle = 129 checks** when the history store is enabled:
+  - `EMIR.LFC.MODI_WITHOUT_NEWT` / `SFTR.LFC.MODI_WITHOUT_NEWT` — modification on a UTI with no prior NEWT in the store (Consistency / High).
+  - `EMIR.LFC.ETRM_WITHOUT_NEWT` / `SFTR.LFC.ETRM_WITHOUT_NEWT` — early termination on a UTI with no prior NEWT (Consistency / High).
+  - `EMIR.LFC.DUPLICATE_NEWT_FOR_UTI` / `SFTR.LFC.DUPLICATE_NEWT_FOR_UTI` — new trade declared for a UTI that already has a prior NEWT (Uniqueness / Critical).
+  - `EMIR.LFC.VALUATION_REGRESSION` — VALU whose `valuation_timestamp` is earlier than the latest known prior VALU for the same UTI (Consistency / Warning).
+  - `EMIR.LFC.VALUATION_AFTER_TERMINATION` — VALU whose `valuation_timestamp.date()` is on or after a prior ETRM's `termination_date` for the same UTI (Consistency / High).
+- New `--store <PATH>` flag on `opendqi emir scan` and `opendqi sftr scan`. When set: scanned records are persisted to the SQLite file at `PATH`, prior records for the current batch's UTIs are loaded, and the lifecycle checks run on top of the regular single-batch suite. Without the flag, OpenDQI runs entirely in memory and never opens a database — strict zero-regression for existing workflows.
+- `.gitignore` now excludes `*.sqlite*`, `*.db*`, and their journal / WAL / SHM companions.
+- Documentation: new `docs/lifecycle-checks.md` (catalog) and `docs/history-store.md` (usage, schema, operations).
+
 ### Added (SFTR tier 2 — parity with EMIR tier 2)
 
 - **20 additional SFTR data-quality checks**, bringing the SFTR catalog from 20 to **40** (full parity in dimension coverage with the EMIR catalog at this depth).

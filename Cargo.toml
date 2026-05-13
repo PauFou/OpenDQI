@@ -5,6 +5,7 @@ members = [
     "crates/opendqi-io",
     "crates/opendqi-report",
     "crates/opendqi-xml",
+    "crates/opendqi-store",
     "crates/opendqi-server",
     "crates/opendqi-cli",
 ]
@@ -33,6 +34,7 @@ rayon = "1.10"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 walkdir = "2.5"
+rusqlite = { version = "0.31", features = ["bundled", "chrono"] }
 
 [profile.release]
 lto = "thin"

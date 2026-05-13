@@ -32,6 +32,16 @@ reports/
 *.html.tmp
 *.parquet.tmp
 
+# Local history store (SQLite). Never commit a user's scan history.
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
 # Test data that may contain confidential information
 private-data/
 client-data/

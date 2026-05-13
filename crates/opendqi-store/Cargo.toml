@@ -1,0 +1,18 @@
+[package]
+name = "opendqi-store"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "OpenDQI local-first history store (SQLite) for cross-batch lifecycle checks."
+
+[dependencies]
+opendqi-core = { path = "../opendqi-core" }
+anyhow.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
+rust_decimal.workspace = true
+rusqlite.workspace = true
+tracing.workspace = true

@@ -7,7 +7,10 @@ use std::process::ExitCode;
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 use clap::Subcommand;
-use opendqi_core::dq::{default_sftr_checks, run_all_sftr, CheckContext};
+use opendqi_core::dq::{
+    default_sftr_checks, default_sftr_lifecycle_checks, run_all_sftr, run_all_sftr_lifecycle,
+    CheckContext,
+};
 use opendqi_core::{DqDimension, DqIssue, Regime, ScanSummary, Severity, SftrRecord, Thresholds};
 use opendqi_io::{discover_emir_inputs, has_extension};
 use opendqi_report::{write_issues_csv, write_report_html, write_summary_json};
@@ -36,6 +39,12 @@ pub enum SftrAction {
         /// the report (one `SFTR.FMT.XSD_VIOLATION` per error line).
         #[arg(long)]
         xsd: Option<PathBuf>,
+        /// Optional SQLite history-store path. When set, scanned
+        /// records are persisted and cross-batch lifecycle checks
+        /// (MODI-without-NEWT, ETRM-without-NEWT, duplicate NEWT)
+        /// run against the accumulated history.
+        #[arg(long, value_name = "PATH")]
+        store: Option<PathBuf>,
     },
     /// Validate XML files: well-formedness check + XSD validation.
     /// Exits non-zero when at least one issue is found.
@@ -63,8 +72,15 @@ pub fn run(action: SftrAction) -> Result<ExitCode> {
             out,
             config,
             xsd,
+            store,
         } => {
-            run_scan(&input, &out, config.as_deref(), xsd.as_deref())?;
+            run_scan(
+                &input,
+                &out,
+                config.as_deref(),
+                xsd.as_deref(),
+                store.as_deref(),
+            )?;
             Ok(ExitCode::SUCCESS)
         }
         SftrAction::Validate { input, xsd } => run_validate(&input, &xsd),
@@ -82,6 +98,7 @@ fn run_scan(
     out: &Path,
     config_path: Option<&Path>,
     xsd_path: Option<&Path>,
+    store_path: Option<&Path>,
 ) -> Result<()> {
     let started_at = Utc::now();
 
@@ -155,6 +172,32 @@ fn run_scan(
     let checks = default_sftr_checks();
     let mut issues = run_all_sftr(&checks, &records, &ctx);
     issues.extend(format_issues);
+
+    if let Some(store_path) = store_path {
+        let mut store = opendqi_store::open_store(store_path)
+            .with_context(|| format!("opening history store at {}", store_path.display()))?;
+        let scan_id = store
+            .persist_sftr_batch(inputs.len(), &records)
+            .context("persisting SFTR batch to history store")?;
+        let utis: Vec<&str> = records
+            .iter()
+            .filter_map(|r| r.uti.as_deref())
+            .map(str::trim)
+            .filter(|u| !u.is_empty())
+            .collect();
+        let prior = store
+            .load_prior_sftr(&utis, scan_id)
+            .context("loading prior SFTR records from history store")?;
+        info!(prior_records = prior.len(), "loaded prior records");
+        let lifecycle_issues =
+            run_all_sftr_lifecycle(&default_sftr_lifecycle_checks(), &records, &prior, &ctx);
+        info!(
+            lifecycle_issues = lifecycle_issues.len(),
+            "lifecycle checks run"
+        );
+        issues.extend(lifecycle_issues);
+    }
+
     sort_issues(&mut issues);
 
     let summary = build_summary(&records, &issues, &inputs, started_at, Utc::now());

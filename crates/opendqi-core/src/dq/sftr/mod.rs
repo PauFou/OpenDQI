@@ -16,6 +16,8 @@ pub trait SftrCheck: Send + Sync {
     fn run(&self, records: &[SftrRecord], ctx: &CheckContext) -> Vec<DqIssue>;
 }
 
+pub(crate) mod lifecycle;
+
 mod action_type_enum;
 mod coll_needs_currency;
 mod collateral_currency_missing;

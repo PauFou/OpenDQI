@@ -421,3 +421,86 @@ pub fn run_all_sftr(
     sort_issues(&mut issues);
     issues
 }
+
+// ---- Lifecycle checks (cross-batch) -------------------------------
+//
+// Lifecycle checks see two slices: `current` (the batch being scanned)
+// and `prior` (records ingested by earlier scans of the same UTIs,
+// loaded from the SQLite history store). They are opt-in: the CLI
+// only invokes them when `--store <path>` is set.
+
+mod lifecycle;
+
+pub use lifecycle::{
+    DuplicateNewtForUti, EtrmWithoutNewt, LifecycleValuationAfterTermination, ModiWithoutNewt,
+    ValuationRegression,
+};
+
+/// A lifecycle (cross-batch) EMIR check.
+pub trait LifecycleCheck: Send + Sync {
+    /// Stable identifier, e.g. `EMIR.LFC.MODI_WITHOUT_NEWT`.
+    fn id(&self) -> &'static str;
+    /// The DQ dimension this check belongs to.
+    fn dimension(&self) -> DqDimension;
+    /// Default severity for issues raised by this check.
+    fn severity(&self) -> Severity;
+    /// Execute the check against the current batch + the prior records.
+    fn run(&self, current: &[EmirRecord], prior: &[EmirRecord], ctx: &CheckContext)
+        -> Vec<DqIssue>;
+}
+
+/// Default EMIR lifecycle check registry (5 checks).
+pub fn default_lifecycle_checks() -> Vec<Box<dyn LifecycleCheck>> {
+    vec![
+        Box::new(ModiWithoutNewt),
+        Box::new(EtrmWithoutNewt),
+        Box::new(DuplicateNewtForUti),
+        Box::new(ValuationRegression),
+        Box::new(LifecycleValuationAfterTermination),
+    ]
+}
+
+/// Run every EMIR lifecycle check and return the concatenated, sorted
+/// issues.
+pub fn run_all_lifecycle(
+    checks: &[Box<dyn LifecycleCheck>],
+    current: &[EmirRecord],
+    prior: &[EmirRecord],
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    let mut issues: Vec<DqIssue> = checks
+        .iter()
+        .flat_map(|c| c.run(current, prior, ctx))
+        .collect();
+    sort_issues(&mut issues);
+    issues
+}
+
+pub use sftr::lifecycle::{
+    SftrDuplicateNewtForUti, SftrEtrmWithoutNewt, SftrLifecycleCheck, SftrModiWithoutNewt,
+};
+
+/// Default SFTR lifecycle check registry (3 checks).
+pub fn default_sftr_lifecycle_checks() -> Vec<Box<dyn SftrLifecycleCheck>> {
+    vec![
+        Box::new(SftrModiWithoutNewt),
+        Box::new(SftrEtrmWithoutNewt),
+        Box::new(SftrDuplicateNewtForUti),
+    ]
+}
+
+/// Run every SFTR lifecycle check and return the concatenated, sorted
+/// issues.
+pub fn run_all_sftr_lifecycle(
+    checks: &[Box<dyn SftrLifecycleCheck>],
+    current: &[SftrRecord],
+    prior: &[SftrRecord],
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    let mut issues: Vec<DqIssue> = checks
+        .iter()
+        .flat_map(|c| c.run(current, prior, ctx))
+        .collect();
+    sort_issues(&mut issues);
+    issues
+}
