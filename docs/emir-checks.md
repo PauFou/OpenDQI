@@ -1,10 +1,10 @@
 # EMIR data-quality checks
 
-OpenDQI currently ships **21 EMIR data-quality checks**, 16 of which
-are aligned with the official ESMA EMIR Refit Validation Rules
-(`EMIR-VR-*`). Each check is a pure function from a slice of
-`EmirRecord` to a list of `DqIssue`. The full registry is exposed
-through [`opendqi_core::dq::default_checks`].
+OpenDQI currently ships **51 EMIR data-quality checks** covering all
+six DQ dimensions. Most are aligned with the official ESMA EMIR
+Refit Validation Rules (`EMIR-VR-*`). Each check is a pure function
+from a slice of `EmirRecord` to a list of `DqIssue`. The full
+registry is exposed through [`opendqi_core::dq::default_checks`].
 
 Severity scale: `info` < `warning` < `high` < `critical`.
 
@@ -33,6 +33,36 @@ Severity scale: `info` < `warning` < `high` < `critical`.
 | `EMIR.CON.REPORTING_BEFORE_EXECUTION` | Consistency | High | EMIR-VR-1001-04 | Reporting timestamp precedes the execution timestamp |
 | `EMIR.CON.CLEARED_REQUIRES_CCP` | Consistency | High | — | Clearing status indicates "cleared" but no CCP LEI provided |
 | `EMIR.CON.VALUATION_AFTER_TERMINATION` | Consistency | High | — | Valuation observed after the termination date |
+| `EMIR.COMP.CLEARING_STATUS_MISSING` | Completeness | High | — | `clearing_status` absent |
+| `EMIR.COMP.INTRAGROUP_INDICATOR_MISSING` | Completeness | Warning | — | Intragroup transaction flag absent |
+| `EMIR.COMP.NATURE_MISSING` | Completeness | Warning | — | Nature of the reporting counterparty absent |
+| `EMIR.COMP.TRADING_CAPACITY_MISSING` | Completeness | Warning | — | Trading capacity absent |
+| `EMIR.COMP.MASTER_AGREEMENT_TYPE_MISSING` | Completeness | Warning | — | Master agreement type absent |
+| `EMIR.COMP.ASSET_CLASS_MISSING` | Completeness | High | — | Asset class absent |
+| `EMIR.COMP.INITIAL_MARGIN_MISSING_FOR_FULL` | Completeness | Warning | — | `collateralisation_category=FLCL` but `initial_margin_posted` absent |
+| `EMIR.COMP.VARIATION_MARGIN_MISSING_FOR_FULL` | Completeness | Warning | — | `collateralisation_category=FLCL` but `variation_margin_posted` absent |
+| `EMIR.COMP.COLLATERAL_PORTFOLIO_REQUIRED_FOR_FULL` | Completeness | High | — | `collateralisation_category=FLCL` but no collateral portfolio code |
+| `EMIR.VLD.LEI_FORMAT_CCP` | Validity | High | — | Clearing CCP LEI not ISO 17442 shape |
+| `EMIR.VLD.ACTION_TYPE_ENUM` | Validity | High | — | Action type not in `{NEWT, MODI, CORR, ETRM, POSC, VALU, MARU, OTHR, EROR, REVI}` |
+| `EMIR.VLD.EVENT_TYPE_ENUM` | Validity | Warning | — | Event type not in the ESMA enumeration |
+| `EMIR.VLD.VALUATION_TYPE_ENUM` | Validity | Warning | — | Valuation type not in `{MTMA, MTMO}` |
+| `EMIR.VLD.TRADING_CAPACITY_ENUM` | Validity | Warning | — | Trading capacity not in `{AGEN, PRIN}` |
+| `EMIR.VLD.ASSET_CLASS_ENUM` | Validity | High | — | Asset class outside the EMIR enumeration |
+| `EMIR.VLD.NATURE_ENUM` | Validity | Warning | — | Nature not in `{F, N, C}` |
+| `EMIR.VLD.MASTER_AGREEMENT_TYPE_ENUM` | Validity | Warning | — | Master agreement type outside the recognised set |
+| `EMIR.VLD.COLLATERALISATION_CATEGORY_ENUM` | Validity | Warning | — | Collateralisation category not in `{FLCL, OWCL, PRCL, UNCL}` |
+| `EMIR.VLD.CLEARING_STATUS_ENUM` | Validity | High | — | Clearing status not in `{CLRD, NCLR, ICLR, INCL}` |
+| `EMIR.ACC.NEGATIVE_INITIAL_MARGIN_POSTED` | Accuracy | High | — | Initial margin posted is negative |
+| `EMIR.ACC.NEGATIVE_INITIAL_MARGIN_COLLECTED` | Accuracy | High | — | Initial margin collected is negative |
+| `EMIR.ACC.NEGATIVE_VARIATION_MARGIN_POSTED` | Accuracy | High | — | Variation margin posted is negative |
+| `EMIR.ACC.NEGATIVE_VARIATION_MARGIN_COLLECTED` | Accuracy | High | — | Variation margin collected is negative |
+| `EMIR.CON.NCLR_FORBIDS_CCP` | Consistency | Warning | — | Clearing status is NCLR but a CCP LEI is reported |
+| `EMIR.CON.MARU_REQUIRES_MARGIN` | Consistency | High | — | Action type is MARU but no margin amount is set |
+| `EMIR.CON.EVENT_BEFORE_EXECUTION` | Consistency | High | — | Event timestamp precedes execution timestamp |
+| `EMIR.CON.MATURITY_IN_PAST` | Consistency | Warning | — | Outstanding trade with `maturity_date` already in the past |
+| `EMIR.CON.TERMINATION_AFTER_MATURITY` | Consistency | High | — | Termination date is after maturity date |
+| `EMIR.CON.EFFECTIVE_AFTER_MATURITY` | Consistency | High | — | Effective date is after maturity date |
+| `EMIR.CON.ETRM_REQUIRES_TERMINATION_DATE` | Consistency | High | — | Action ETRM with no `termination_date` |
 
 `EMIR-VR-*` references map to the official ESMA EMIR Refit
 Validation Rules workbook published by ESMA (not redistributed by

@@ -6,48 +6,108 @@ use crate::config::Thresholds;
 use crate::model::{DqDimension, DqIssue, EmirRecord, Severity, SftrRecord};
 
 mod abnormal_maturity;
+mod action_type_enum;
+mod asset_class_enum;
+mod asset_class_missing;
 mod cleared_requires_ccp;
+mod clearing_status_enum;
+mod clearing_status_missing;
+mod collateral_portfolio_required_for_full;
+mod collateralisation_category_enum;
 mod counterparty_1_missing;
 mod counterparty_2_missing;
 mod currency_notional;
 mod currency_valuation;
 mod duplicate_uti;
+mod effective_after_maturity;
+mod etrm_requires_termination_date;
+mod event_before_execution;
+mod event_type_enum;
 mod formats;
+mod initial_margin_missing_for_full;
+mod intragroup_indicator_missing;
 mod late_reporting;
+mod lei_format_ccp;
 mod lei_format_err;
 mod lei_format_oc;
 mod lei_format_rc;
+mod maru_requires_margin;
+mod master_agreement_type_enum;
+mod master_agreement_type_missing;
+mod maturity_in_past;
 mod missing_uti;
 mod missing_valuation;
+mod nature_enum;
+mod nature_missing;
+mod nclr_forbids_ccp;
+mod negative_initial_margin_collected;
+mod negative_initial_margin_posted;
 mod negative_notional;
+mod negative_variation_margin_collected;
+mod negative_variation_margin_posted;
 mod notional_currency_missing;
 mod reporting_before_execution;
+mod termination_after_maturity;
+mod trading_capacity_enum;
+mod trading_capacity_missing;
 mod valuation_after_reporting;
 mod valuation_after_termination;
 mod valuation_currency_missing;
 mod valuation_timestamp_missing;
+mod valuation_type_enum;
+mod variation_margin_missing_for_full;
 mod zero_notional;
 
 pub use abnormal_maturity::AbnormalMaturity;
+pub use action_type_enum::ActionTypeEnum;
+pub use asset_class_enum::AssetClassEnum;
+pub use asset_class_missing::AssetClassMissing;
 pub use cleared_requires_ccp::ClearedRequiresCcp;
+pub use clearing_status_enum::ClearingStatusEnum;
+pub use clearing_status_missing::ClearingStatusMissing;
+pub use collateral_portfolio_required_for_full::CollateralPortfolioRequiredForFull;
+pub use collateralisation_category_enum::CollateralisationCategoryEnum;
 pub use counterparty_1_missing::Counterparty1Missing;
 pub use counterparty_2_missing::Counterparty2Missing;
 pub use currency_notional::CurrencyNotional;
 pub use currency_valuation::CurrencyValuation;
 pub use duplicate_uti::DuplicateUti;
+pub use effective_after_maturity::EffectiveAfterMaturity;
+pub use etrm_requires_termination_date::EtrmRequiresTerminationDate;
+pub use event_before_execution::EventBeforeExecution;
+pub use event_type_enum::EventTypeEnum;
+pub use initial_margin_missing_for_full::InitialMarginMissingForFull;
+pub use intragroup_indicator_missing::IntragroupIndicatorMissing;
 pub use late_reporting::LateReporting;
+pub use lei_format_ccp::LeiFormatCcp;
 pub use lei_format_err::LeiFormatErr;
 pub use lei_format_oc::LeiFormatOc;
 pub use lei_format_rc::LeiFormatRc;
+pub use maru_requires_margin::MaruRequiresMargin;
+pub use master_agreement_type_enum::MasterAgreementTypeEnum;
+pub use master_agreement_type_missing::MasterAgreementTypeMissing;
+pub use maturity_in_past::MaturityInPast;
 pub use missing_uti::MissingUti;
 pub use missing_valuation::MissingValuation;
+pub use nature_enum::NatureEnum;
+pub use nature_missing::NatureMissing;
+pub use nclr_forbids_ccp::NclrForbidsCcp;
+pub use negative_initial_margin_collected::NegativeInitialMarginCollected;
+pub use negative_initial_margin_posted::NegativeInitialMarginPosted;
 pub use negative_notional::NegativeNotional;
+pub use negative_variation_margin_collected::NegativeVariationMarginCollected;
+pub use negative_variation_margin_posted::NegativeVariationMarginPosted;
 pub use notional_currency_missing::NotionalCurrencyMissing;
 pub use reporting_before_execution::ReportingBeforeExecution;
+pub use termination_after_maturity::TerminationAfterMaturity;
+pub use trading_capacity_enum::TradingCapacityEnum;
+pub use trading_capacity_missing::TradingCapacityMissing;
 pub use valuation_after_reporting::ValuationAfterReporting;
 pub use valuation_after_termination::ValuationAfterTermination;
 pub use valuation_currency_missing::ValuationCurrencyMissing;
 pub use valuation_timestamp_missing::ValuationTimestampMissing;
+pub use valuation_type_enum::ValuationTypeEnum;
+pub use variation_margin_missing_for_full::VariationMarginMissingForFull;
 pub use zero_notional::ZeroNotional;
 
 /// Read-only context passed to every check.
@@ -105,16 +165,39 @@ pub fn default_checks() -> Vec<Box<dyn Check>> {
         Box::new(NotionalCurrencyMissing),
         Box::new(ValuationCurrencyMissing),
         Box::new(ValuationTimestampMissing),
+        Box::new(ClearingStatusMissing),
+        Box::new(IntragroupIndicatorMissing),
+        Box::new(NatureMissing),
+        Box::new(TradingCapacityMissing),
+        Box::new(MasterAgreementTypeMissing),
+        Box::new(AssetClassMissing),
+        Box::new(InitialMarginMissingForFull),
+        Box::new(VariationMarginMissingForFull),
+        Box::new(CollateralPortfolioRequiredForFull),
         // Validity
         Box::new(LeiFormatRc),
         Box::new(LeiFormatOc),
         Box::new(LeiFormatErr),
+        Box::new(LeiFormatCcp),
         Box::new(CurrencyNotional),
         Box::new(CurrencyValuation),
+        Box::new(ActionTypeEnum),
+        Box::new(EventTypeEnum),
+        Box::new(ValuationTypeEnum),
+        Box::new(TradingCapacityEnum),
+        Box::new(AssetClassEnum),
+        Box::new(NatureEnum),
+        Box::new(MasterAgreementTypeEnum),
+        Box::new(CollateralisationCategoryEnum),
+        Box::new(ClearingStatusEnum),
         // Accuracy
         Box::new(AbnormalMaturity),
         Box::new(ZeroNotional),
         Box::new(NegativeNotional),
+        Box::new(NegativeInitialMarginPosted),
+        Box::new(NegativeInitialMarginCollected),
+        Box::new(NegativeVariationMarginPosted),
+        Box::new(NegativeVariationMarginCollected),
         // Uniqueness
         Box::new(DuplicateUti),
         // Timeliness
@@ -124,6 +207,13 @@ pub fn default_checks() -> Vec<Box<dyn Check>> {
         Box::new(ReportingBeforeExecution),
         Box::new(ClearedRequiresCcp),
         Box::new(ValuationAfterTermination),
+        Box::new(NclrForbidsCcp),
+        Box::new(MaruRequiresMargin),
+        Box::new(EventBeforeExecution),
+        Box::new(MaturityInPast),
+        Box::new(TerminationAfterMaturity),
+        Box::new(EffectiveAfterMaturity),
+        Box::new(EtrmRequiresTerminationDate),
     ]
 }
 

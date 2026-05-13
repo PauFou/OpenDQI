@@ -57,3 +57,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`opendqi sftr validate <input> --xsd <xsd>`** is a real command (well-formedness + XSD validation, exits non-zero on any defect).
 - New ISIN shape validator `is_valid_isin` in `opendqi-core/src/dq/formats.rs`.
 - Extended SFTR fixture `examples/sftr/iso20022/extended.xml` exercising one positive case per new check.
+
+### Added (EMIR margin / clearing / enums / dates depth)
+
+- **30 additional EMIR data-quality checks**, bringing the EMIR catalog from 21 to **51** (covers margin amounts, clearing metadata, enumerated codes, and a broader set of date / consistency rules).
+  - Margin (8): negative initial/variation margin posted/collected, `MARU` action requires margin, FLCL requires initial/variation margin posted + collateral portfolio code.
+  - Clearing (5): CCP LEI shape, NCLR forbids CCP, clearing status missing/enum, intragroup indicator missing.
+  - Enumerations (8): `action_type` / `event_type` / `valuation_type` / `trading_capacity` / `asset_class` / `nature` / `master_agreement_type` / `collateralisation_category`.
+  - Dates & consistency (9): event-before-execution, maturity-in-past, termination/effective after maturity, ETRM requires termination date, and four "missing" completeness checks (nature / trading capacity / master agreement / asset class).
+- New `is_in` helper in `opendqi-core/src/dq/formats.rs` for case-insensitive small-enum matching.
+- `opendqi-io/src/csv_in.rs` now ingests `nature`, `corporate_sector`, `trading_capacity`, `valuation_type`, `master_agreement_type`, `master_agreement_version`, `intragroup_indicator` columns when present in the mapping.
+- Synthetic fixture `examples/emir/margin-and-enums.csv` + `margin-and-enums.yml`: 31 rows exercising each of the 30 new check_ids at least once.
+
+### Changed (EMIR depth side effects)
+
+- The pre-existing `examples/emir/extended-checks.csv` now produces ~87 issues (up from 17) because the new completeness/enum checks correctly flag many fields that fixture leaves unpopulated. This is expected — the fixture is preserved as-is so the additional coverage is visible.

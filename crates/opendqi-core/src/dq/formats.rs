@@ -42,6 +42,13 @@ pub fn is_valid_currency_code(s: &str) -> bool {
     s.bytes().all(|b| b.is_ascii_uppercase())
 }
 
+/// Returns true if `value` matches any entry in `allowed`, comparing
+/// ASCII case-insensitively. Useful for enumerated-string field
+/// validation against a small fixed set.
+pub fn is_in(value: &str, allowed: &[&'static str]) -> bool {
+    allowed.iter().any(|a| a.eq_ignore_ascii_case(value))
+}
+
 /// Returns true if `s` matches the ISO 6166 ISIN shape: 12 characters
 /// total — 2 uppercase letters (country code), 9 alphanumeric, and 1
 /// numeric check digit.

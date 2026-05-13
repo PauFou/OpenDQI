@@ -97,11 +97,26 @@ pub fn read_emir_csv(path: &Path, mapping: &CsvMapping) -> Result<Vec<EmirRecord
             clearing_status: pick("clearing_status"),
             collateralisation_category: pick("collateralisation_category"),
             clearing_ccp_lei: pick("clearing_ccp_lei"),
+            nature: pick("nature"),
+            corporate_sector: pick("corporate_sector"),
+            trading_capacity: pick("trading_capacity"),
+            valuation_type: pick("valuation_type"),
+            master_agreement_type: pick("master_agreement_type"),
+            master_agreement_version: pick("master_agreement_version"),
+            intragroup_indicator: pick("intragroup_indicator").and_then(|v| parse_bool(&v)),
             ..Default::default()
         };
         out.push(record);
     }
     Ok(out)
+}
+
+fn parse_bool(value: &str) -> Option<bool> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "true" | "1" | "y" | "yes" => Some(true),
+        "false" | "0" | "n" | "no" => Some(false),
+        _ => None,
+    }
 }
 
 fn parse_decimal(value: &str, field: &str, record_id: &str) -> Option<Decimal> {
