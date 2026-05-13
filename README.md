@@ -62,14 +62,17 @@ OpenDQI can detect issues such as:
 
 ## Input formats
 
-Initial support:
+Supported:
 
 - CSV with mapping YAML
+- OpenDQI v0.1 simplified XML (see [`docs/xml-format.md`](docs/xml-format.md))
+- Official **ISO 20022 `auth.030.001.03`** EMIR Refit XML (see [`docs/iso20022-emir.md`](docs/iso20022-emir.md))
+- Directories of mixed CSV/XML files
+- Optional XSD validation via `xmllint` (see [`docs/xsd-validation.md`](docs/xsd-validation.md))
 
 Planned:
 
-- XML
-- directories of XML files
+- SFTR `auth.108` ISO 20022 reports
 - ZIP/GZIP archives
 - Parquet
 - Trade Repository feedback files

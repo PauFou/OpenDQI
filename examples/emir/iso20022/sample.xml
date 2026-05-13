@@ -1,0 +1,331 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic ISO 20022 auth.030.001.03 fixture for OpenDQI tests.
+  Hand-authored — not derived from any ESMA or SWIFT example, contains
+  zero real data. Element names and structure follow the public
+  ISO 20022 EMIR Refit standard (Regulation (EU) 2022/1855).
+
+  Covers the 8 EMIR action types and mirrors the DQ patterns of
+  examples/emir/sample.xml (v0.1 simplified format).
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.030.001.03">
+  <DerivsTradRpt>
+    <TradData>
+
+      <!-- 1. Clean IRS swap (two legs), cleared on LCH, MTMA valuation. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt>
+              <LEI>DUMMYERR0000000000AA</LEI>
+            </NttyRspnsblForRpt>
+            <RptgCtrPty>
+              <Id><LEI>DUMMYCPTY100000000AA</LEI></Id>
+              <Ntr>F</Ntr>
+              <CorpSctr><Fnncl>CDTI</Fnncl></CorpSctr>
+              <TradgCpcty>PRIN</TradgCpcty>
+              <RptgOblgtn>true</RptgOblgtn>
+              <CmrclOrTrsrFincg>true</CmrclOrTrsrFincg>
+            </RptgCtrPty>
+            <OthrCtrPty>
+              <Id><Org><LEI>DUMMYCPTY200000000AA</LEI></Org></Id>
+            </OthrCtrPty>
+          </CtrPtySpcfcData>
+          <CmonTradData>
+            <CtrctData>
+              <AsstClss>RATE</AsstClss>
+              <PdctClssfctn>SRACA</PdctClssfctn>
+              <MstrAgrmt><Tp>ISDA</Tp><Vrsn>2002</Vrsn></MstrAgrmt>
+              <NtraGrpTx>false</NtraGrpTx>
+              <DrctlyLnkdToCmrclActvtyOrTrsr>true</DrctlyLnkdToCmrclActvtyOrTrsr>
+            </CtrctData>
+            <TxData>
+              <TradId><UnqTxIdr>OPENDQI-ISO-CLEAN-0001</UnqTxIdr></TradId>
+              <EvtTp>TRAD</EvtTp>
+              <ExctnTmStmp>2026-02-01T09:00:00Z</ExctnTmStmp>
+              <EvtTmStmp>2026-02-01T09:00:00Z</EvtTmStmp>
+              <RptgTmStmp>2026-02-01T18:00:00Z</RptgTmStmp>
+              <EffctvDt>2026-02-02</EffctvDt>
+              <MtrtyDt>2031-02-02</MtrtyDt>
+              <NtnlAmt>
+                <Lgs>
+                  <FrstLgNtnl><Amt Ccy="EUR">10000000</Amt><PmtFrqcy>3M</PmtFrqcy></FrstLgNtnl>
+                  <ScndLgNtnl><Amt Ccy="USD">10800000</Amt><PmtFrqcy>3M</PmtFrqcy></ScndLgNtnl>
+                </Lgs>
+              </NtnlAmt>
+              <Pric><Amt Ccy="EUR">100.25</Amt></Pric>
+            </TxData>
+            <Valtn>
+              <Amt Ccy="EUR">1500.50</Amt>
+              <TmStmp>2026-05-12T18:00:00Z</TmStmp>
+              <Tp>MTMA</Tp>
+            </Valtn>
+            <Coll>
+              <PrtflCd>PORT-001</PrtflCd>
+              <CollstnInd>FLCL</CollstnInd>
+            </Coll>
+            <Clr>
+              <Clrd>true</Clrd>
+              <CCP><LEI>LCHLDNUS00000000AA</LEI></CCP>
+            </Clr>
+          </CmonTradData>
+        </New>
+      </Rpt>
+
+      <!-- 2. Missing UTI → UTI_MISSING. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>DUMMYERR0000000000AA</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>DUMMYCPTY100000000AA</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>DUMMYCPTY200000000AA</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <CmonTradData>
+            <CtrctData><AsstClss>RATE</AsstClss></CtrctData>
+            <TxData>
+              <EvtTp>TRAD</EvtTp>
+              <ExctnTmStmp>2026-03-01T09:00:00Z</ExctnTmStmp>
+              <EvtTmStmp>2026-03-01T09:00:00Z</EvtTmStmp>
+              <RptgTmStmp>2026-03-01T17:00:00Z</RptgTmStmp>
+              <EffctvDt>2026-03-02</EffctvDt>
+              <MtrtyDt>2030-03-02</MtrtyDt>
+              <NtnlAmt><Lgs><FrstLgNtnl><Amt Ccy="EUR">5000000</Amt></FrstLgNtnl></Lgs></NtnlAmt>
+            </TxData>
+            <Valtn>
+              <Amt Ccy="EUR">800.00</Amt>
+              <TmStmp>2026-05-12T18:00:00Z</TmStmp>
+            </Valtn>
+          </CmonTradData>
+        </New>
+      </Rpt>
+
+      <!-- 3. Outstanding trade, no valuation → VALUATION_MISSING. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>DUMMYERR0000000000AA</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>DUMMYCPTY100000000AA</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>DUMMYCPTY200000000AA</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <CmonTradData>
+            <CtrctData><AsstClss>RATE</AsstClss></CtrctData>
+            <TxData>
+              <TradId><UnqTxIdr>OPENDQI-ISO-NOVAL-0003</UnqTxIdr></TradId>
+              <EvtTp>TRAD</EvtTp>
+              <ExctnTmStmp>2026-01-15T08:00:00Z</ExctnTmStmp>
+              <EvtTmStmp>2026-01-15T08:00:00Z</EvtTmStmp>
+              <RptgTmStmp>2026-01-15T17:00:00Z</RptgTmStmp>
+              <EffctvDt>2026-01-16</EffctvDt>
+              <MtrtyDt>2029-01-16</MtrtyDt>
+              <NtnlAmt><Lgs><FrstLgNtnl><Amt Ccy="EUR">7500000</Amt></FrstLgNtnl></Lgs></NtnlAmt>
+            </TxData>
+          </CmonTradData>
+        </New>
+      </Rpt>
+
+      <!-- 4. Placeholder maturity 2099-12-31 → ABNORMAL_MATURITY. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>DUMMYERR0000000000AA</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>DUMMYCPTY100000000AA</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>DUMMYCPTY200000000AA</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <CmonTradData>
+            <CtrctData><AsstClss>RATE</AsstClss></CtrctData>
+            <TxData>
+              <TradId><UnqTxIdr>OPENDQI-ISO-PLACE-0004</UnqTxIdr></TradId>
+              <EvtTp>TRAD</EvtTp>
+              <ExctnTmStmp>2026-04-01T08:00:00Z</ExctnTmStmp>
+              <EvtTmStmp>2026-04-01T08:00:00Z</EvtTmStmp>
+              <RptgTmStmp>2026-04-01T17:00:00Z</RptgTmStmp>
+              <EffctvDt>2026-04-02</EffctvDt>
+              <MtrtyDt>2099-12-31</MtrtyDt>
+              <NtnlAmt><Lgs><FrstLgNtnl><Amt Ccy="EUR">2000000</Amt></FrstLgNtnl></Lgs></NtnlAmt>
+            </TxData>
+            <Valtn>
+              <Amt Ccy="EUR">250.00</Amt>
+              <TmStmp>2026-05-12T17:00:00Z</TmStmp>
+            </Valtn>
+          </CmonTradData>
+        </New>
+      </Rpt>
+
+      <!-- 5 & 6. Same UTI twice → DUPLICATE_UTI. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>DUMMYERR0000000000AA</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>DUMMYCPTY100000000AA</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>DUMMYCPTY200000000AA</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <CmonTradData>
+            <CtrctData><AsstClss>RATE</AsstClss></CtrctData>
+            <TxData>
+              <TradId><UnqTxIdr>OPENDQI-ISO-DUPE-0006</UnqTxIdr></TradId>
+              <EvtTp>TRAD</EvtTp>
+              <ExctnTmStmp>2026-02-15T09:00:00Z</ExctnTmStmp>
+              <EvtTmStmp>2026-02-15T09:00:00Z</EvtTmStmp>
+              <RptgTmStmp>2026-02-15T17:00:00Z</RptgTmStmp>
+              <EffctvDt>2026-02-16</EffctvDt>
+              <MtrtyDt>2028-02-16</MtrtyDt>
+              <NtnlAmt><Lgs><FrstLgNtnl><Amt Ccy="EUR">3000000</Amt></FrstLgNtnl></Lgs></NtnlAmt>
+            </TxData>
+            <Valtn>
+              <Amt Ccy="EUR">950.00</Amt>
+              <TmStmp>2026-05-12T17:00:00Z</TmStmp>
+            </Valtn>
+          </CmonTradData>
+        </New>
+      </Rpt>
+
+      <Rpt>
+        <Mod>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>DUMMYERR0000000000AA</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>DUMMYCPTY100000000AA</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>DUMMYCPTY200000000AA</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <CmonTradData>
+            <CtrctData><AsstClss>RATE</AsstClss></CtrctData>
+            <TxData>
+              <TradId>
+                <UnqTxIdr>OPENDQI-ISO-DUPE-0006</UnqTxIdr>
+                <PrrUnqTxIdr><UnqTxIdr>OPENDQI-ISO-DUPE-0006</UnqTxIdr></PrrUnqTxIdr>
+              </TradId>
+              <EvtTp>MODI</EvtTp>
+              <ExctnTmStmp>2026-02-15T09:00:00Z</ExctnTmStmp>
+              <EvtTmStmp>2026-04-01T09:00:00Z</EvtTmStmp>
+              <RptgTmStmp>2026-04-01T17:00:00Z</RptgTmStmp>
+              <EffctvDt>2026-02-16</EffctvDt>
+              <MtrtyDt>2028-02-16</MtrtyDt>
+              <NtnlAmt><Lgs><FrstLgNtnl><Amt Ccy="EUR">3000000</Amt></FrstLgNtnl></Lgs></NtnlAmt>
+            </TxData>
+            <Valtn>
+              <Amt Ccy="EUR">975.00</Amt>
+              <TmStmp>2026-05-12T17:00:00Z</TmStmp>
+            </Valtn>
+          </CmonTradData>
+        </Mod>
+      </Rpt>
+
+      <!-- 7. Late reporting (event 48h before report) → LATE_REPORTING. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>DUMMYERR0000000000AA</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>DUMMYCPTY100000000AA</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>DUMMYCPTY200000000AA</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <CmonTradData>
+            <CtrctData><AsstClss>RATE</AsstClss></CtrctData>
+            <TxData>
+              <TradId><UnqTxIdr>OPENDQI-ISO-LATE-0008</UnqTxIdr></TradId>
+              <EvtTp>TRAD</EvtTp>
+              <ExctnTmStmp>2026-03-10T08:00:00Z</ExctnTmStmp>
+              <EvtTmStmp>2026-03-10T08:00:00Z</EvtTmStmp>
+              <RptgTmStmp>2026-03-12T09:00:00Z</RptgTmStmp>
+              <EffctvDt>2026-03-11</EffctvDt>
+              <MtrtyDt>2029-03-11</MtrtyDt>
+              <NtnlAmt><Lgs><FrstLgNtnl><Amt Ccy="EUR">4000000</Amt></FrstLgNtnl></Lgs></NtnlAmt>
+            </TxData>
+            <Valtn>
+              <Amt Ccy="EUR">1100.00</Amt>
+              <TmStmp>2026-05-12T17:00:00Z</TmStmp>
+            </Valtn>
+          </CmonTradData>
+        </New>
+      </Rpt>
+
+      <!-- 8. Early termination. -->
+      <Rpt>
+        <EarlyTermntn>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>DUMMYERR0000000000AA</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>DUMMYCPTY100000000AA</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>DUMMYCPTY200000000AA</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <CmonTradData>
+            <CtrctData><AsstClss>RATE</AsstClss></CtrctData>
+            <TxData>
+              <TradId><UnqTxIdr>OPENDQI-ISO-ETRM-0009</UnqTxIdr></TradId>
+              <EvtTp>ETRM</EvtTp>
+              <ExctnTmStmp>2025-12-01T09:00:00Z</ExctnTmStmp>
+              <EvtTmStmp>2026-05-01T09:00:00Z</EvtTmStmp>
+              <RptgTmStmp>2026-05-01T17:00:00Z</RptgTmStmp>
+              <EffctvDt>2025-12-02</EffctvDt>
+              <MtrtyDt>2030-12-02</MtrtyDt>
+              <TermntnDt>2026-05-01</TermntnDt>
+              <NtnlAmt><Lgs><FrstLgNtnl><Amt Ccy="EUR">1000000</Amt></FrstLgNtnl></Lgs></NtnlAmt>
+            </TxData>
+          </CmonTradData>
+        </EarlyTermntn>
+      </Rpt>
+
+      <!-- 9. Correction. -->
+      <Rpt>
+        <Crrctn>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>DUMMYERR0000000000AA</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>DUMMYCPTY100000000AA</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>DUMMYCPTY200000000AA</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <CmonTradData>
+            <CtrctData><AsstClss>RATE</AsstClss></CtrctData>
+            <TxData>
+              <TradId><UnqTxIdr>OPENDQI-ISO-CORR-0010</UnqTxIdr></TradId>
+              <EvtTp>CORR</EvtTp>
+              <ExctnTmStmp>2026-04-15T09:00:00Z</ExctnTmStmp>
+              <EvtTmStmp>2026-04-15T09:00:00Z</EvtTmStmp>
+              <RptgTmStmp>2026-04-15T17:00:00Z</RptgTmStmp>
+              <EffctvDt>2026-04-16</EffctvDt>
+              <MtrtyDt>2029-04-16</MtrtyDt>
+              <NtnlAmt><Lgs><FrstLgNtnl><Amt Ccy="EUR">500000</Amt></FrstLgNtnl></Lgs></NtnlAmt>
+            </TxData>
+            <Valtn>
+              <Amt Ccy="EUR">125.00</Amt>
+              <TmStmp>2026-05-12T17:00:00Z</TmStmp>
+            </Valtn>
+          </CmonTradData>
+        </Crrctn>
+      </Rpt>
+
+      <!-- 10. Margin update — fills the four margin slots. -->
+      <Rpt>
+        <MrgnUpd>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>DUMMYERR0000000000AA</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>DUMMYCPTY100000000AA</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>DUMMYCPTY200000000AA</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <PrtflCd>PORT-001</PrtflCd>
+          <InitlMrgnPstd><Amt Ccy="EUR">125000</Amt></InitlMrgnPstd>
+          <InitlMrgnColl><Amt Ccy="EUR">130000</Amt></InitlMrgnColl>
+          <VartnMrgnPstd><Amt Ccy="EUR">5000</Amt></VartnMrgnPstd>
+          <VartnMrgnColl><Amt Ccy="EUR">5200</Amt></VartnMrgnColl>
+        </MrgnUpd>
+      </Rpt>
+
+      <!-- 11. Valuation update — captured via Valtn but no notional. -->
+      <Rpt>
+        <ValtnUpd>
+          <CmonTradData>
+            <CtrctData><AsstClss>RATE</AsstClss></CtrctData>
+            <TxData>
+              <TradId><UnqTxIdr>OPENDQI-ISO-VALU-0012</UnqTxIdr></TradId>
+              <EvtTp>VALU</EvtTp>
+              <RptgTmStmp>2026-05-13T08:00:00Z</RptgTmStmp>
+              <MtrtyDt>2028-02-16</MtrtyDt>
+            </TxData>
+            <Valtn>
+              <Amt Ccy="EUR">1010.00</Amt>
+              <TmStmp>2026-05-13T08:00:00Z</TmStmp>
+              <Tp>MTMA</Tp>
+            </Valtn>
+          </CmonTradData>
+        </ValtnUpd>
+      </Rpt>
+
+    </TradData>
+  </DerivsTradRpt>
+</Document>

@@ -1,10 +1,15 @@
 # OpenDQI EMIR XML format (v0.1, simplified)
 
-OpenDQI accepts a simplified XML representation of EMIR derivative
-trade reports for its MVP scan pipeline. The format is intentionally
-flat and easy to author — it is **not** ISO 20022 `auth.030`. A
-dedicated ISO 20022 adapter is on the roadmap and will live alongside
-this parser.
+OpenDQI accepts two XML formats for EMIR inputs:
+
+1. The simplified **OpenDQI v0.1** format documented here — flat,
+   easy to author, useful for hand-written or quick-conversion
+   pipelines.
+2. The official **ISO 20022 `auth.030.001.03`** format used under
+   EMIR Refit — see [`iso20022-emir.md`](iso20022-emir.md).
+
+OpenDQI auto-detects the format from the root namespace; users do
+not pick.
 
 ## Namespace
 

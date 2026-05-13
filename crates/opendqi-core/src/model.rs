@@ -185,6 +185,53 @@ pub struct EmirRecord {
     pub clearing_status: Option<String>,
     /// Collateralisation category.
     pub collateralisation_category: Option<String>,
+    /// Notional amount of the second leg (swap-like products).
+    pub leg2_notional_amount: Option<Decimal>,
+    /// Currency of the second-leg notional.
+    pub leg2_notional_currency: Option<String>,
+    /// Payment frequency of the first leg (free-form code).
+    pub leg1_payment_frequency: Option<String>,
+    /// Payment frequency of the second leg.
+    pub leg2_payment_frequency: Option<String>,
+    /// LEI of the Central Counterparty when the trade is cleared.
+    pub clearing_ccp_lei: Option<String>,
+    /// Intragroup transaction indicator.
+    pub intragroup_indicator: Option<bool>,
+    /// Hedging indicator (directly linked to commercial activity).
+    pub hedging_indicator: Option<bool>,
+    /// Valuation type ("MTMA" mark-to-market, "MTMO" mark-to-model).
+    pub valuation_type: Option<String>,
+    /// Trading capacity (AGEN / PRIN / ...).
+    pub trading_capacity: Option<String>,
+    /// Commercial or treasury financing indicator.
+    pub commercial_or_treasury_financing: Option<bool>,
+    /// Reporting obligation indicator.
+    pub reporting_obligation_indicator: Option<String>,
+    /// Corporate sector of the reporting counterparty.
+    pub corporate_sector: Option<String>,
+    /// Nature of the reporting counterparty (FC / NFCM / NFC ...).
+    pub nature: Option<String>,
+    /// Master agreement type (e.g. ISDA).
+    pub master_agreement_type: Option<String>,
+    /// Master agreement version (e.g. 2002).
+    pub master_agreement_version: Option<String>,
+    /// Confirmation method.
+    pub confirmation_method: Option<String>,
+    /// Mark-to-market value change since previous valuation.
+    pub mtm_value_change: Option<Decimal>,
+    /// Option greek: delta.
+    pub delta: Option<Decimal>,
+    /// Option greek: gamma.
+    pub gamma: Option<Decimal>,
+    /// Option greek: vega.
+    pub vega: Option<Decimal>,
+    /// Catch-all map of any source-format leaf that did not match a
+    /// typed field. Key is the source-format-relative path
+    /// (e.g. `CmonTradData/CtrctData/UndrlygInstrm/.../X`), value is
+    /// the leaf text — optionally suffixed with attribute hints
+    /// (e.g. `"1500.50|Ccy=EUR"`).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub raw_fields: BTreeMap<String, String>,
 }
 
 impl EmirRecord {

@@ -16,43 +16,16 @@ use quick_xml::NsReader;
 use rust_decimal::Decimal;
 use tracing::warn;
 
-use crate::wellformed::check_wellformedness;
+use super::XmlReadOutcome;
 
 const EXPECTED_NAMESPACE: &[u8] = b"https://opendqi.org/schemas/emir/v0.1";
 
-const CHECK_NOT_WELLFORMED: &str = "EMIR.FMT.XML_NOT_WELLFORMED";
 const CHECK_UNSUPPORTED_NS: &str = "EMIR.FMT.XML_UNSUPPORTED_NAMESPACE";
 const CHECK_UNKNOWN_ELEMENT: &str = "EMIR.FMT.XML_UNKNOWN_ELEMENT";
 
-/// Outcome of reading one XML file.
-///
-/// Format-level issues (well-formedness, unsupported namespace, unknown
-/// elements) are collected here. They are not the result of running a
-/// `Check` against records — they describe the file itself.
-#[derive(Debug, Default)]
-pub struct XmlReadOutcome {
-    /// Records extracted from the file (possibly empty).
-    pub records: Vec<EmirRecord>,
-    /// File-level data-quality issues.
-    pub issues: Vec<DqIssue>,
-}
-
-/// Read a single EMIR XML file.
-pub fn read_emir_xml(path: &Path) -> anyhow::Result<XmlReadOutcome> {
+/// Read a single well-formed EMIR XML file in the simplified v0.1 format.
+pub fn read(path: &Path) -> anyhow::Result<XmlReadOutcome> {
     let source_label = path.to_string_lossy().into_owned();
-
-    if let Err(err) = check_wellformedness(path) {
-        return Ok(XmlReadOutcome {
-            records: vec![],
-            issues: vec![format_issue(
-                CHECK_NOT_WELLFORMED,
-                Severity::Critical,
-                format!("XML is not well-formed: {}", err.message),
-                &source_label,
-            )],
-        });
-    }
-
     let mut reader = NsReader::from_file(path)?;
     reader.config_mut().trim_text(true);
 
@@ -549,7 +522,7 @@ mod tests {
 </EmirReport>
 "#;
         let p = write_tmp("simple.xml", xml);
-        let out = read_emir_xml(&p).unwrap();
+        let out = read(&p).unwrap();
         std::fs::remove_file(&p).unwrap();
 
         assert_eq!(out.records.len(), 2);
@@ -578,18 +551,6 @@ mod tests {
     }
 
     #[test]
-    fn malformed_xml_yields_critical_issue_and_no_panic() {
-        let p = write_tmp("broken.xml", br#"<?xml version="1.0"?><EmirReport xmlns="https://opendqi.org/schemas/emir/v0.1"><Trade><UTI>X</UTI></Trad></EmirReport>"#);
-        let out = read_emir_xml(&p).unwrap();
-        std::fs::remove_file(&p).unwrap();
-
-        assert!(out.records.is_empty());
-        assert_eq!(out.issues.len(), 1);
-        assert_eq!(out.issues[0].check_id, "EMIR.FMT.XML_NOT_WELLFORMED");
-        assert_eq!(out.issues[0].severity, Severity::Critical);
-    }
-
-    #[test]
     fn unsupported_namespace_flagged_but_still_extracts() {
         let xml = br#"<?xml version="1.0"?>
 <EmirReport xmlns="https://example.com/other/v1">
@@ -600,7 +561,7 @@ mod tests {
 </EmirReport>
 "#;
         let p = write_tmp("ns.xml", xml);
-        let out = read_emir_xml(&p).unwrap();
+        let out = read(&p).unwrap();
         std::fs::remove_file(&p).unwrap();
 
         assert_eq!(out.records.len(), 1);
@@ -623,7 +584,7 @@ mod tests {
 </EmirReport>
 "#;
         let p = write_tmp("unk.xml", xml);
-        let out = read_emir_xml(&p).unwrap();
+        let out = read(&p).unwrap();
         std::fs::remove_file(&p).unwrap();
 
         let unknowns: Vec<&DqIssue> = out
@@ -646,7 +607,7 @@ mod tests {
 </EmirReport>
 "#;
         let p = write_tmp("empty.xml", xml);
-        let out = read_emir_xml(&p).unwrap();
+        let out = read(&p).unwrap();
         std::fs::remove_file(&p).unwrap();
 
         assert_eq!(out.records.len(), 1);

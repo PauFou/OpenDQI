@@ -36,3 +36,8 @@ reports/
 private-data/
 client-data/
 samples/private/
+
+# ESMA reference bundle (SWIFT-licensed XSDs, ESMA PDFs).
+# Strictly local — never commit. See docs/iso20022-emir.md for how
+# to obtain the official schemas yourself.
+ESMA_docs/
