@@ -9,15 +9,19 @@ use chrono::Utc;
 use clap::Subcommand;
 use opendqi_core::dq::{
     default_sftr_checks, default_sftr_feedback_checks, default_sftr_lifecycle_checks,
-    default_sftr_reconciliation_checks, run_all_sftr, run_all_sftr_feedback,
-    run_all_sftr_lifecycle, run_all_sftr_reconciliation, CheckContext,
+    default_sftr_reconciliation_checks, default_sftr_tr_activity_checks,
+    default_sftr_tr_state_checks, run_all_sftr, run_all_sftr_feedback, run_all_sftr_lifecycle,
+    run_all_sftr_reconciliation, run_all_sftr_tr_activity, run_all_sftr_tr_state, CheckContext,
 };
-use opendqi_core::{DqDimension, DqIssue, Regime, ScanSummary, Severity, SftrRecord, Thresholds};
-use opendqi_io::{discover_emir_inputs, has_extension};
+use opendqi_core::{
+    DqDimension, DqIssue, Regime, ScanSummary, Severity, SftrRecord, SftrTrStateRecord, Thresholds,
+    TrActivitySummary,
+};
+use opendqi_io::{discover_emir_inputs, has_extension, read_sftr_csv, CsvMapping};
 use opendqi_report::{write_issues_csv, write_report_html, write_summary_json};
 use opendqi_xml::{
-    check_wellformedness, read_sftr_feedback_xml, read_sftr_reconciliation_xml, read_sftr_xml,
-    ExternalXmllintValidator, XsdValidator, XsdViolation,
+    check_wellformedness, read_sftr_feedback_xml, read_sftr_reconciliation_xml,
+    read_sftr_tr_state_xml, read_sftr_xml, ExternalXmllintValidator, XsdValidator, XsdViolation,
 };
 use tracing::{info, warn};
 
@@ -88,6 +92,86 @@ pub enum SftrAction {
         #[arg(long)]
         out: PathBuf,
     },
+    /// Ingest an SFTR Trade State Report (ISO 20022 `auth.079`) and
+    /// produce `SFTR.TST.*` issues over the TR's snapshot:
+    /// outstanding summary, stale collateral valuation, missing
+    /// collateral on outstanding SFT, active past maturity, duplicate
+    /// active UTI, haircut out of range. Outputs
+    /// `summary.json`, `tr_state_issues.csv`, `tr_state_report.html`.
+    TrStateScan {
+        /// Path to the `auth.079` XML file received from the TR.
+        input: PathBuf,
+        /// Optional path to the SQLite history store (loads prior SFT
+        /// records for the UTIs in the TSR — symmetric with EMIR).
+        #[arg(long)]
+        store: Option<PathBuf>,
+        /// Directory where reports are written.
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// Ingest an SFTR Trade Activity Report (TR replay of
+    /// `auth.052`) and produce `SFTR.TRA.*` issues: repeated
+    /// corrections, ETRM / MODI spikes, duplicate NEWT in batch.
+    /// With `--tsr <auth.079>` also runs TAR↔TSR coherence checks.
+    /// Outputs `summary.json`, `tr_activity_issues.csv`,
+    /// `tr_activity_report.html`.
+    TrActivityScan {
+        /// Path to the `auth.052` XML file (firm-submitted or TR
+        /// replay) — directory accepted.
+        input: PathBuf,
+        /// Optional path to the SQLite history store.
+        #[arg(long)]
+        store: Option<PathBuf>,
+        /// Optional companion SFTR TSR (`auth.079`). When set,
+        /// triggers the TAR↔TSR coherence check.
+        #[arg(long)]
+        tsr: Option<PathBuf>,
+        /// Directory where reports are written.
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// Consolidated SFTR TR audit. Ingests a TAR (`auth.052`), a TSR
+    /// (`auth.079`), and a feedback file (`auth.080`) together,
+    /// runs every layer's checks, plus 3 cross-layer coherence
+    /// checks (`SFTR.AUD.*`), and writes a single
+    /// `tr_audit_report.html` consolidating all three layers.
+    TrAudit {
+        /// Path to the TAR `auth.052` XML file (or directory).
+        #[arg(long)]
+        tar: PathBuf,
+        /// Path to the TSR `auth.079` XML file.
+        #[arg(long)]
+        tsr: PathBuf,
+        /// Path to the feedback `auth.080` XML file.
+        #[arg(long)]
+        feedback: PathBuf,
+        /// Optional path to the SQLite history store.
+        #[arg(long)]
+        store: Option<PathBuf>,
+        /// Directory where reports are written.
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// Reconcile a firm's internal SFT book export (CSV) against a
+    /// TR SFTR Trade State Report (`auth.079`). Produces
+    /// `SFTR.BREC.*` issues for missing UTIs (in either direction)
+    /// and field mismatches on loan / collateral / maturity / status.
+    /// Outputs `summary.json`, `book_vs_tsr_issues.csv`,
+    /// `book_vs_tsr_report.html`.
+    BookReconcile {
+        /// Path to the internal SFT book export (CSV).
+        #[arg(long)]
+        book: PathBuf,
+        /// Path to the TR `auth.079` SFTR TSR XML.
+        #[arg(long)]
+        tsr: PathBuf,
+        /// Path to the YAML mapping describing book CSV columns.
+        #[arg(long)]
+        mapping: PathBuf,
+        /// Directory where reports are written.
+        #[arg(long)]
+        out: PathBuf,
+    },
     /// Normalize an SFTR file into Parquet — planned milestone.
     Normalize {
         /// Path to the input file.
@@ -123,6 +207,38 @@ pub fn run(action: SftrAction) -> Result<ExitCode> {
         }
         SftrAction::Reconcile { input, store, out } => {
             run_reconcile(&input, &store, &out)?;
+            Ok(ExitCode::SUCCESS)
+        }
+        SftrAction::TrStateScan { input, store, out } => {
+            run_tr_state_scan(&input, store.as_deref(), &out)?;
+            Ok(ExitCode::SUCCESS)
+        }
+        SftrAction::TrActivityScan {
+            input,
+            store,
+            tsr,
+            out,
+        } => {
+            run_tr_activity_scan(&input, store.as_deref(), tsr.as_deref(), &out)?;
+            Ok(ExitCode::SUCCESS)
+        }
+        SftrAction::TrAudit {
+            tar,
+            tsr,
+            feedback,
+            store,
+            out,
+        } => {
+            run_tr_audit(&tar, &tsr, &feedback, store.as_deref(), &out)?;
+            Ok(ExitCode::SUCCESS)
+        }
+        SftrAction::BookReconcile {
+            book,
+            tsr,
+            mapping,
+            out,
+        } => {
+            run_book_reconcile(&book, &tsr, &mapping, &out)?;
             Ok(ExitCode::SUCCESS)
         }
         SftrAction::Normalize { .. } => {
@@ -532,6 +648,885 @@ fn run_reconcile(input: &Path, store_path: &Path, out: &Path) -> Result<()> {
     );
     println!("Report: {}", out.join("report.html").display());
     Ok(())
+}
+
+fn run_tr_state_scan(input: &Path, store_path: Option<&Path>, out: &Path) -> Result<()> {
+    let started_at = Utc::now();
+    let outcome = read_sftr_tr_state_xml(input)
+        .with_context(|| format!("reading SFTR TSR file {}", input.display()))?;
+    info!(
+        file = %input.display(),
+        records = outcome.records.len(),
+        format_issues = outcome.issues.len(),
+        "loaded SFTR TSR XML",
+    );
+
+    let mut issues: Vec<DqIssue> = outcome.issues;
+
+    let prior: Vec<SftrRecord> = if let Some(store_path) = store_path {
+        let store = opendqi_store::open_store(store_path)
+            .with_context(|| format!("opening history store at {}", store_path.display()))?;
+        let utis: Vec<&str> = outcome
+            .records
+            .iter()
+            .filter_map(|r| r.uti.as_deref())
+            .map(str::trim)
+            .filter(|u| !u.is_empty())
+            .collect();
+        let prior = store
+            .load_prior_sftr(&utis, i64::MAX)
+            .context("loading prior SFTR records from history store")?;
+        info!(prior_records = prior.len(), "loaded prior records");
+        prior
+    } else {
+        Vec::new()
+    };
+
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+    let tsr_issues = run_all_sftr_tr_state(
+        &default_sftr_tr_state_checks(),
+        &outcome.records,
+        &prior,
+        &ctx,
+    );
+    info!(tsr_issues = tsr_issues.len(), "SFTR TSR checks run");
+    issues.extend(tsr_issues);
+    sort_issues(&mut issues);
+
+    let inputs = vec![input.to_path_buf()];
+    let sources = vec![input.to_string_lossy().into_owned()];
+    let summary = build_feedback_summary(
+        outcome.records.len(),
+        &issues,
+        &inputs,
+        started_at,
+        Utc::now(),
+    );
+
+    std::fs::create_dir_all(out)
+        .with_context(|| format!("creating output directory {}", out.display()))?;
+    write_summary_json(&out.join("summary.json"), &summary)?;
+    write_issues_csv(&out.join("tr_state_issues.csv"), &issues)?;
+    write_report_html(
+        &out.join("tr_state_report.html"),
+        &summary,
+        &issues,
+        &sources,
+    )?;
+
+    let critical = summary
+        .issues_by_severity
+        .get(&Severity::Critical)
+        .copied()
+        .unwrap_or(0);
+    let high = summary
+        .issues_by_severity
+        .get(&Severity::High)
+        .copied()
+        .unwrap_or(0);
+    println!(
+        "Scanned {} SFTR TSR record(s). {} issues ({} critical, {} high). Score: {:.1}/100.",
+        summary.records_processed, summary.issues_total, critical, high, summary.quality_score
+    );
+    println!("Report: {}", out.join("tr_state_report.html").display());
+    Ok(())
+}
+
+fn run_tr_activity_scan(
+    input: &Path,
+    store_path: Option<&Path>,
+    tsr_path: Option<&Path>,
+    out: &Path,
+) -> Result<()> {
+    let started_at = Utc::now();
+    let inputs = discover_emir_inputs(input)?;
+    if inputs.is_empty() {
+        return Err(anyhow!("no XML inputs found at {}", input.display()));
+    }
+    info!(count = inputs.len(), "discovered SFTR TAR inputs");
+
+    let mut records: Vec<SftrRecord> = Vec::new();
+    let mut format_issues: Vec<DqIssue> = Vec::new();
+    let mut sources: Vec<String> = Vec::with_capacity(inputs.len());
+
+    for path in &inputs {
+        sources.push(path.to_string_lossy().into_owned());
+        if has_extension(path, "xml") {
+            let mut outcome = read_sftr_xml(path)?;
+            info!(
+                file = %path.display(),
+                records = outcome.records.len(),
+                "loaded SFTR TAR XML",
+            );
+            records.append(&mut outcome.records);
+            format_issues.append(&mut outcome.issues);
+        } else {
+            warn!(path = %path.display(), "unsupported file extension; only XML supported by sftr tr-activity-scan");
+        }
+    }
+
+    let prior: Vec<SftrRecord> = if let Some(store_path) = store_path {
+        let store = opendqi_store::open_store(store_path)
+            .with_context(|| format!("opening history store at {}", store_path.display()))?;
+        let utis: Vec<&str> = records
+            .iter()
+            .filter_map(|r| r.uti.as_deref())
+            .map(str::trim)
+            .filter(|u| !u.is_empty())
+            .collect();
+        let prior = store
+            .load_prior_sftr(&utis, i64::MAX)
+            .context("loading prior SFTR records from history store")?;
+        info!(prior_records = prior.len(), "loaded prior records");
+        prior
+    } else {
+        Vec::new()
+    };
+
+    let tsr_records: Option<Vec<SftrTrStateRecord>> = if let Some(tsr_path) = tsr_path {
+        let outcome = read_sftr_tr_state_xml(tsr_path)
+            .with_context(|| format!("reading companion SFTR TSR {}", tsr_path.display()))?;
+        info!(records = outcome.records.len(), "loaded companion SFTR TSR");
+        Some(outcome.records)
+    } else {
+        None
+    };
+
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+
+    let mut action_distribution: BTreeMap<String, u32> = BTreeMap::new();
+    let mut event_distribution: BTreeMap<String, u32> = BTreeMap::new();
+    for r in &records {
+        let action = r.action_type.as_deref().unwrap_or("(missing)").to_owned();
+        *action_distribution.entry(action).or_insert(0) += 1;
+        let event = r.event_type.as_deref().unwrap_or("(missing)").to_owned();
+        *event_distribution.entry(event).or_insert(0) += 1;
+    }
+    let activity_summary = TrActivitySummary {
+        total_records: records.len() as u32,
+        action_distribution,
+        event_distribution,
+    };
+
+    let activity_issues = run_all_sftr_tr_activity(
+        &default_sftr_tr_activity_checks(),
+        &records,
+        &prior,
+        tsr_records.as_deref(),
+        &ctx,
+    );
+    info!(
+        activity_issues = activity_issues.len(),
+        "SFTR TAR checks run"
+    );
+
+    let mut issues: Vec<DqIssue> = format_issues;
+    issues.extend(activity_issues);
+    sort_issues(&mut issues);
+
+    let summary = build_summary(&records, &issues, &inputs, started_at, Utc::now());
+
+    std::fs::create_dir_all(out)
+        .with_context(|| format!("creating output directory {}", out.display()))?;
+    write_summary_json(&out.join("summary.json"), &summary)?;
+    let activity_json =
+        serde_json::to_string_pretty(&activity_summary).context("serialising TrActivitySummary")?;
+    std::fs::write(out.join("tr_activity_summary.json"), activity_json)
+        .context("writing tr_activity_summary.json")?;
+    write_issues_csv(&out.join("tr_activity_issues.csv"), &issues)?;
+    write_report_html(
+        &out.join("tr_activity_report.html"),
+        &summary,
+        &issues,
+        &sources,
+    )?;
+
+    let critical = summary
+        .issues_by_severity
+        .get(&Severity::Critical)
+        .copied()
+        .unwrap_or(0);
+    let high = summary
+        .issues_by_severity
+        .get(&Severity::High)
+        .copied()
+        .unwrap_or(0);
+    println!(
+        "Scanned {} SFTR TAR record(s). {} issues ({} critical, {} high). Score: {:.1}/100.",
+        summary.records_processed, summary.issues_total, critical, high, summary.quality_score
+    );
+    println!("Report: {}", out.join("tr_activity_report.html").display());
+    Ok(())
+}
+
+fn run_tr_audit(
+    tar_path: &Path,
+    tsr_path: &Path,
+    feedback_path: &Path,
+    store_path: Option<&Path>,
+    out: &Path,
+) -> Result<()> {
+    use std::collections::HashSet;
+
+    let started_at = Utc::now();
+
+    // 1. Load all three SFTR layers.
+    let tar_inputs = discover_emir_inputs(tar_path)?;
+    let mut tar_records: Vec<SftrRecord> = Vec::new();
+    let mut tar_issues: Vec<DqIssue> = Vec::new();
+    for p in &tar_inputs {
+        if !has_extension(p, "xml") {
+            warn!(path = %p.display(), "skipping non-XML file in SFTR TAR input");
+            continue;
+        }
+        let mut outcome = read_sftr_xml(p)?;
+        tar_records.append(&mut outcome.records);
+        tar_issues.append(&mut outcome.issues);
+    }
+    info!(records = tar_records.len(), "loaded SFTR TAR");
+
+    let tsr_outcome = read_sftr_tr_state_xml(tsr_path)
+        .with_context(|| format!("reading SFTR TSR {}", tsr_path.display()))?;
+    info!(records = tsr_outcome.records.len(), "loaded SFTR TSR");
+
+    let feedback_outcome = read_sftr_feedback_xml(feedback_path)
+        .with_context(|| format!("reading SFTR feedback {}", feedback_path.display()))?;
+    info!(
+        records = feedback_outcome.records.len(),
+        "loaded SFTR feedback"
+    );
+
+    let mut issues: Vec<DqIssue> = tar_issues;
+    issues.extend(tsr_outcome.issues.clone());
+    issues.extend(feedback_outcome.issues.clone());
+
+    let prior: Vec<SftrRecord> = if let Some(sp) = store_path {
+        let store = opendqi_store::open_store(sp)
+            .with_context(|| format!("opening history store at {}", sp.display()))?;
+        let mut utis: Vec<&str> = tar_records
+            .iter()
+            .filter_map(|r| r.uti.as_deref())
+            .map(str::trim)
+            .filter(|u| !u.is_empty())
+            .collect();
+        utis.extend(
+            tsr_outcome
+                .records
+                .iter()
+                .filter_map(|r| r.uti.as_deref())
+                .map(str::trim)
+                .filter(|u| !u.is_empty()),
+        );
+        utis.extend(
+            feedback_outcome
+                .records
+                .iter()
+                .filter_map(|r| r.uti.as_deref())
+                .map(str::trim)
+                .filter(|u| !u.is_empty()),
+        );
+        let prior = store
+            .load_prior_sftr(&utis, i64::MAX)
+            .context("loading prior SFTR records from history store")?;
+        info!(prior_records = prior.len(), "loaded prior records");
+        prior
+    } else {
+        Vec::new()
+    };
+
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+
+    let tar_checks = run_all_sftr(&default_sftr_checks(), &tar_records, &ctx);
+    issues.extend(tar_checks);
+    let lifecycle =
+        run_all_sftr_lifecycle(&default_sftr_lifecycle_checks(), &tar_records, &prior, &ctx);
+    issues.extend(lifecycle);
+    let tsr_checks = run_all_sftr_tr_state(
+        &default_sftr_tr_state_checks(),
+        &tsr_outcome.records,
+        &prior,
+        &ctx,
+    );
+    issues.extend(tsr_checks);
+    let fbk_checks = run_all_sftr_feedback(
+        &default_sftr_feedback_checks(),
+        &feedback_outcome.records,
+        &prior,
+        &ctx,
+    );
+    issues.extend(fbk_checks);
+    let activity_checks = run_all_sftr_tr_activity(
+        &default_sftr_tr_activity_checks(),
+        &tar_records,
+        &prior,
+        Some(&tsr_outcome.records),
+        &ctx,
+    );
+    issues.extend(activity_checks);
+
+    // Cross-layer coherence (SFTR.AUD.*).
+    let tsr_utis: HashSet<&str> = tsr_outcome
+        .records
+        .iter()
+        .filter_map(|r| r.uti.as_deref())
+        .map(str::trim)
+        .filter(|u| !u.is_empty())
+        .collect();
+    let tar_utis: HashSet<&str> = tar_records
+        .iter()
+        .filter_map(|r| r.uti.as_deref())
+        .map(str::trim)
+        .filter(|u| !u.is_empty())
+        .collect();
+    let rejected_utis: HashSet<&str> = feedback_outcome
+        .records
+        .iter()
+        .filter(|f| matches!(f.feedback_type, opendqi_core::FeedbackType::Rejected))
+        .filter_map(|f| f.uti.as_deref())
+        .map(str::trim)
+        .filter(|u| !u.is_empty())
+        .collect();
+    let tsr_outstanding_utis: HashSet<&str> = tsr_outcome
+        .records
+        .iter()
+        .filter(|r| {
+            r.status
+                .as_deref()
+                .map(|s| {
+                    let s = s.trim();
+                    s.is_empty()
+                        || s.eq_ignore_ascii_case("OUTSTANDING")
+                        || s.eq_ignore_ascii_case("ACTIVE")
+                })
+                .unwrap_or(true)
+        })
+        .filter_map(|r| r.uti.as_deref())
+        .map(str::trim)
+        .filter(|u| !u.is_empty())
+        .collect();
+
+    for r in &tar_records {
+        let is_newt = r
+            .action_type
+            .as_deref()
+            .map(|a| a.eq_ignore_ascii_case("NEWT"))
+            .unwrap_or(false);
+        if !is_newt {
+            continue;
+        }
+        if let Some(uti) = r.uti.as_deref() {
+            let uti = uti.trim();
+            if !uti.is_empty() && !tsr_utis.contains(uti) {
+                issues.push(DqIssue {
+                    check_id: "SFTR.AUD.NEWT_IN_TAR_NOT_IN_TSR".into(),
+                    regime: Regime::Sftr,
+                    severity: Severity::High,
+                    dimension: DqDimension::Consistency,
+                    record_id: r.record_id.clone(),
+                    uti: Some(uti.to_owned()),
+                    field: Some("uti".into()),
+                    value: Some(uti.to_owned()),
+                    message: format!(
+                        "SFT UTI {uti} was NEWT'd in the TAR but is absent from the TSR — submission may not have been accepted."
+                    ),
+                    source_file: r.source_file.clone(),
+                });
+            }
+        }
+    }
+    for uti in tsr_outstanding_utis.iter() {
+        if !tar_utis.contains(uti) {
+            issues.push(DqIssue {
+                check_id: "SFTR.AUD.OUTSTANDING_IN_TSR_NOT_IN_TAR".into(),
+                regime: Regime::Sftr,
+                severity: Severity::Warning,
+                dimension: DqDimension::Consistency,
+                record_id: None,
+                uti: Some((*uti).to_owned()),
+                field: Some("uti".into()),
+                value: Some((*uti).to_owned()),
+                message: format!(
+                    "SFT UTI {uti} is outstanding in the TSR but no record appears in the TAR for this period."
+                ),
+                source_file: Some(tsr_path.to_string_lossy().into_owned()),
+            });
+        }
+    }
+    for uti in rejected_utis.iter() {
+        if tsr_outstanding_utis.contains(uti) {
+            issues.push(DqIssue {
+                check_id: "SFTR.AUD.REJECTED_BUT_OUTSTANDING_IN_TSR".into(),
+                regime: Regime::Sftr,
+                severity: Severity::Critical,
+                dimension: DqDimension::Consistency,
+                record_id: None,
+                uti: Some((*uti).to_owned()),
+                field: Some("uti".into()),
+                value: Some((*uti).to_owned()),
+                message: format!(
+                    "SFT UTI {uti} is reported rejected in the feedback file yet appears outstanding in the TSR — TR-side inconsistency."
+                ),
+                source_file: Some(feedback_path.to_string_lossy().into_owned()),
+            });
+        }
+    }
+
+    sort_issues(&mut issues);
+
+    let all_inputs = vec![
+        tar_path.to_path_buf(),
+        tsr_path.to_path_buf(),
+        feedback_path.to_path_buf(),
+    ];
+    let sources: Vec<String> = all_inputs
+        .iter()
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect();
+    let summary = build_summary(&tar_records, &issues, &all_inputs, started_at, Utc::now());
+
+    std::fs::create_dir_all(out)
+        .with_context(|| format!("creating output directory {}", out.display()))?;
+    write_summary_json(&out.join("summary.json"), &summary)?;
+    write_issues_csv(&out.join("tr_audit_issues.csv"), &issues)?;
+    write_report_html(
+        &out.join("tr_audit_report.html"),
+        &summary,
+        &issues,
+        &sources,
+    )?;
+
+    let critical = summary
+        .issues_by_severity
+        .get(&Severity::Critical)
+        .copied()
+        .unwrap_or(0);
+    let high = summary
+        .issues_by_severity
+        .get(&Severity::High)
+        .copied()
+        .unwrap_or(0);
+    println!(
+        "SFTR TR audit: TAR={} TSR={} feedback={}. {} issues ({} critical, {} high). Score: {:.1}/100.",
+        tar_records.len(),
+        tsr_outcome.records.len(),
+        feedback_outcome.records.len(),
+        summary.issues_total,
+        critical,
+        high,
+        summary.quality_score
+    );
+    println!("Report: {}", out.join("tr_audit_report.html").display());
+    Ok(())
+}
+
+/// SFTR book-vs-TSR valuation tolerance: loan / collateral values are
+/// compared with a 1% relative tolerance. Compile-time constant v1.
+const SFTR_BOOK_VALUE_TOLERANCE_PCT: f64 = 1.0;
+
+fn run_book_reconcile(
+    book_path: &Path,
+    tsr_path: &Path,
+    mapping_path: &Path,
+    out: &Path,
+) -> Result<()> {
+    let started_at = Utc::now();
+
+    let mapping = CsvMapping::from_path(mapping_path)
+        .with_context(|| format!("loading mapping {}", mapping_path.display()))?;
+    let book_records = read_sftr_csv(book_path, &mapping)
+        .with_context(|| format!("reading book CSV {}", book_path.display()))?;
+    info!(records = book_records.len(), "loaded SFTR book");
+
+    let tsr_outcome = read_sftr_tr_state_xml(tsr_path)
+        .with_context(|| format!("reading SFTR TSR {}", tsr_path.display()))?;
+    info!(records = tsr_outcome.records.len(), "loaded SFTR TSR");
+
+    let mut issues: Vec<DqIssue> = tsr_outcome.issues.clone();
+    issues.extend(compute_sftr_book_reconcile_issues(
+        &book_records,
+        &tsr_outcome.records,
+    ));
+    sort_issues(&mut issues);
+
+    let inputs = vec![book_path.to_path_buf(), tsr_path.to_path_buf()];
+    let sources: Vec<String> = inputs
+        .iter()
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect();
+    let summary = build_summary(&book_records, &issues, &inputs, started_at, Utc::now());
+
+    std::fs::create_dir_all(out)
+        .with_context(|| format!("creating output directory {}", out.display()))?;
+    write_summary_json(&out.join("summary.json"), &summary)?;
+    write_issues_csv(&out.join("book_vs_tsr_issues.csv"), &issues)?;
+    write_report_html(
+        &out.join("book_vs_tsr_report.html"),
+        &summary,
+        &issues,
+        &sources,
+    )?;
+
+    let critical = summary
+        .issues_by_severity
+        .get(&Severity::Critical)
+        .copied()
+        .unwrap_or(0);
+    let high = summary
+        .issues_by_severity
+        .get(&Severity::High)
+        .copied()
+        .unwrap_or(0);
+    println!(
+        "SFTR book vs TSR: book={} tsr={}. {} issues ({} critical, {} high). Score: {:.1}/100.",
+        book_records.len(),
+        tsr_outcome.records.len(),
+        summary.issues_total,
+        critical,
+        high,
+        summary.quality_score
+    );
+    println!("Report: {}", out.join("book_vs_tsr_report.html").display());
+    Ok(())
+}
+
+/// Compare a firm's SFT book to a SFTR TSR snapshot. 7 SFTR.BREC.*
+/// issues mirroring the EMIR equivalents but on SFT-specific fields.
+fn compute_sftr_book_reconcile_issues(
+    book: &[SftrRecord],
+    tsr: &[SftrTrStateRecord],
+) -> Vec<DqIssue> {
+    use std::collections::BTreeMap;
+
+    fn uti_key(s: &Option<String>) -> Option<&str> {
+        s.as_deref().map(str::trim).filter(|t| !t.is_empty())
+    }
+
+    let book_by_uti: BTreeMap<&str, &SftrRecord> = book
+        .iter()
+        .filter_map(|r| uti_key(&r.uti).map(|u| (u, r)))
+        .collect();
+    let tsr_by_uti: BTreeMap<&str, &SftrTrStateRecord> = tsr
+        .iter()
+        .filter_map(|r| uti_key(&r.uti).map(|u| (u, r)))
+        .collect();
+
+    let mut all_utis: Vec<&str> = book_by_uti
+        .keys()
+        .chain(tsr_by_uti.keys())
+        .copied()
+        .collect();
+    all_utis.sort();
+    all_utis.dedup();
+
+    let mut out = Vec::new();
+    for uti in all_utis {
+        match (book_by_uti.get(uti), tsr_by_uti.get(uti)) {
+            (Some(b), None) => {
+                out.push(sftr_brec_issue(
+                    "SFTR.BREC.IN_BOOK_NOT_IN_TSR",
+                    Severity::High,
+                    DqDimension::Consistency,
+                    uti,
+                    b.record_id.clone(),
+                    b.source_file.clone(),
+                    Some("uti".into()),
+                    None,
+                    format!(
+                        "SFT UTI {uti} appears in the firm's book but is absent from the SFTR TSR."
+                    ),
+                ));
+            }
+            (None, Some(t)) => {
+                if !sftr_tsr_is_outstanding(t) {
+                    continue;
+                }
+                out.push(sftr_brec_issue(
+                    "SFTR.BREC.IN_TSR_NOT_IN_BOOK",
+                    Severity::High,
+                    DqDimension::Consistency,
+                    uti,
+                    t.record_id.clone(),
+                    t.source_file.clone(),
+                    Some("uti".into()),
+                    None,
+                    format!(
+                        "SFT UTI {uti} is outstanding at the TR but is absent from the firm's book."
+                    ),
+                ));
+            }
+            (Some(b), Some(t)) => {
+                if let (Some(bn), Some(tn)) = (b.loan_value, t.loan_value) {
+                    if !value_within_tolerance(bn, tn) {
+                        out.push(sftr_brec_issue(
+                            "SFTR.BREC.LOAN_MISMATCH",
+                            Severity::High,
+                            DqDimension::Accuracy,
+                            uti,
+                            b.record_id.clone(),
+                            b.source_file.clone(),
+                            Some("loan_value".into()),
+                            Some(format!("book={bn} tsr={tn}")),
+                            format!(
+                                "Loan value mismatch on SFT UTI {uti}: book {bn} vs TSR {tn} (tolerance {SFTR_BOOK_VALUE_TOLERANCE_PCT}%)."
+                            ),
+                        ));
+                    }
+                }
+                if let (Some(bc), Some(tc)) =
+                    (b.loan_currency.as_deref(), t.loan_currency.as_deref())
+                {
+                    if !bc.eq_ignore_ascii_case(tc) {
+                        out.push(sftr_brec_issue(
+                            "SFTR.BREC.LOAN_CURRENCY_MISMATCH",
+                            Severity::Warning,
+                            DqDimension::Validity,
+                            uti,
+                            b.record_id.clone(),
+                            b.source_file.clone(),
+                            Some("loan_currency".into()),
+                            Some(format!("book={bc} tsr={tc}")),
+                            format!(
+                                "Loan currency mismatch on SFT UTI {uti}: book {bc} vs TSR {tc}."
+                            ),
+                        ));
+                    }
+                }
+                if let (Some(bv), Some(tv)) = (b.collateral_value, t.collateral_value) {
+                    if !value_within_tolerance(bv, tv) {
+                        out.push(sftr_brec_issue(
+                            "SFTR.BREC.COLLATERAL_MISMATCH",
+                            Severity::Warning,
+                            DqDimension::Accuracy,
+                            uti,
+                            b.record_id.clone(),
+                            b.source_file.clone(),
+                            Some("collateral_value".into()),
+                            Some(format!("book={bv} tsr={tv}")),
+                            format!(
+                                "Collateral value mismatch on SFT UTI {uti}: book {bv} vs TSR {tv} (tolerance {SFTR_BOOK_VALUE_TOLERANCE_PCT}%)."
+                            ),
+                        ));
+                    }
+                }
+                if let (Some(bm), Some(tm)) = (b.maturity_date, t.maturity_date) {
+                    if bm != tm {
+                        out.push(sftr_brec_issue(
+                            "SFTR.BREC.MATURITY_MISMATCH",
+                            Severity::High,
+                            DqDimension::Accuracy,
+                            uti,
+                            b.record_id.clone(),
+                            b.source_file.clone(),
+                            Some("maturity_date".into()),
+                            Some(format!("book={bm} tsr={tm}")),
+                            format!("Maturity mismatch on SFT UTI {uti}: book {bm} vs TSR {tm}."),
+                        ));
+                    }
+                }
+                let book_active = b.termination_date.is_none();
+                let tsr_terminated = t
+                    .status
+                    .as_deref()
+                    .map(|s| s.trim().eq_ignore_ascii_case("TERMINATED"))
+                    .unwrap_or(false);
+                if book_active && tsr_terminated {
+                    out.push(sftr_brec_issue(
+                        "SFTR.BREC.STATUS_MISMATCH",
+                        Severity::Warning,
+                        DqDimension::Consistency,
+                        uti,
+                        b.record_id.clone(),
+                        b.source_file.clone(),
+                        Some("status".into()),
+                        Some("book=active tsr=TERMINATED".into()),
+                        format!(
+                            "Status mismatch on SFT UTI {uti}: book has no termination but TSR reports the SFT as TERMINATED."
+                        ),
+                    ));
+                }
+            }
+            (None, None) => unreachable!(),
+        }
+    }
+    out
+}
+
+fn sftr_tsr_is_outstanding(t: &SftrTrStateRecord) -> bool {
+    match t.status.as_deref() {
+        None => true,
+        Some(s) => {
+            let s = s.trim();
+            s.is_empty()
+                || s.eq_ignore_ascii_case("OUTSTANDING")
+                || s.eq_ignore_ascii_case("ACTIVE")
+                || s.eq_ignore_ascii_case("LIVE")
+        }
+    }
+}
+
+fn value_within_tolerance(book: rust_decimal::Decimal, tsr: rust_decimal::Decimal) -> bool {
+    if book == tsr {
+        return true;
+    }
+    let book_f = book.to_string().parse::<f64>().unwrap_or(f64::NAN);
+    let tsr_f = tsr.to_string().parse::<f64>().unwrap_or(f64::NAN);
+    if !book_f.is_finite() || !tsr_f.is_finite() {
+        return false;
+    }
+    if tsr_f.abs() < f64::EPSILON {
+        return book_f.abs() < f64::EPSILON;
+    }
+    let diff_pct = ((book_f - tsr_f).abs() / tsr_f.abs()) * 100.0;
+    diff_pct <= SFTR_BOOK_VALUE_TOLERANCE_PCT
+}
+
+#[allow(clippy::too_many_arguments)]
+fn sftr_brec_issue(
+    check_id: &str,
+    severity: Severity,
+    dimension: DqDimension,
+    uti: &str,
+    record_id: Option<String>,
+    source_file: Option<String>,
+    field: Option<String>,
+    value: Option<String>,
+    message: String,
+) -> DqIssue {
+    DqIssue {
+        check_id: check_id.into(),
+        regime: Regime::Sftr,
+        severity,
+        dimension,
+        record_id,
+        uti: Some(uti.to_owned()),
+        field,
+        value,
+        message,
+        source_file,
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::items_after_test_module)]
+mod sftr_book_reconcile_tests {
+    use super::*;
+    use chrono::NaiveDate;
+    use rust_decimal::Decimal;
+
+    fn book_baseline(uti: &str) -> SftrRecord {
+        SftrRecord {
+            uti: Some(uti.into()),
+            loan_value: Some(Decimal::from(1_000_000)),
+            loan_currency: Some("EUR".into()),
+            collateral_value: Some(Decimal::new(1_100_000, 2)),
+            collateral_currency: Some("EUR".into()),
+            maturity_date: NaiveDate::from_ymd_opt(2027, 6, 30),
+            ..Default::default()
+        }
+    }
+    fn tsr_baseline(uti: &str) -> SftrTrStateRecord {
+        SftrTrStateRecord {
+            uti: Some(uti.into()),
+            loan_value: Some(Decimal::from(1_000_000)),
+            loan_currency: Some("EUR".into()),
+            collateral_value: Some(Decimal::new(1_100_000, 2)),
+            collateral_currency: Some("EUR".into()),
+            maturity_date: NaiveDate::from_ymd_opt(2027, 6, 30),
+            status: Some("OUTSTANDING".into()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn baseline_match_emits_nothing() {
+        let issues =
+            compute_sftr_book_reconcile_issues(&[book_baseline("U1")], &[tsr_baseline("U1")]);
+        assert!(issues.is_empty(), "expected no issues, got {issues:?}");
+    }
+
+    #[test]
+    fn in_book_not_in_tsr() {
+        let issues = compute_sftr_book_reconcile_issues(&[book_baseline("UB")], &[]);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].check_id, "SFTR.BREC.IN_BOOK_NOT_IN_TSR");
+    }
+
+    #[test]
+    fn in_tsr_not_in_book_outstanding_only() {
+        let mut t = tsr_baseline("UT");
+        let issues = compute_sftr_book_reconcile_issues(&[], &[t.clone()]);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].check_id, "SFTR.BREC.IN_TSR_NOT_IN_BOOK");
+        t.status = Some("TERMINATED".into());
+        let issues = compute_sftr_book_reconcile_issues(&[], &[t]);
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn loan_mismatch() {
+        let mut b = book_baseline("U1");
+        b.loan_value = Some(Decimal::from(9_999_999));
+        let issues = compute_sftr_book_reconcile_issues(&[b], &[tsr_baseline("U1")]);
+        assert!(issues
+            .iter()
+            .any(|i| i.check_id == "SFTR.BREC.LOAN_MISMATCH"));
+    }
+
+    #[test]
+    fn loan_currency_mismatch() {
+        let mut b = book_baseline("U1");
+        b.loan_currency = Some("USD".into());
+        let issues = compute_sftr_book_reconcile_issues(&[b], &[tsr_baseline("U1")]);
+        assert!(issues
+            .iter()
+            .any(|i| i.check_id == "SFTR.BREC.LOAN_CURRENCY_MISMATCH"));
+    }
+
+    #[test]
+    fn collateral_mismatch_outside_tolerance() {
+        let mut b = book_baseline("U1");
+        // 50% off — beyond 1% tolerance.
+        b.collateral_value = Some(Decimal::new(550_000, 2));
+        let issues = compute_sftr_book_reconcile_issues(&[b], &[tsr_baseline("U1")]);
+        assert!(issues
+            .iter()
+            .any(|i| i.check_id == "SFTR.BREC.COLLATERAL_MISMATCH"));
+    }
+
+    #[test]
+    fn maturity_mismatch() {
+        let mut b = book_baseline("U1");
+        b.maturity_date = NaiveDate::from_ymd_opt(2099, 12, 31);
+        let issues = compute_sftr_book_reconcile_issues(&[b], &[tsr_baseline("U1")]);
+        assert!(issues
+            .iter()
+            .any(|i| i.check_id == "SFTR.BREC.MATURITY_MISMATCH"));
+    }
+
+    #[test]
+    fn status_mismatch_book_active_tsr_terminated() {
+        let mut t = tsr_baseline("U1");
+        t.status = Some("TERMINATED".into());
+        let issues = compute_sftr_book_reconcile_issues(&[book_baseline("U1")], &[t]);
+        assert!(issues
+            .iter()
+            .any(|i| i.check_id == "SFTR.BREC.STATUS_MISMATCH"));
+    }
 }
 
 fn sort_issues(issues: &mut [DqIssue]) {

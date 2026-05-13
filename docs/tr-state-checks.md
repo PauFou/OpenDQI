@@ -3,8 +3,9 @@
 OpenDQI's TSR layer ingests the **state-oriented** report a Trade
 Repository periodically sends to the firm — its view of which trades
 are currently outstanding, with their latest valuation, notional,
-collateral portfolio, and maturity. EMIR uses ISO 20022 `auth.107`
-(SFTR uses `auth.079`, on the Phase 6 roadmap).
+collateral portfolio, and maturity. EMIR uses ISO 20022 `auth.107`;
+SFTR uses `auth.079` (the SFT TSR adds loan / collateral / haircut /
+SFT-type columns — see the SFTR section below).
 
 Unlike the activity-oriented TAR or the rejection-oriented feedback
 report, a TSR is a **snapshot**. Each line answers "what does the TR
@@ -68,3 +69,29 @@ TSR checks live under `crates/opendqi-core/src/dq/tr_state/`. Each
 implements the `TrStateCheck` trait, lives in a single file, ships
 two unit tests (positive + negative), and is registered in
 `default_tr_state_checks()` in `crates/opendqi-core/src/dq/mod.rs`.
+
+## SFTR (`auth.079`)
+
+The SFTR TSR layer mirrors the EMIR design but operates on
+`SftrTrStateRecord` (loan, collateral, haircut, sft_type, reuse
+indicator). It is invoked via:
+
+```bash
+opendqi sftr tr-state-scan <auth.079.xml> [--store <db>] --out <dir>
+```
+
+Outputs match the EMIR layer (`summary.json`, `tr_state_issues.csv`,
+`tr_state_report.html`) and can co-exist with other SFTR layers in the
+same `--out` directory.
+
+| Check ID | Dimension | Severity | What it detects |
+|---|---|---|---|
+| `SFTR.TST.OUTSTANDING_SUMMARY` | Completeness | Info | One Info issue per outstanding SFT. |
+| `SFTR.TST.STALE_VALUATION` | Accuracy | High | TSR header `state_as_of` older than the configured threshold. |
+| `SFTR.TST.MISSING_COLLATERAL` | Completeness | High | Outstanding SFT with no collateral value. |
+| `SFTR.TST.ACTIVE_PAST_MATURITY` | Consistency | High | Outstanding SFT whose maturity date is in the past. |
+| `SFTR.TST.DUPLICATE_ACTIVE_UTI` | Uniqueness | Critical | Same UTI appears more than once among outstanding SFTs. |
+| `SFTR.TST.HAIRCUT_OUT_OF_RANGE_ON_OUTSTANDING` | Accuracy | Warning | Haircut on an outstanding SFT < 0 or > 1.0. |
+
+Checks live under `crates/opendqi-core/src/dq/sftr/tr_state/` and
+implement the `SftrTrStateCheck` trait.

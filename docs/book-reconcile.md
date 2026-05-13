@@ -91,4 +91,33 @@ positives).
 - **Multi-file books** — single CSV per run; trivial to extend.
 - **`EMIR.BREC.COUNTERPARTY_MISMATCH`** — the book's LEI semantics
   vary across firms; reserved for a later milestone.
-- **SFTR book-reconcile** — Phase 6.
+
+## SFTR (`auth.079`)
+
+The SFTR equivalent reconciles a firm's internal SFT book against an
+SFTR TSR snapshot. It is invoked via:
+
+```bash
+opendqi sftr book-reconcile \
+  --book ./internal_sft_book.csv \
+  --tsr ./auth079.xml \
+  --mapping ./book_mapping.yml \
+  --out ./book_vs_tsr_report/
+```
+
+The mapping recognises SFT-specific columns (`loan_value`,
+`loan_currency`, `collateral_value`, `collateral_currency`, `haircut`,
+`sft_type`, …). See
+[`examples/sftr/book_reconcile/book_mapping.yml`](../examples/sftr/book_reconcile/book_mapping.yml).
+
+7 `SFTR.BREC.*` checks mirror the EMIR equivalents:
+
+| Check ID | Severity | What it detects |
+|---|---|---|
+| `SFTR.BREC.IN_BOOK_NOT_IN_TSR` | High | SFT in the firm's book but absent from the TSR. |
+| `SFTR.BREC.IN_TSR_NOT_IN_BOOK` | High | Outstanding SFT at the TR but absent from the firm's book. |
+| `SFTR.BREC.LOAN_MISMATCH` | High | Loan value differs beyond 1% tolerance. |
+| `SFTR.BREC.LOAN_CURRENCY_MISMATCH` | Warning | Loan currency differs. |
+| `SFTR.BREC.COLLATERAL_MISMATCH` | Warning | Collateral value differs beyond 1% tolerance. |
+| `SFTR.BREC.MATURITY_MISMATCH` | High | Maturity date differs. |
+| `SFTR.BREC.STATUS_MISMATCH` | Warning | Book reports the SFT as active but the TSR has it as TERMINATED. |

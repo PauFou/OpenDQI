@@ -499,6 +499,91 @@ impl Default for TrStateRecord {
     }
 }
 
+/// One line from an SFTR Trade State Report (TSR) — the TR's view
+/// of one outstanding securities-financing transaction at a given
+/// point in time (ISO 20022 `auth.079`).
+///
+/// Like `TrStateRecord` but with SFT-specific fields:
+/// loan / collateral / haircut / sft_type / reuse_indicator.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SftrTrStateRecord {
+    /// Source file path (or other origin label).
+    pub source_file: Option<String>,
+    /// Stable identifier of the line within the source.
+    pub record_id: Option<String>,
+    /// Regulatory regime — always `Regime::Sftr` for this record.
+    pub regime: Regime,
+    /// Snapshot timestamp from the report header.
+    pub state_as_of: Option<DateTime<Utc>>,
+    /// UTI of the outstanding SFT.
+    pub uti: Option<String>,
+    /// LEI of the reporting counterparty.
+    pub reporting_counterparty: Option<String>,
+    /// LEI of the other counterparty.
+    pub other_counterparty: Option<String>,
+    /// TR-side status — typically `OUTSTANDING`, `MATURED`,
+    /// `TERMINATED`.
+    pub status: Option<String>,
+    /// SFT type: `REPO`, `BSB`, `SLEB`, `MGLD`.
+    pub sft_type: Option<String>,
+    /// Loan / principal value (latest TR-held amount).
+    pub loan_value: Option<Decimal>,
+    /// Loan currency (ISO 4217).
+    pub loan_currency: Option<String>,
+    /// Collateral market value (latest TR-held amount).
+    pub collateral_value: Option<Decimal>,
+    /// Collateral currency.
+    pub collateral_currency: Option<String>,
+    /// Haircut applied to the collateral (0.0 — 1.0).
+    pub haircut: Option<Decimal>,
+    /// "Available for collateral reuse" indicator.
+    pub reuse_indicator: Option<bool>,
+    /// Effective / event date.
+    pub effective_date: Option<NaiveDate>,
+    /// Maturity date.
+    pub maturity_date: Option<NaiveDate>,
+    /// Termination date, when applicable.
+    pub termination_date: Option<NaiveDate>,
+    /// Settlement date.
+    pub settlement_date: Option<NaiveDate>,
+    /// Collateral portfolio code.
+    pub collateral_portfolio_code: Option<String>,
+    /// ISIN of the security used as collateral.
+    pub collateral_isin: Option<String>,
+    /// Catch-all of XML leaves not promoted to typed fields.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub raw_fields: BTreeMap<String, String>,
+}
+
+impl Default for SftrTrStateRecord {
+    fn default() -> Self {
+        Self {
+            source_file: None,
+            record_id: None,
+            regime: Regime::Sftr,
+            state_as_of: None,
+            uti: None,
+            reporting_counterparty: None,
+            other_counterparty: None,
+            status: None,
+            sft_type: None,
+            loan_value: None,
+            loan_currency: None,
+            collateral_value: None,
+            collateral_currency: None,
+            haircut: None,
+            reuse_indicator: None,
+            effective_date: None,
+            maturity_date: None,
+            termination_date: None,
+            settlement_date: None,
+            collateral_portfolio_code: None,
+            collateral_isin: None,
+            raw_fields: BTreeMap::new(),
+        }
+    }
+}
+
 /// One line item from a Trade Repository reconciliation report
 /// (ISO 20022 `auth.106` for EMIR, `auth.083` for SFTR). Each
 /// record describes a UTI's pairing / reconciliation status between

@@ -67,3 +67,25 @@ Each implements the `TrActivityCheck` trait (signature `(records,
 prior, tsr, ctx) -> Vec<DqIssue>`), lives in a single file, ships
 two unit tests, and is registered in `default_tr_activity_checks()`
 in `crates/opendqi-core/src/dq/mod.rs`.
+
+## SFTR (`auth.052`)
+
+The SFTR TAR layer mirrors the EMIR design but operates on
+`SftrRecord` and an optional companion `SftrTrStateRecord` set
+(`auth.079`). It is invoked via:
+
+```bash
+opendqi sftr tr-activity-scan <auth.052.xml> \
+  [--store <db>] [--tsr <auth.079>] --out <dir>
+```
+
+| Check ID | Dimension | Severity | What it detects |
+|---|---|---|---|
+| `SFTR.TRA.REPEATED_CORRECTION` | Accuracy | High | Same UTI carries ≥3 CORR/MODI in the same TAR batch. |
+| `SFTR.TRA.SPIKE_TERM` | Accuracy | Warning | ETRM proportion > 25% of the batch. |
+| `SFTR.TRA.SPIKE_MODI` | Accuracy | Warning | MODI proportion > 40% of the batch. |
+| `SFTR.TRA.DUPLICATE_NEWT_IN_BATCH` | Uniqueness | Critical | Same UTI NEWT'd twice in the same batch. |
+| `SFTR.TRA.NEWT_NOT_IN_TSR` | Consistency | High | UTI NEWT'd in TAR but absent from the companion TSR (`--tsr` only). |
+
+Checks live under `crates/opendqi-core/src/dq/sftr/tr_activity/` and
+implement the `SftrTrActivityCheck` trait.

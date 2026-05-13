@@ -1,11 +1,21 @@
 # SFTR data-quality checks
 
-OpenDQI currently ships **40 SFTR data-quality checks**, exposed
-through [`opendqi_core::default_sftr_checks`] and runnable via
-`opendqi sftr scan`. The catalog mirrors the EMIR check coverage —
-same dimensions, similar logic, SFTR-specific field semantics
-(loan / collateral / haircut / settlement, SFT type, master
-agreement).
+OpenDQI ships **40 single-batch SFTR checks** (this document), plus
+SFTR post-TR intelligence layers — `auth.080` feedback,
+`auth.083` reconciliation, `auth.079` TSR, `auth.052` TAR,
+`auth.052 + auth.079 + auth.080` audit, and CSV-vs-TSR
+book-reconcile. The single-batch catalog below covers
+`opendqi sftr scan`; see
+[`tr-state-checks.md`](tr-state-checks.md),
+[`tr-activity-checks.md`](tr-activity-checks.md),
+[`tr-audit.md`](tr-audit.md),
+[`tr-feedback.md`](tr-feedback.md),
+[`tr-reconciliation.md`](tr-reconciliation.md), and
+[`book-reconcile.md`](book-reconcile.md) for the post-TR layers.
+
+The catalog mirrors the EMIR check coverage — same dimensions,
+similar logic, SFTR-specific field semantics (loan / collateral /
+haircut / settlement, SFT type, master agreement).
 
 Severity scale: `info` < `warning` < `high` < `critical`.
 

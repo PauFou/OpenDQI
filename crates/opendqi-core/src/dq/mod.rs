@@ -5,7 +5,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use crate::config::Thresholds;
 use crate::model::{
     DqDimension, DqIssue, EmirRecord, FeedbackRecord, ReconciliationRecord, Severity, SftrRecord,
-    TrStateRecord,
+    SftrTrStateRecord, TrStateRecord,
 };
 
 mod abnormal_maturity;
@@ -821,6 +821,74 @@ pub fn run_all_tr_activity(
     records: &[EmirRecord],
     prior: &[EmirRecord],
     tsr: Option<&[TrStateRecord]>,
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    let mut issues: Vec<DqIssue> = checks
+        .iter()
+        .flat_map(|c| c.run(records, prior, tsr, ctx))
+        .collect();
+    sort_issues(&mut issues);
+    issues
+}
+
+// ---- SFTR Trade State Report (auth.079) checks ------------------
+
+pub use sftr::tr_state::{
+    SftrActivePastMaturity, SftrDuplicateActiveUti, SftrHaircutOutOfRangeOnTsr,
+    SftrMissingCollateralOnTsr, SftrOutstandingSummary, SftrStaleValuationOnTsr, SftrTrStateCheck,
+};
+
+/// Default SFTR TSR check registry (6 checks).
+pub fn default_sftr_tr_state_checks() -> Vec<Box<dyn SftrTrStateCheck>> {
+    vec![
+        Box::new(SftrOutstandingSummary),
+        Box::new(SftrStaleValuationOnTsr),
+        Box::new(SftrMissingCollateralOnTsr),
+        Box::new(SftrActivePastMaturity),
+        Box::new(SftrDuplicateActiveUti),
+        Box::new(SftrHaircutOutOfRangeOnTsr),
+    ]
+}
+
+/// Run every SFTR TSR check.
+pub fn run_all_sftr_tr_state(
+    checks: &[Box<dyn SftrTrStateCheck>],
+    records: &[SftrTrStateRecord],
+    prior: &[SftrRecord],
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    let mut issues: Vec<DqIssue> = checks
+        .iter()
+        .flat_map(|c| c.run(records, prior, ctx))
+        .collect();
+    sort_issues(&mut issues);
+    issues
+}
+
+// ---- SFTR Trade Activity Report (auth.052 TR-replay) checks -----
+
+pub use sftr::tr_activity::{
+    SftrDuplicateNewtInBatch, SftrNewtNotInTsr, SftrRepeatedCorrection, SftrSpikeModi,
+    SftrSpikeTerm, SftrTrActivityCheck,
+};
+
+/// Default SFTR TAR check registry (5 checks).
+pub fn default_sftr_tr_activity_checks() -> Vec<Box<dyn SftrTrActivityCheck>> {
+    vec![
+        Box::new(SftrRepeatedCorrection),
+        Box::new(SftrSpikeTerm),
+        Box::new(SftrSpikeModi),
+        Box::new(SftrDuplicateNewtInBatch),
+        Box::new(SftrNewtNotInTsr),
+    ]
+}
+
+/// Run every SFTR TAR check.
+pub fn run_all_sftr_tr_activity(
+    checks: &[Box<dyn SftrTrActivityCheck>],
+    records: &[SftrRecord],
+    prior: &[SftrRecord],
+    tsr: Option<&[SftrTrStateRecord]>,
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
     let mut issues: Vec<DqIssue> = checks

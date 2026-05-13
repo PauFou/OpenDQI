@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic SFTR Trade State Report (auth.079.001.01) for OpenDQI tests.
+  Hand-authored — not derived from any ESMA or SWIFT example.
+  Each SftStat exercises one of the 6 SFTR.TST.* checks, plus a clean
+  outstanding baseline so SFTR.TST.OUTSTANDING_SUMMARY emits a row.
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.079.001.01">
+  <SftStateReport>
+    <Hdr><StateAsOf>2026-05-13T08:00:00Z</StateAsOf></Hdr>
+
+    <!-- 1. CLEAN outstanding REPO with valid haircut (baseline). -->
+    <SftStat>
+      <UnqTxIdr>OPENDQI-SFTR-TSR-CLEAN-0001</UnqTxIdr>
+      <RptgCtrPty><LEI>ABCDEFGHIJKLMNOPQR01</LEI></RptgCtrPty>
+      <OthrCtrPty><LEI>ABCDEFGHIJKLMNOPQR02</LEI></OthrCtrPty>
+      <Sts>OUTSTANDING</Sts>
+      <SftTp>REPO</SftTp>
+      <LoanAmt Ccy="EUR">1000000</LoanAmt>
+      <CollVal Ccy="EUR">1050000</CollVal>
+      <Hrcut>0.05</Hrcut>
+      <RuseInd>false</RuseInd>
+      <EvntDt>2026-05-12</EvntDt>
+      <MtrtyDt>2026-08-12</MtrtyDt>
+      <SttlmDt>2026-05-13</SttlmDt>
+      <Sctys><ISIN>DE0001135275</ISIN></Sctys>
+    </SftStat>
+
+    <!-- 2. MISSING_COLLATERAL: outstanding but CollVal absent. -->
+    <SftStat>
+      <UnqTxIdr>OPENDQI-SFTR-TSR-NOCOLL-0002</UnqTxIdr>
+      <RptgCtrPty><LEI>ABCDEFGHIJKLMNOPQR01</LEI></RptgCtrPty>
+      <OthrCtrPty><LEI>ABCDEFGHIJKLMNOPQR02</LEI></OthrCtrPty>
+      <Sts>OUTSTANDING</Sts>
+      <SftTp>REPO</SftTp>
+      <LoanAmt Ccy="EUR">500000</LoanAmt>
+      <MtrtyDt>2026-09-30</MtrtyDt>
+    </SftStat>
+
+    <!-- 3. ACTIVE_PAST_MATURITY: outstanding but maturity is in the past. -->
+    <SftStat>
+      <UnqTxIdr>OPENDQI-SFTR-TSR-PASTMAT-0003</UnqTxIdr>
+      <RptgCtrPty><LEI>ABCDEFGHIJKLMNOPQR01</LEI></RptgCtrPty>
+      <OthrCtrPty><LEI>ABCDEFGHIJKLMNOPQR02</LEI></OthrCtrPty>
+      <Sts>OUTSTANDING</Sts>
+      <SftTp>BSB</SftTp>
+      <LoanAmt Ccy="EUR">750000</LoanAmt>
+      <CollVal Ccy="EUR">800000</CollVal>
+      <Hrcut>0.05</Hrcut>
+      <MtrtyDt>2024-12-31</MtrtyDt>
+    </SftStat>
+
+    <!-- 4. HAIRCUT_OUT_OF_RANGE: 1.5 is &gt; 1.0. -->
+    <SftStat>
+      <UnqTxIdr>OPENDQI-SFTR-TSR-HRCUT-0004</UnqTxIdr>
+      <RptgCtrPty><LEI>ABCDEFGHIJKLMNOPQR01</LEI></RptgCtrPty>
+      <OthrCtrPty><LEI>ABCDEFGHIJKLMNOPQR02</LEI></OthrCtrPty>
+      <Sts>OUTSTANDING</Sts>
+      <SftTp>REPO</SftTp>
+      <LoanAmt Ccy="USD">2000000</LoanAmt>
+      <CollVal Ccy="USD">2100000</CollVal>
+      <Hrcut>1.5</Hrcut>
+      <MtrtyDt>2027-02-15</MtrtyDt>
+    </SftStat>
+
+    <!-- 5. DUPLICATE_ACTIVE_UTI first occurrence. -->
+    <SftStat>
+      <UnqTxIdr>OPENDQI-SFTR-TSR-DUP-0005</UnqTxIdr>
+      <RptgCtrPty><LEI>ABCDEFGHIJKLMNOPQR01</LEI></RptgCtrPty>
+      <OthrCtrPty><LEI>ABCDEFGHIJKLMNOPQR02</LEI></OthrCtrPty>
+      <Sts>OUTSTANDING</Sts>
+      <SftTp>SLEB</SftTp>
+      <LoanAmt Ccy="EUR">300000</LoanAmt>
+      <CollVal Ccy="EUR">320000</CollVal>
+      <Hrcut>0.05</Hrcut>
+      <MtrtyDt>2027-04-30</MtrtyDt>
+    </SftStat>
+
+    <!-- 5bis. DUPLICATE_ACTIVE_UTI second occurrence (same UTI). -->
+    <SftStat>
+      <UnqTxIdr>OPENDQI-SFTR-TSR-DUP-0005</UnqTxIdr>
+      <RptgCtrPty><LEI>ABCDEFGHIJKLMNOPQR01</LEI></RptgCtrPty>
+      <OthrCtrPty><LEI>ABCDEFGHIJKLMNOPQR02</LEI></OthrCtrPty>
+      <Sts>OUTSTANDING</Sts>
+      <SftTp>SLEB</SftTp>
+      <LoanAmt Ccy="EUR">300000</LoanAmt>
+      <CollVal Ccy="EUR">320000</CollVal>
+      <Hrcut>0.05</Hrcut>
+      <MtrtyDt>2027-04-30</MtrtyDt>
+    </SftStat>
+
+    <!-- 6. STALE_VALUATION: state_as_of is recent, but record-level
+         valuation_timestamp absent and CollVal is present with a far
+         maturity — covered by stale_valuation when state_as_of > threshold.
+         Here we add a TERMINATED SFT to ensure outstanding filter is sane. -->
+    <SftStat>
+      <UnqTxIdr>OPENDQI-SFTR-TSR-TERM-0006</UnqTxIdr>
+      <RptgCtrPty><LEI>ABCDEFGHIJKLMNOPQR01</LEI></RptgCtrPty>
+      <OthrCtrPty><LEI>ABCDEFGHIJKLMNOPQR02</LEI></OthrCtrPty>
+      <Sts>TERMINATED</Sts>
+      <SftTp>REPO</SftTp>
+      <LoanAmt Ccy="EUR">100000</LoanAmt>
+      <CollVal Ccy="EUR">102000</CollVal>
+      <Hrcut>0.05</Hrcut>
+      <MtrtyDt>2027-01-01</MtrtyDt>
+      <TermntnDt>2026-04-30</TermntnDt>
+    </SftStat>
+
+  </SftStateReport>
+</Document>

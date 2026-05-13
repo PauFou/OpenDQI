@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, NaiveDate, Utc};
-use opendqi_core::EmirRecord;
+use opendqi_core::{EmirRecord, SftrRecord};
 use rust_decimal::Decimal;
 use tracing::warn;
 
@@ -115,6 +115,92 @@ pub fn read_emir_csv(path: &Path, mapping: &CsvMapping) -> Result<Vec<EmirRecord
             delta: pick("delta").and_then(|v| parse_decimal(&v, "delta", &record_id_label)),
             gamma: pick("gamma").and_then(|v| parse_decimal(&v, "gamma", &record_id_label)),
             vega: pick("vega").and_then(|v| parse_decimal(&v, "vega", &record_id_label)),
+            ..Default::default()
+        };
+        out.push(record);
+    }
+    Ok(out)
+}
+
+/// Read a CSV file as an SFTR book export and produce
+/// `Vec<SftrRecord>` using the given mapping. Mirrors `read_emir_csv`
+/// but populates SFT-specific fields (loan / collateral / haircut /
+/// sft_type, …) instead of derivative fields.
+pub fn read_sftr_csv(path: &Path, mapping: &CsvMapping) -> Result<Vec<SftrRecord>> {
+    let mut reader = csv::ReaderBuilder::new()
+        .has_headers(true)
+        .from_path(path)
+        .with_context(|| format!("opening CSV {}", path.display()))?;
+
+    let headers = reader
+        .headers()
+        .cloned()
+        .with_context(|| format!("reading CSV headers from {}", path.display()))?;
+    let source_label = path.to_string_lossy().into_owned();
+
+    let mut out = Vec::new();
+    for (i, row) in reader.records().enumerate() {
+        let row = row.with_context(|| format!("reading row {} from {}", i + 1, path.display()))?;
+
+        let pick = |canonical: &str| -> Option<String> {
+            let header = mapping.fields.get(canonical)?;
+            let col_idx = headers.iter().position(|h| h == header)?;
+            let raw = row.get(col_idx)?;
+            let trimmed = raw.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_owned())
+            }
+        };
+
+        let line_no = (i + 2) as u64;
+        let record_id_label = format!("{}#{line_no}", source_label);
+
+        let date_fmt = mapping.effective_date_format();
+        let dt_fmt = mapping.effective_datetime_format();
+
+        let record = SftrRecord {
+            source_file: Some(source_label.clone()),
+            record_id: pick("record_id").or_else(|| Some(record_id_label.clone())),
+            uti: pick("uti"),
+            prior_uti: pick("prior_uti"),
+            action_type: pick("action_type"),
+            event_type: pick("event_type"),
+            entity_responsible_for_reporting: pick("entity_responsible_for_reporting"),
+            counterparty_1: pick("counterparty_1"),
+            counterparty_2: pick("counterparty_2"),
+            sft_type: pick("sft_type"),
+            master_agreement_type: pick("master_agreement_type"),
+            master_agreement_version: pick("master_agreement_version"),
+            loan_value: pick("loan_value")
+                .and_then(|v| parse_decimal(&v, "loan_value", &record_id_label)),
+            loan_currency: pick("loan_currency"),
+            collateral_value: pick("collateral_value")
+                .and_then(|v| parse_decimal(&v, "collateral_value", &record_id_label)),
+            collateral_currency: pick("collateral_currency"),
+            haircut: pick("haircut").and_then(|v| parse_decimal(&v, "haircut", &record_id_label)),
+            reuse_indicator: pick("reuse_indicator").and_then(|v| parse_bool(&v)),
+            rebate_rate: pick("rebate_rate")
+                .and_then(|v| parse_decimal(&v, "rebate_rate", &record_id_label)),
+            lending_fee: pick("lending_fee")
+                .and_then(|v| parse_decimal(&v, "lending_fee", &record_id_label)),
+            execution_timestamp: pick("execution_timestamp")
+                .and_then(|v| parse_datetime(&v, dt_fmt, "execution_timestamp", &record_id_label)),
+            event_timestamp: pick("event_timestamp")
+                .and_then(|v| parse_datetime(&v, dt_fmt, "event_timestamp", &record_id_label)),
+            reporting_timestamp: pick("reporting_timestamp")
+                .and_then(|v| parse_datetime(&v, dt_fmt, "reporting_timestamp", &record_id_label)),
+            effective_date: pick("effective_date")
+                .and_then(|v| parse_date(&v, date_fmt, "effective_date", &record_id_label)),
+            maturity_date: pick("maturity_date")
+                .and_then(|v| parse_date(&v, date_fmt, "maturity_date", &record_id_label)),
+            termination_date: pick("termination_date")
+                .and_then(|v| parse_date(&v, date_fmt, "termination_date", &record_id_label)),
+            settlement_date: pick("settlement_date")
+                .and_then(|v| parse_date(&v, date_fmt, "settlement_date", &record_id_label)),
+            collateral_portfolio_code: pick("collateral_portfolio_code"),
+            collateral_isin: pick("collateral_isin"),
             ..Default::default()
         };
         out.push(record);

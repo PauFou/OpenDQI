@@ -21,6 +21,6 @@ pub use config::Thresholds;
 pub use dq::{default_checks, default_sftr_checks, Check, SftrCheck};
 pub use model::{
     DqDimension, DqIssue, EmirRecord, FeedbackRecord, FeedbackType, ReconciliationRecord, Regime,
-    ScanSummary, Severity, SftrRecord, TrActivitySummary, TrStateRecord,
+    ScanSummary, Severity, SftrRecord, SftrTrStateRecord, TrActivitySummary, TrStateRecord,
 };
 pub use scoring::quality_score;

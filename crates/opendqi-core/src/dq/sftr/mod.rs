@@ -19,6 +19,8 @@ pub trait SftrCheck: Send + Sync {
 pub(crate) mod feedback;
 pub(crate) mod lifecycle;
 pub(crate) mod reconciliation;
+pub(crate) mod tr_activity;
+pub(crate) mod tr_state;
 
 mod action_type_enum;
 mod coll_needs_currency;
