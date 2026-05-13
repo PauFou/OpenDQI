@@ -29,7 +29,7 @@ OpenDQI organises its work around the three layers of a TR-firm conversation. Se
 
 1. **Activity layer (TAR)** — what was submitted or processed during a period. Today: `opendqi emir scan` for firm submissions and `opendqi emir tr-activity-scan` for TR replays of `auth.030`, with 5 EMIR.TRA.* checks (repeated correction, NEWT/MODI/TERM spikes, duplicate NEWT in batch, TAR↔TSR coherence). See [`docs/tr-activity-checks.md`](docs/tr-activity-checks.md).
 2. **State layer (TSR)** — what the TR currently believes is outstanding. Today: `opendqi emir tr-state-scan <auth.107>` with 7 state-health checks (outstanding-summary, stale / missing valuation, active-past-maturity, placeholder-date, duplicate-active-UTI, valuation-after-termination). Outputs `tr_state_issues.csv` / `tr_state_report.html`, distinct from the activity / feedback layers. See [`docs/tr-state-checks.md`](docs/tr-state-checks.md).
-3. **Rejection layer** — what failed and why. Today: `opendqi emir feedback <auth.092>` plus the top-level `opendqi feedback list/resolve/stale` workflow over the local SQLite store. Planned (Phase 3): top rejection causes, ageing, rejected-then-accepted analytics.
+3. **Rejection layer** — what failed and why. Today: `opendqi emir feedback <auth.092>` plus the top-level `opendqi feedback list/resolve/stale/analytics` workflow over the local SQLite store. The `analytics` action surfaces top rejection causes, repeated rejected UTIs, age buckets, rejected-then-accepted detection, and exports a `rejection_profile.yml`. See [`docs/rejection-analytics.md`](docs/rejection-analytics.md).
 
 The auth.* message catalog and our parser coverage are tracked in [`docs/auth-messages.md`](docs/auth-messages.md).
 
@@ -107,6 +107,7 @@ Public summary; see [`docs/positioning.md`](docs/positioning.md) for context.
 - **Phase 0** — stabilise current engine, audit auth.* naming, pivot positioning. ✅
 - **Phase 1** — EMIR TSR health (`tr-state-scan` over `auth.107`). ✅
 - **Phase 2** — EMIR TAR activity intelligence (`tr-activity-scan`). ✅
+- **Phase 3** — Rejection analytics (`feedback analytics`). ✅
 - **Phase 2** — EMIR TAR activity intelligence (`tr-activity-scan`).
 - **Phase 3** — Rejection analytics (deepened `auth.092`).
 - **Phase 4** — Combined `tr-audit` command.

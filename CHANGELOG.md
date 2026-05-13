@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (Rejection analytics) — Phase 3
+
+- New CLI sub-action `opendqi feedback analytics --store <PATH> [--regime emir|sftr] --out <DIR>`. Aggregates every persisted feedback row and produces a rejection profile.
+- New `Store::count_feedbacks_by_reason(regime)` and `Store::count_feedbacks_by_uti(regime)` SQL aggregate queries — both filter by optional regime and order descending by count.
+- Analytics surfaces:
+  - **Top rejection causes** — histogram of `reason_code`.
+  - **Repeated rejected UTIs** — UTIs with ≥ 3 rejection rows.
+  - **Age buckets** (0–1d / 1–7d / 7–30d / 30d+) over `ingested_at`.
+  - **Stale open rejections** — `status='open'` rows older than 7 days.
+  - **Rejected-then-accepted** — UTI rejected, then later NEWT'd successfully in the EMIR records table.
+- Outputs: `rejection_summary.json`, `rejections.csv` (open + stale rows), `rejection_profile.yml` (copy-paste catalog for the firm's pre-submission check pack), `rejection_report.html`.
+- New `docs/rejection-analytics.md` explaining usage, detected patterns, and design notes (in particular, the choice to run analytics inline in the CLI rather than through the `FeedbackCheck` trait).
+
 ### Added (EMIR TAR activity intelligence) — Phase 2
 
 - New canonical `TrActivitySummary` in `opendqi-core::model`: action / event distributions over a TAR batch (`action_distribution`, `event_distribution`, `total_records`).

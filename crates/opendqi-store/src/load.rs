@@ -312,6 +312,73 @@ impl Store {
         )?;
         Ok(rows)
     }
+
+    /// Count of feedback rows grouped by `reason_code`, sorted
+    /// descending by count. Used by rejection analytics to surface
+    /// the most common TR rejection reasons.
+    pub fn count_feedbacks_by_reason(
+        &self,
+        regime: Option<Regime>,
+    ) -> Result<Vec<(String, i64)>, StoreError> {
+        let mut sql = String::from(
+            "SELECT COALESCE(reason_code, '(none)') AS rc, COUNT(*) AS n \
+             FROM feedbacks WHERE 1=1",
+        );
+        let mut bind: Vec<Value> = Vec::new();
+        if let Some(r) = regime {
+            sql.push_str(" AND regime = ?");
+            bind.push(Value::Text(
+                match r {
+                    Regime::Emir => "EMIR",
+                    Regime::Sftr => "SFTR",
+                }
+                .to_owned(),
+            ));
+        }
+        sql.push_str(" GROUP BY rc ORDER BY n DESC, rc ASC");
+        let mut stmt = self.conn.prepare(&sql)?;
+        let rows = stmt.query_map(params_from_iter(bind), |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
+    /// Count of feedback rows grouped by `uti`, sorted descending.
+    /// Used to identify UTIs that have been rejected repeatedly.
+    pub fn count_feedbacks_by_uti(
+        &self,
+        regime: Option<Regime>,
+    ) -> Result<Vec<(String, i64)>, StoreError> {
+        let mut sql = String::from(
+            "SELECT COALESCE(uti, '(none)') AS u, COUNT(*) AS n \
+             FROM feedbacks WHERE 1=1",
+        );
+        let mut bind: Vec<Value> = Vec::new();
+        if let Some(r) = regime {
+            sql.push_str(" AND regime = ?");
+            bind.push(Value::Text(
+                match r {
+                    Regime::Emir => "EMIR",
+                    Regime::Sftr => "SFTR",
+                }
+                .to_owned(),
+            ));
+        }
+        sql.push_str(" GROUP BY u ORDER BY n DESC, u ASC");
+        let mut stmt = self.conn.prepare(&sql)?;
+        let rows = stmt.query_map(params_from_iter(bind), |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    }
 }
 
 fn ts_from(t: Option<i64>) -> Option<DateTime<Utc>> {
