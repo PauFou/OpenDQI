@@ -3,7 +3,7 @@
 use chrono::{DateTime, NaiveDate, Utc};
 
 use crate::config::Thresholds;
-use crate::model::{DqDimension, DqIssue, EmirRecord, Severity};
+use crate::model::{DqDimension, DqIssue, EmirRecord, Severity, SftrRecord};
 
 mod abnormal_maturity;
 mod cleared_requires_ccp;
@@ -135,11 +135,47 @@ pub fn run_all(
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
     let mut issues: Vec<DqIssue> = checks.iter().flat_map(|c| c.run(records, ctx)).collect();
+    sort_issues(&mut issues);
+    issues
+}
+
+fn sort_issues(issues: &mut [DqIssue]) {
     issues.sort_by(|a, b| {
         a.check_id
             .cmp(&b.check_id)
             .then_with(|| a.source_file.cmp(&b.source_file))
             .then_with(|| a.record_id.cmp(&b.record_id))
     });
+}
+
+// ---- SFTR ----------------------------------------------------------
+
+mod sftr;
+
+pub use sftr::{
+    SftrCheck, SftrCollateralValueMissing, SftrDuplicateUti, SftrHaircutMissing, SftrLateReporting,
+    SftrMissingUti,
+};
+
+/// Default SFTR check registry. 5 MVP checks in a stable order.
+pub fn default_sftr_checks() -> Vec<Box<dyn SftrCheck>> {
+    vec![
+        Box::new(SftrMissingUti),
+        Box::new(SftrCollateralValueMissing),
+        Box::new(SftrHaircutMissing),
+        Box::new(SftrLateReporting),
+        Box::new(SftrDuplicateUti),
+    ]
+}
+
+/// Run every SFTR check in `checks` against `records` and return the
+/// concatenated issues, sorted deterministically.
+pub fn run_all_sftr(
+    checks: &[Box<dyn SftrCheck>],
+    records: &[SftrRecord],
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    let mut issues: Vec<DqIssue> = checks.iter().flat_map(|c| c.run(records, ctx)).collect();
+    sort_issues(&mut issues);
     issues
 }

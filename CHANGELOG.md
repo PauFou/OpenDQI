@@ -40,3 +40,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Existing fixtures (`examples/emir/sample.csv`, `sample.xml`, `iso20022/sample.xml`) intentionally exhibit LEI shapes that end with `AA` and valuation timestamps later than reporting timestamps; the new checks correctly flag these as defects. Issue counts for those fixtures rise from 7/7/8 to ~38/38/47. This is expected and demonstrates the new coverage in action — the fixtures are not yet rewritten to be defect-free.
+
+### Added (SFTR)
+
+- **SFTR regime support**: new canonical `SftrRecord` struct, `SftrCheck` trait, `default_sftr_checks()` registry and `run_all_sftr` runner in `opendqi-core`.
+- **ISO 20022 `auth.052.001.02` ingestion adapter** (`opendqi-xml::sftr`): namespace-aware routing, selective extractor with the same `raw_fields` catch-all pattern as the EMIR adapter. Recognises all SFTR action types (NEWT/MODI/CORR/ETRM/VALU/COLU/MARU/REUU/POSC/OTHR) and the four SFT wrappers (Repo/BSB/SLEB/MGLD).
+- **5 MVP SFTR data-quality checks**: `SFTR.COMP.UTI_MISSING`, `SFTR.COMP.COLLATERAL_VALUE_MISSING`, `SFTR.COMP.HAIRCUT_MISSING`, `SFTR.TIM.LATE_REPORTING`, `SFTR.UNI.DUPLICATE_UTI`. See [`docs/sftr-checks.md`](docs/sftr-checks.md).
+- **CLI**: `opendqi sftr scan <path> --out <dir>` is now a real command (previously a placeholder). XML-only ingestion for this milestone.
+- Synthetic fixture `examples/sftr/iso20022/sample.xml` (10 SFTs hand-authored covering Repo / BSB / SLEB and all DQ patterns) plus integration test `crates/opendqi-xml/tests/sftr_integration.rs`.
+- Documentation: new `docs/sftr-checks.md` and `docs/iso20022-sftr.md`.

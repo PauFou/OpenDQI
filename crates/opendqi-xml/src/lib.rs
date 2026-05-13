@@ -12,9 +12,11 @@
 #![warn(missing_docs)]
 
 pub mod emir;
+pub mod sftr;
 pub mod wellformed;
 pub mod xsd;
 
 pub use emir::{read_emir_xml, XmlReadOutcome};
+pub use sftr::{read_sftr_xml, SftrXmlReadOutcome};
 pub use wellformed::{check_wellformedness, WellformednessError};
 pub use xsd::{ExternalXmllintValidator, NoopValidator, XsdToolError, XsdValidator, XsdViolation};

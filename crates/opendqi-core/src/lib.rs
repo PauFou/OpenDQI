@@ -18,6 +18,6 @@ pub mod model;
 pub mod scoring;
 
 pub use config::Thresholds;
-pub use dq::{default_checks, Check};
-pub use model::{DqDimension, DqIssue, EmirRecord, Regime, ScanSummary, Severity};
+pub use dq::{default_checks, default_sftr_checks, Check, SftrCheck};
+pub use model::{DqDimension, DqIssue, EmirRecord, Regime, ScanSummary, Severity, SftrRecord};
 pub use scoring::quality_score;

@@ -1,0 +1,267 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic ISO 20022 auth.052.001.02 fixture for OpenDQI tests.
+  Hand-authored — not derived from any ESMA or SWIFT example.
+  Covers Repo / BSB / SLEB SFT types and the 5 MVP DQ patterns.
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.052.001.02">
+  <SctiesFincgRptgTxRpt>
+    <TradData>
+
+      <!-- 1. Clean Repo on GMRA 2011. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>ABCDEFGHIJKLMNOPQR01</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData>
+            <Repo>
+              <UnqTxIdr>OPENDQI-SFTR-CLEAN-0001</UnqTxIdr>
+              <EvtTp>NEWT</EvtTp>
+              <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+              <RptgDtTm>2026-04-01T18:00:00Z</RptgDtTm>
+              <SttlmDt>2026-04-02</SttlmDt>
+              <EvntDt>2026-04-02</EvntDt>
+              <MtrtyDt>2026-07-02</MtrtyDt>
+              <PrncplAmt><Amt Ccy="EUR">5000000</Amt></PrncplAmt>
+              <MstrAgrmt><Tp>GMRA</Tp><Vrsn>2011</Vrsn></MstrAgrmt>
+              <RbtRate>0.0250</RbtRate>
+            </Repo>
+          </LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">5250000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+            <AvlblForCollReuse>false</AvlblForCollReuse>
+            <PrtflCd>SFTR-PORT-001</PrtflCd>
+            <Sctys><Id>DE0001135275</Id></Sctys>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 2. Missing UTI → UTI_MISSING. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>ABCDEFGHIJKLMNOPQR01</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData>
+            <Repo>
+              <EvtTp>NEWT</EvtTp>
+              <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+              <RptgDtTm>2026-04-01T18:00:00Z</RptgDtTm>
+              <MtrtyDt>2026-07-02</MtrtyDt>
+              <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+            </Repo>
+          </LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1050000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 3. Outstanding Repo without CollData → COLLATERAL_VALUE_MISSING. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>ABCDEFGHIJKLMNOPQR01</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData>
+            <Repo>
+              <UnqTxIdr>OPENDQI-SFTR-NOCOLL-0003</UnqTxIdr>
+              <EvtTp>NEWT</EvtTp>
+              <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+              <RptgDtTm>2026-04-01T18:00:00Z</RptgDtTm>
+              <MtrtyDt>2026-07-02</MtrtyDt>
+              <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+            </Repo>
+          </LnData>
+        </New>
+      </Rpt>
+
+      <!-- 4. Collateral value present but no haircut → HAIRCUT_MISSING. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>ABCDEFGHIJKLMNOPQR01</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData>
+            <Repo>
+              <UnqTxIdr>OPENDQI-SFTR-NOHRCUT-0004</UnqTxIdr>
+              <EvtTp>NEWT</EvtTp>
+              <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+              <RptgDtTm>2026-04-01T18:00:00Z</RptgDtTm>
+              <MtrtyDt>2026-07-02</MtrtyDt>
+              <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+            </Repo>
+          </LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1050000</Amt></CollVal>
+            <AvlblForCollReuse>true</AvlblForCollReuse>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 5. Late reporting (event 48h before report) → LATE_REPORTING. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>ABCDEFGHIJKLMNOPQR01</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData>
+            <Repo>
+              <UnqTxIdr>OPENDQI-SFTR-LATE-0005</UnqTxIdr>
+              <EvtTp>NEWT</EvtTp>
+              <ExctnDtTm>2026-03-10T08:00:00Z</ExctnDtTm>
+              <RptgDtTm>2026-03-12T09:00:00Z</RptgDtTm>
+              <MtrtyDt>2026-06-10</MtrtyDt>
+              <PrncplAmt><Amt Ccy="EUR">2000000</Amt></PrncplAmt>
+            </Repo>
+          </LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">2100000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 6 & 7. Duplicate UTI on two records → DUPLICATE_UTI. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>ABCDEFGHIJKLMNOPQR01</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData>
+            <Repo>
+              <UnqTxIdr>OPENDQI-SFTR-DUPE-0006</UnqTxIdr>
+              <EvtTp>NEWT</EvtTp>
+              <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+              <RptgDtTm>2026-04-01T18:00:00Z</RptgDtTm>
+              <MtrtyDt>2026-07-02</MtrtyDt>
+              <PrncplAmt><Amt Ccy="EUR">3000000</Amt></PrncplAmt>
+            </Repo>
+          </LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">3150000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <Rpt>
+        <Mod>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>ABCDEFGHIJKLMNOPQR01</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData>
+            <Repo>
+              <UnqTxIdr>OPENDQI-SFTR-DUPE-0006</UnqTxIdr>
+              <PrrUnqTxIdr><UnqTxIdr>OPENDQI-SFTR-DUPE-0006</UnqTxIdr></PrrUnqTxIdr>
+              <EvtTp>MODI</EvtTp>
+              <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+              <EvtDtTm>2026-04-15T09:00:00Z</EvtDtTm>
+              <RptgDtTm>2026-04-15T18:00:00Z</RptgDtTm>
+              <MtrtyDt>2026-07-02</MtrtyDt>
+              <PrncplAmt><Amt Ccy="EUR">3000000</Amt></PrncplAmt>
+            </Repo>
+          </LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">3200000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+          </CollData>
+        </Mod>
+      </Rpt>
+
+      <!-- 8. Securities Lending (SLEB). -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>ABCDEFGHIJKLMNOPQR01</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData>
+            <SctyLndg>
+              <UnqTxIdr>OPENDQI-SFTR-SLEB-0008</UnqTxIdr>
+              <EvtTp>NEWT</EvtTp>
+              <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+              <RptgDtTm>2026-04-01T18:00:00Z</RptgDtTm>
+              <MtrtyDt>2026-10-01</MtrtyDt>
+              <PrncplAmt><Amt Ccy="USD">10000000</Amt></PrncplAmt>
+              <MstrAgrmt><Tp>GMSLA</Tp><Vrsn>2010</Vrsn></MstrAgrmt>
+              <LndgFee>0.0050</LndgFee>
+            </SctyLndg>
+          </LnData>
+          <CollData>
+            <CollVal><Amt Ccy="USD">10500000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+            <AvlblForCollReuse>true</AvlblForCollReuse>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 9. Buy-Sell-Back (BSB). -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>ABCDEFGHIJKLMNOPQR01</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData>
+            <BsbSctyTrad>
+              <UnqTxIdr>OPENDQI-SFTR-BSB-0009</UnqTxIdr>
+              <EvtTp>NEWT</EvtTp>
+              <ExctnDtTm>2026-04-01T09:00:00Z</ExctnDtTm>
+              <RptgDtTm>2026-04-01T18:00:00Z</RptgDtTm>
+              <MtrtyDt>2026-05-01</MtrtyDt>
+              <PrncplAmt><Amt Ccy="GBP">2500000</Amt></PrncplAmt>
+            </BsbSctyTrad>
+          </LnData>
+          <CollData>
+            <CollVal><Amt Ccy="GBP">2600000</Amt></CollVal>
+            <Hrcut>0.04</Hrcut>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 10. Early termination. -->
+      <Rpt>
+        <EarlyTermntn>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>ABCDEFGHIJKLMNOPQR01</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData>
+            <Repo>
+              <UnqTxIdr>OPENDQI-SFTR-ETRM-0010</UnqTxIdr>
+              <EvtTp>ETRM</EvtTp>
+              <ExctnDtTm>2025-12-01T09:00:00Z</ExctnDtTm>
+              <RptgDtTm>2026-05-01T18:00:00Z</RptgDtTm>
+              <EvtDtTm>2026-05-01T09:00:00Z</EvtDtTm>
+              <MtrtyDt>2026-12-01</MtrtyDt>
+              <TermntnDt>2026-05-01</TermntnDt>
+              <PrncplAmt><Amt Ccy="EUR">4000000</Amt></PrncplAmt>
+            </Repo>
+          </LnData>
+        </EarlyTermntn>
+      </Rpt>
+
+    </TradData>
+  </SctiesFincgRptgTxRpt>
+</Document>

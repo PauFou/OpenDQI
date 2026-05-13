@@ -10,8 +10,9 @@ It helps regulatory reporting, compliance, operations, and data teams validate f
 - SFTR support planned
 - XML well-formedness checks (planned)
 - XSD validation integration (planned)
-- CSV input with configurable mapping
+- CSV input with configurable mapping (EMIR)
 - **21 EMIR data-quality checks** (16 aligned with the official ESMA EMIR Refit Validation Rules) covering completeness, validity, accuracy, uniqueness, timeliness and consistency — see [`docs/emir-checks.md`](docs/emir-checks.md)
+- **5 MVP SFTR data-quality checks** ([`docs/sftr-checks.md`](docs/sftr-checks.md)) on top of the ISO 20022 `auth.052.001.02` adapter ([`docs/iso20022-sftr.md`](docs/iso20022-sftr.md))
 - HTML, JSON, and CSV outputs
 - CLI batch mode
 - Local web UI with drag-and-drop (planned)

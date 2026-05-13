@@ -245,6 +245,99 @@ impl EmirRecord {
     }
 }
 
+/// Canonical SFTR record.
+///
+/// Parallel to [`EmirRecord`]: a Securities Financing Transaction
+/// reportable under the EU Securities Financing Transactions
+/// Regulation. Like the EMIR variant, almost every field is optional
+/// — the data-quality checks surface the gaps.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SftrRecord {
+    /// Source file path (or other origin label).
+    pub source_file: Option<String>,
+    /// Stable identifier of the record within the source.
+    pub record_id: Option<String>,
+
+    /// Unique Trade Identifier.
+    pub uti: Option<String>,
+    /// Prior UTI after a re-identification.
+    pub prior_uti: Option<String>,
+
+    /// SFTR action type (NEWT, MODI, CORR, ETRM, VALU, COLU, REUU,
+    /// POSC, MARU, OTHR).
+    pub action_type: Option<String>,
+    /// SFTR event type code.
+    pub event_type: Option<String>,
+
+    /// Entity Responsible for Reporting (LEI).
+    pub entity_responsible_for_reporting: Option<String>,
+    /// Reporting counterparty (LEI).
+    pub counterparty_1: Option<String>,
+    /// Other counterparty (LEI / BIC).
+    pub counterparty_2: Option<String>,
+
+    /// SFT type code: `REPO`, `BSB` (buy-sell-back), `SLEB`
+    /// (securities lending or borrowing), `MGLD` (margin lending).
+    pub sft_type: Option<String>,
+    /// Master agreement type (GMRA, GMSLA, ...).
+    pub master_agreement_type: Option<String>,
+    /// Master agreement version (e.g. "2011").
+    pub master_agreement_version: Option<String>,
+
+    /// Loan / principal value.
+    pub loan_value: Option<Decimal>,
+    /// Loan / principal currency (ISO 4217).
+    pub loan_currency: Option<String>,
+    /// Collateral value.
+    pub collateral_value: Option<Decimal>,
+    /// Collateral currency.
+    pub collateral_currency: Option<String>,
+    /// Haircut applied to the collateral.
+    pub haircut: Option<Decimal>,
+    /// "Available for collateral reuse" indicator.
+    pub reuse_indicator: Option<bool>,
+    /// Repo rebate rate.
+    pub rebate_rate: Option<Decimal>,
+    /// Lending fee.
+    pub lending_fee: Option<Decimal>,
+
+    /// Execution timestamp.
+    pub execution_timestamp: Option<DateTime<Utc>>,
+    /// Event timestamp.
+    pub event_timestamp: Option<DateTime<Utc>>,
+    /// Reporting timestamp.
+    pub reporting_timestamp: Option<DateTime<Utc>>,
+
+    /// Effective / event date.
+    pub effective_date: Option<NaiveDate>,
+    /// Maturity date.
+    pub maturity_date: Option<NaiveDate>,
+    /// Termination date.
+    pub termination_date: Option<NaiveDate>,
+    /// Settlement date.
+    pub settlement_date: Option<NaiveDate>,
+
+    /// Collateral portfolio code.
+    pub collateral_portfolio_code: Option<String>,
+    /// ISIN of the security used as collateral.
+    pub collateral_isin: Option<String>,
+
+    /// Catch-all of XML leaves that were not promoted to typed fields.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub raw_fields: BTreeMap<String, String>,
+}
+
+impl SftrRecord {
+    /// Returns true when the SFT is considered outstanding, i.e. not
+    /// terminated as of `today`.
+    pub fn is_outstanding(&self, today: NaiveDate) -> bool {
+        match self.termination_date {
+            None => true,
+            Some(t) => t > today,
+        }
+    }
+}
+
 /// Aggregate statistics for a scan run.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanSummary {
