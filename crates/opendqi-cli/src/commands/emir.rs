@@ -351,8 +351,16 @@ fn run_feedback(input: &Path, store_path: &Path, out: &Path) -> Result<()> {
 
     let mut issues: Vec<DqIssue> = outcome.issues;
 
-    let store = opendqi_store::open_store(store_path)
+    let mut store = opendqi_store::open_store(store_path)
         .with_context(|| format!("opening history store at {}", store_path.display()))?;
+
+    // Persist the feedback batch into the `feedbacks` table so the
+    // `opendqi feedback list/resolve/stale` workflow can pick it up.
+    let persisted = store
+        .persist_feedback_batch(&outcome.records)
+        .context("persisting EMIR feedback batch to history store")?;
+    info!(persisted, "feedback rows persisted to store");
+
     let utis: Vec<&str> = outcome
         .records
         .iter()

@@ -62,4 +62,22 @@ CREATE TABLE IF NOT EXISTS sftr_records (
 );
 CREATE INDEX IF NOT EXISTS sftr_records_uti     ON sftr_records(uti);
 CREATE INDEX IF NOT EXISTS sftr_records_uti_act ON sftr_records(uti, action_type);
+
+CREATE TABLE IF NOT EXISTS feedbacks (
+    feedback_id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    scan_id              INTEGER,
+    regime               TEXT    NOT NULL CHECK(regime IN ('EMIR','SFTR')),
+    uti                  TEXT,
+    feedback_type        TEXT    NOT NULL,
+    reason_code          TEXT,
+    reason_description   TEXT,
+    reported_field       TEXT,
+    source_file          TEXT,
+    feedback_timestamp   INTEGER,
+    status               TEXT    NOT NULL DEFAULT 'open' CHECK(status IN ('open','resolved','stale')),
+    status_set_at        INTEGER NOT NULL,
+    ingested_at          INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS feedbacks_uti_status ON feedbacks(uti, status);
+CREATE INDEX IF NOT EXISTS feedbacks_status     ON feedbacks(status);
 "#;

@@ -23,6 +23,7 @@ mod persist;
 mod schema;
 
 pub use error::StoreError;
+pub use load::FeedbackRow;
 
 /// Open (or create) the SQLite store at `path` and run idempotent
 /// schema migrations. The returned [`Store`] owns the connection.

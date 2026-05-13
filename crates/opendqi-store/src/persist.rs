@@ -5,7 +5,7 @@
 //! input, returning the freshly-allocated `scan_id`.
 
 use chrono::{DateTime, NaiveDate, Utc};
-use opendqi_core::{EmirRecord, SftrRecord};
+use opendqi_core::{EmirRecord, FeedbackRecord, FeedbackType, Regime, SftrRecord};
 use rusqlite::{params, Transaction};
 
 use crate::error::StoreError;
@@ -44,6 +44,24 @@ impl Store {
         }
         tx.commit()?;
         Ok(scan_id)
+    }
+
+    /// Persist a batch of TR feedback records into the `feedbacks`
+    /// table. All rows start with `status='open'`. Returns the number
+    /// of rows inserted.
+    pub fn persist_feedback_batch(
+        &mut self,
+        records: &[FeedbackRecord],
+    ) -> Result<usize, StoreError> {
+        let now = Utc::now().timestamp();
+        let tx = self.conn.transaction()?;
+        let mut inserted = 0usize;
+        for r in records {
+            insert_feedback(&tx, now, r)?;
+            inserted += 1;
+        }
+        tx.commit()?;
+        Ok(inserted)
     }
 }
 
@@ -144,6 +162,48 @@ fn insert_sftr_record(
             date_opt(r.termination_date),
             date_opt(r.settlement_date),
             r.sft_type,
+            ingested_at,
+        ],
+    )?;
+    Ok(())
+}
+
+fn insert_feedback(
+    tx: &Transaction<'_>,
+    ingested_at: i64,
+    r: &FeedbackRecord,
+) -> Result<(), StoreError> {
+    let regime = match r.regime {
+        Regime::Emir => "EMIR",
+        Regime::Sftr => "SFTR",
+    };
+    let feedback_type = match r.feedback_type {
+        FeedbackType::Rejected => "rejected",
+        FeedbackType::Missing => "missing",
+        FeedbackType::Inaccurate => "inaccurate",
+        FeedbackType::ReconciliationBreak => "reconciliation_break",
+    };
+    tx.execute(
+        "INSERT INTO feedbacks (
+            scan_id, regime, uti, feedback_type,
+            reason_code, reason_description, reported_field,
+            source_file, feedback_timestamp,
+            status, status_set_at, ingested_at
+        ) VALUES (
+            NULL, ?1, ?2, ?3,
+            ?4, ?5, ?6,
+            ?7, ?8,
+            'open', ?9, ?9
+        )",
+        params![
+            regime,
+            r.uti,
+            feedback_type,
+            r.reason_code,
+            r.reason_description,
+            r.reported_field,
+            r.source_file,
+            ts_opt(r.feedback_timestamp),
             ingested_at,
         ],
     )?;

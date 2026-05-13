@@ -9,12 +9,41 @@
 use std::str::FromStr;
 
 use chrono::{DateTime, NaiveDate, Utc};
-use opendqi_core::{EmirRecord, SftrRecord};
-use rusqlite::{params_from_iter, types::Value, OptionalExtension};
+use opendqi_core::{EmirRecord, Regime, SftrRecord};
+use rusqlite::{params, params_from_iter, types::Value, OptionalExtension};
 use rust_decimal::Decimal;
 
 use crate::error::StoreError;
 use crate::Store;
+
+/// A row from the `feedbacks` table, exposed to callers (e.g. the CLI
+/// `feedback list` command).
+#[derive(Debug, Clone)]
+pub struct FeedbackRow {
+    /// SQLite auto-increment primary key.
+    pub feedback_id: i64,
+    /// Regulatory regime.
+    pub regime: Regime,
+    /// UTI of the submission the feedback refers to.
+    pub uti: Option<String>,
+    /// TR feedback type as stored: `rejected` / `missing` /
+    /// `inaccurate` / `reconciliation_break`.
+    pub feedback_type: String,
+    /// TR reason code (e.g. `VAL01`).
+    pub reason_code: Option<String>,
+    /// TR reason description.
+    pub reason_description: Option<String>,
+    /// For `inaccurate` feedback: which field was flagged.
+    pub reported_field: Option<String>,
+    /// Source file the feedback was parsed from.
+    pub source_file: Option<String>,
+    /// Workflow status: `open` / `resolved` / `stale`.
+    pub status: String,
+    /// Unix timestamp at which `status` was last set.
+    pub status_set_at: i64,
+    /// Unix timestamp at which the row was first persisted.
+    pub ingested_at: i64,
+}
 
 impl Store {
     /// Load all EMIR records that share a UTI with `current_utis` and
@@ -206,6 +235,82 @@ impl Store {
             .query_row("SELECT COUNT(*) FROM sftr_records", [], |r| r.get(0))
             .optional()?
             .unwrap_or(0))
+    }
+
+    /// List rows from the `feedbacks` table, with optional filters.
+    /// All filters are AND-ed; pass `None` to skip a filter.
+    pub fn list_feedbacks(
+        &self,
+        regime: Option<Regime>,
+        uti: Option<&str>,
+        status: Option<&str>,
+    ) -> Result<Vec<FeedbackRow>, StoreError> {
+        let mut sql = String::from(
+            "SELECT feedback_id, regime, uti, feedback_type, reason_code, \
+                reason_description, reported_field, source_file, status, \
+                status_set_at, ingested_at \
+             FROM feedbacks WHERE 1=1",
+        );
+        let mut bind: Vec<Value> = Vec::new();
+        if let Some(r) = regime {
+            sql.push_str(" AND regime = ?");
+            bind.push(Value::Text(
+                match r {
+                    Regime::Emir => "EMIR",
+                    Regime::Sftr => "SFTR",
+                }
+                .to_owned(),
+            ));
+        }
+        if let Some(u) = uti {
+            sql.push_str(" AND uti = ?");
+            bind.push(Value::Text(u.to_owned()));
+        }
+        if let Some(s) = status {
+            sql.push_str(" AND status = ?");
+            bind.push(Value::Text(s.to_owned()));
+        }
+        sql.push_str(" ORDER BY feedback_id");
+
+        let mut stmt = self.conn.prepare(&sql)?;
+        let rows = stmt.query_map(params_from_iter(bind), |row| {
+            let regime_str: String = row.get(1)?;
+            Ok(FeedbackRow {
+                feedback_id: row.get(0)?,
+                regime: match regime_str.as_str() {
+                    "SFTR" => Regime::Sftr,
+                    _ => Regime::Emir,
+                },
+                uti: row.get(2)?,
+                feedback_type: row.get(3)?,
+                reason_code: row.get(4)?,
+                reason_description: row.get(5)?,
+                reported_field: row.get(6)?,
+                source_file: row.get(7)?,
+                status: row.get(8)?,
+                status_set_at: row.get(9)?,
+                ingested_at: row.get(10)?,
+            })
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
+    /// Update the status of every feedback row matching `uti` (that
+    /// is not already in the target status). Returns the number of
+    /// rows updated.
+    pub fn update_feedback_status(&self, uti: &str, new_status: &str) -> Result<usize, StoreError> {
+        let now = Utc::now().timestamp();
+        let rows = self.conn.execute(
+            "UPDATE feedbacks \
+             SET status = ?1, status_set_at = ?2 \
+             WHERE uti = ?3 AND status != ?1",
+            params![new_status, now, uti],
+        )?;
+        Ok(rows)
     }
 }
 

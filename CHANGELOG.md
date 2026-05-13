@@ -73,6 +73,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The pre-existing `examples/emir/extended-checks.csv` now produces ~87 issues (up from 17) because the new completeness/enum checks correctly flag many fields that fixture leaves unpopulated. This is expected — the fixture is preserved as-is so the additional coverage is visible.
 
+### Added (Store v2 — feedbacks table + Open/Resolved/Stale workflow)
+
+- New `feedbacks` table in the SQLite history store, additive to v1 schema. Persists every TR feedback row with a `status` column (`open` / `resolved` / `stale`), `status_set_at` timestamp, and indexes on `(uti, status)` and `(status)`.
+- New `Store` methods: `persist_feedback_batch`, `list_feedbacks(regime, uti, status)`, `update_feedback_status(uti, new_status)`. New public `FeedbackRow` struct.
+- `opendqi {emir,sftr} feedback` ingestion now **persists** every parsed feedback record into the store (transparent for the user — the store was already opened). Existing callers pass through unchanged.
+- New **top-level** CLI subcommand `opendqi feedback`:
+  - `feedback list --store <PATH> [--regime emir|sftr] [--uti <UTI>] [--status open|resolved|stale]`
+  - `feedback resolve --store <PATH> --uti <UTI>`
+  - `feedback stale --store <PATH> --uti <UTI>`
+- Idempotent: re-marking a row to its current status is a no-op.
+- Documentation: `docs/history-store.md` (new "feedbacks table" + "workflow" sections), `docs/feedback-checks.md` (persistence note).
+
 ### Added (TR feedback ingestion + 8 `*.FBK.*` checks)
 
 - New canonical types `FeedbackType` (`Rejected` / `Missing` / `Inaccurate` / `ReconciliationBreak`) and `FeedbackRecord` in `opendqi-core::model`.

@@ -59,10 +59,11 @@ Each feedback check sees two inputs:
   appears in the feedback (no `scan_id` filter — for feedback, "what
   is known" is the right semantic).
 
-The feedback batch is **not** persisted into the history store for v1.
-The store remains a history of *submissions*; a future milestone will
-add a `feedbacks` table with a `status` column (Open / Resolved /
-Stale).
+Each ingested feedback batch is **persisted into the `feedbacks`
+table** in the history store. Use `opendqi feedback list/resolve/stale`
+to manage the Open/Resolved/Stale workflow — see
+[`history-store.md`](history-store.md#feedbacks-table--workflow) for
+the catalogue of CLI verbs.
 
 ## Adding a feedback check
 

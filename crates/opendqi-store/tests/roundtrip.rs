@@ -2,7 +2,7 @@
 //! UTI, assert key fields survive.
 
 use chrono::{NaiveDate, TimeZone, Utc};
-use opendqi_core::{EmirRecord, SftrRecord};
+use opendqi_core::{EmirRecord, FeedbackRecord, FeedbackType, Regime, SftrRecord};
 use opendqi_store::open_store;
 use rust_decimal::Decimal;
 
@@ -105,5 +105,71 @@ fn migrate_is_idempotent() {
     let s2 = open_store(&path).unwrap();
     assert_eq!(s2.count_emir().unwrap(), 0);
     assert_eq!(s2.count_sftr().unwrap(), 0);
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn feedback_persist_list_resolve_workflow() {
+    let path = tmp("feedback.db");
+    let mut store = open_store(&path).unwrap();
+
+    let batch = vec![
+        FeedbackRecord {
+            regime: Regime::Emir,
+            feedback_type: FeedbackType::Rejected,
+            uti: Some("UTI-A".into()),
+            reason_code: Some("VAL01".into()),
+            reason_description: Some("Invalid currency".into()),
+            ..Default::default()
+        },
+        FeedbackRecord {
+            regime: Regime::Emir,
+            feedback_type: FeedbackType::Missing,
+            uti: Some("UTI-A".into()),
+            ..Default::default()
+        },
+        FeedbackRecord {
+            regime: Regime::Sftr,
+            feedback_type: FeedbackType::Inaccurate,
+            uti: Some("UTI-B".into()),
+            reported_field: Some("LoanValue".into()),
+            ..Default::default()
+        },
+    ];
+    let inserted = store.persist_feedback_batch(&batch).unwrap();
+    assert_eq!(inserted, 3);
+
+    // List all → 3 rows, status=open.
+    let all = store.list_feedbacks(None, None, None).unwrap();
+    assert_eq!(all.len(), 3);
+    assert!(all.iter().all(|r| r.status == "open"));
+
+    // Filter by regime.
+    let emir = store
+        .list_feedbacks(Some(Regime::Emir), None, None)
+        .unwrap();
+    assert_eq!(emir.len(), 2);
+
+    // Resolve UTI-A → both EMIR rows resolved.
+    let updated = store.update_feedback_status("UTI-A", "resolved").unwrap();
+    assert_eq!(updated, 2);
+
+    let open_after = store.list_feedbacks(None, None, Some("open")).unwrap();
+    assert_eq!(open_after.len(), 1);
+    assert_eq!(open_after[0].uti.as_deref(), Some("UTI-B"));
+
+    let resolved = store.list_feedbacks(None, None, Some("resolved")).unwrap();
+    assert_eq!(resolved.len(), 2);
+
+    // Mark UTI-B as stale.
+    let updated = store.update_feedback_status("UTI-B", "stale").unwrap();
+    assert_eq!(updated, 1);
+    let stale = store.list_feedbacks(None, None, Some("stale")).unwrap();
+    assert_eq!(stale.len(), 1);
+
+    // Idempotent: re-resolving doesn't update.
+    let updated = store.update_feedback_status("UTI-A", "resolved").unwrap();
+    assert_eq!(updated, 0);
+
     let _ = std::fs::remove_file(&path);
 }

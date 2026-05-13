@@ -8,7 +8,7 @@ use std::process::ExitCode;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use commands::{desktop, emir, sftr};
+use commands::{desktop, emir, feedback, sftr};
 
 #[derive(Parser)]
 #[command(
@@ -34,6 +34,11 @@ enum TopLevel {
         #[command(subcommand)]
         action: sftr::SftrAction,
     },
+    /// Store-side workflow for TR feedback rows: list / resolve / stale.
+    Feedback {
+        #[command(subcommand)]
+        action: feedback::FeedbackAction,
+    },
     /// Start the local web UI (planned for milestone 0.2).
     Desktop(desktop::DesktopArgs),
 }
@@ -44,6 +49,10 @@ fn main() -> Result<ExitCode> {
     match cli.command {
         TopLevel::Emir { action } => emir::run(action),
         TopLevel::Sftr { action } => sftr::run(action),
+        TopLevel::Feedback { action } => {
+            feedback::run(action)?;
+            Ok(ExitCode::SUCCESS)
+        }
         TopLevel::Desktop(args) => {
             desktop::run(args)?;
             Ok(ExitCode::SUCCESS)
