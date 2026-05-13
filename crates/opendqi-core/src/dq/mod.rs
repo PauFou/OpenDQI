@@ -3,7 +3,9 @@
 use chrono::{DateTime, NaiveDate, Utc};
 
 use crate::config::Thresholds;
-use crate::model::{DqDimension, DqIssue, EmirRecord, FeedbackRecord, Severity, SftrRecord};
+use crate::model::{
+    DqDimension, DqIssue, EmirRecord, FeedbackRecord, ReconciliationRecord, Severity, SftrRecord,
+};
 
 mod abnormal_maturity;
 mod action_type_enum;
@@ -588,6 +590,90 @@ pub fn run_all_sftr_feedback(
     let mut issues: Vec<DqIssue> = checks
         .iter()
         .flat_map(|c| c.run(feedback, prior, ctx))
+        .collect();
+    sort_issues(&mut issues);
+    issues
+}
+
+// ---- Reconciliation (TR auth.106 / auth.083) checks ---------------
+//
+// Each reconciliation check sees the records parsed from the TR's
+// pairing / reconciliation report plus the relevant prior records
+// loaded from the history store. The auth.106 / auth.083 messages
+// are returned by the TR after matching the firm's submission with
+// the counterparty's.
+
+mod reconciliation;
+
+pub use reconciliation::{EmirFieldMismatch, UnpairedTrade, UnreconciledTrade};
+
+/// A reconciliation (TR auth.106) EMIR check.
+pub trait ReconciliationCheck: Send + Sync {
+    /// Stable identifier, e.g. `EMIR.REC.UNPAIRED_TRADE`.
+    fn id(&self) -> &'static str;
+    /// The DQ dimension this check belongs to.
+    fn dimension(&self) -> DqDimension;
+    /// Default severity for issues raised by this check.
+    fn severity(&self) -> Severity;
+    /// Execute the check against reconciliation records + prior
+    /// EMIR records.
+    fn run(
+        &self,
+        records: &[ReconciliationRecord],
+        prior: &[EmirRecord],
+        ctx: &CheckContext,
+    ) -> Vec<DqIssue>;
+}
+
+/// Default EMIR reconciliation check registry (3 checks).
+pub fn default_reconciliation_checks() -> Vec<Box<dyn ReconciliationCheck>> {
+    vec![
+        Box::new(UnpairedTrade),
+        Box::new(UnreconciledTrade),
+        Box::new(EmirFieldMismatch),
+    ]
+}
+
+/// Run every EMIR reconciliation check and return the concatenated,
+/// sorted issues.
+pub fn run_all_reconciliation(
+    checks: &[Box<dyn ReconciliationCheck>],
+    records: &[ReconciliationRecord],
+    prior: &[EmirRecord],
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    let mut issues: Vec<DqIssue> = checks
+        .iter()
+        .flat_map(|c| c.run(records, prior, ctx))
+        .collect();
+    sort_issues(&mut issues);
+    issues
+}
+
+pub use sftr::reconciliation::{
+    SftrFieldMismatch, SftrReconciliationCheck, SftrUnpairedTrade, SftrUnreconciledTrade,
+};
+
+/// Default SFTR reconciliation check registry (3 checks).
+pub fn default_sftr_reconciliation_checks() -> Vec<Box<dyn SftrReconciliationCheck>> {
+    vec![
+        Box::new(SftrUnpairedTrade),
+        Box::new(SftrUnreconciledTrade),
+        Box::new(SftrFieldMismatch),
+    ]
+}
+
+/// Run every SFTR reconciliation check and return the concatenated,
+/// sorted issues.
+pub fn run_all_sftr_reconciliation(
+    checks: &[Box<dyn SftrReconciliationCheck>],
+    records: &[ReconciliationRecord],
+    prior: &[SftrRecord],
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    let mut issues: Vec<DqIssue> = checks
+        .iter()
+        .flat_map(|c| c.run(records, prior, ctx))
         .collect();
     sort_issues(&mut issues);
     issues

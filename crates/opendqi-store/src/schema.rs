@@ -80,4 +80,19 @@ CREATE TABLE IF NOT EXISTS feedbacks (
 );
 CREATE INDEX IF NOT EXISTS feedbacks_uti_status ON feedbacks(uti, status);
 CREATE INDEX IF NOT EXISTS feedbacks_status     ON feedbacks(status);
+
+CREATE TABLE IF NOT EXISTS reconciliations (
+    recon_id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    regime                    TEXT    NOT NULL CHECK(regime IN ('EMIR','SFTR')),
+    uti                       TEXT,
+    reporting_counterparty    TEXT,
+    other_counterparty        TEXT,
+    pairing_status            TEXT,
+    reconciliation_status     TEXT,
+    mismatched_fields_json    TEXT,
+    source_file               TEXT,
+    reconciliation_timestamp  INTEGER,
+    ingested_at               INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS reconciliations_uti ON reconciliations(uti);
 "#;

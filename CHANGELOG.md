@@ -73,6 +73,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The pre-existing `examples/emir/extended-checks.csv` now produces ~87 issues (up from 17) because the new completeness/enum checks correctly flag many fields that fixture leaves unpopulated. This is expected — the fixture is preserved as-is so the additional coverage is visible.
 
+### Added (TR reconciliation ingestion + 6 `*.REC.*` checks)
+
+- New canonical type `ReconciliationRecord` in `opendqi-core::model`. Captures UTI, both counterparty LEIs, pairing status, reconciliation status, list of mismatched fields, and timestamp.
+- New `ReconciliationCheck` / `SftrReconciliationCheck` traits, parallel to the existing `Check` / `FeedbackCheck` / `LifecycleCheck` traits. Pure function of `(records, prior, ctx)`.
+- **6 TR reconciliation checks** (3 EMIR + 3 SFTR): bringing the catalog to **129 single-batch + 8 lifecycle + 8 feedback + 6 reconciliation = 151 checks**.
+  - `EMIR.REC.UNPAIRED_TRADE` / `SFTR.REC.UNPAIRED_TRADE` — TR reports the trade as UNPAIRED (counterparty has not submitted) (Consistency / High).
+  - `EMIR.REC.UNRECONCILED_TRADE` / `SFTR.REC.UNRECONCILED_TRADE` — TR reports the trade as UNRECONCILED — paired but fields disagree (Consistency / High).
+  - `EMIR.REC.FIELD_MISMATCH` / `SFTR.REC.FIELD_MISMATCH` — one issue per field name in the TR's `<MismatchedField>` list (Accuracy / High).
+- New `crates/opendqi-xml/src/reconciliation.rs`: streaming `NsReader` adapter for ISO 20022 `auth.106` (EMIR) and `auth.083` (SFTR) reconciliation messages. Recognises `<Rcncltn>` blocks with `UnqTxIdr` / `RptgCtrPty/LEI` / `OthrCtrPty/LEI` / `PrngSts` / `RcncltnSts` / repeating `<MismatchedField>` leaves, plus a header `RcncltnDtTm` timestamp. SWIFT-licensed XSDs are not redistributed; the adapter parses a plausible structure aligned with the public ISO 20022 catalog.
+- New `reconciliations` table in the SQLite history store (additive schema). New `Store::persist_reconciliation_batch` method. Mismatched-field lists serialised as JSON.
+- New CLI subcommands `opendqi emir reconcile <input> --store <PATH> --out <DIR>` and `opendqi sftr reconcile <input> --store <PATH> --out <DIR>`. `--store` is required.
+- Synthetic fixtures `examples/emir/reconciliation/auth106-sample.xml` and `examples/sftr/reconciliation/auth083-sample.xml`, each exercising the 3 check_ids of its regime.
+- Documentation: new `docs/reconciliation-checks.md` (catalog) and `docs/tr-reconciliation.md` (usage, XML structure, legal note).
+
 ### Added (Store v2 — feedbacks table + Open/Resolved/Stale workflow)
 
 - New `feedbacks` table in the SQLite history store, additive to v1 schema. Persists every TR feedback row with a `status` column (`open` / `resolved` / `stale`), `status_set_at` timestamp, and indexes on `(uti, status)` and `(status)`.

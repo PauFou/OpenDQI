@@ -13,12 +13,16 @@
 
 pub mod emir;
 pub mod feedback;
+pub mod reconciliation;
 pub mod sftr;
 pub mod wellformed;
 pub mod xsd;
 
 pub use emir::{read_emir_xml, XmlReadOutcome};
 pub use feedback::{read_emir_feedback_xml, read_sftr_feedback_xml, FeedbackXmlReadOutcome};
+pub use reconciliation::{
+    read_emir_reconciliation_xml, read_sftr_reconciliation_xml, ReconciliationXmlReadOutcome,
+};
 pub use sftr::{read_sftr_xml, SftrXmlReadOutcome};
 pub use wellformed::{check_wellformedness, WellformednessError};
 pub use xsd::{ExternalXmllintValidator, NoopValidator, XsdToolError, XsdValidator, XsdViolation};

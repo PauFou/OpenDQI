@@ -408,6 +408,52 @@ impl Default for FeedbackRecord {
     }
 }
 
+/// One line item from a Trade Repository reconciliation report
+/// (ISO 20022 `auth.106` for EMIR, `auth.083` for SFTR). Each
+/// record describes a UTI's pairing / reconciliation status between
+/// the two counterparties from the TR's perspective.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReconciliationRecord {
+    /// Source file path (or other origin label).
+    pub source_file: Option<String>,
+    /// Stable identifier of the line within the source.
+    pub record_id: Option<String>,
+    /// Regulatory regime this reconciliation applies to.
+    pub regime: Regime,
+    /// UTI the line refers to.
+    pub uti: Option<String>,
+    /// LEI of the reporting counterparty.
+    pub reporting_counterparty: Option<String>,
+    /// LEI of the other counterparty.
+    pub other_counterparty: Option<String>,
+    /// Pairing status: typically `PAIRED` / `UNPAIRED`.
+    pub pairing_status: Option<String>,
+    /// Reconciliation status: typically `RECONCILED` / `UNRECONCILED`.
+    pub reconciliation_status: Option<String>,
+    /// Names of fields the TR flagged as mismatched between the two
+    /// counterparties' submissions.
+    pub mismatched_fields: Vec<String>,
+    /// Timestamp of the reconciliation message itself.
+    pub reconciliation_timestamp: Option<DateTime<Utc>>,
+}
+
+impl Default for ReconciliationRecord {
+    fn default() -> Self {
+        Self {
+            source_file: None,
+            record_id: None,
+            regime: Regime::Emir,
+            uti: None,
+            reporting_counterparty: None,
+            other_counterparty: None,
+            pairing_status: None,
+            reconciliation_status: None,
+            mismatched_fields: Vec::new(),
+            reconciliation_timestamp: None,
+        }
+    }
+}
+
 /// Aggregate statistics for a scan run.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanSummary {

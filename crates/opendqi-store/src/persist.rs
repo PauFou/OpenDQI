@@ -5,7 +5,9 @@
 //! input, returning the freshly-allocated `scan_id`.
 
 use chrono::{DateTime, NaiveDate, Utc};
-use opendqi_core::{EmirRecord, FeedbackRecord, FeedbackType, Regime, SftrRecord};
+use opendqi_core::{
+    EmirRecord, FeedbackRecord, FeedbackType, ReconciliationRecord, Regime, SftrRecord,
+};
 use rusqlite::{params, Transaction};
 
 use crate::error::StoreError;
@@ -58,6 +60,23 @@ impl Store {
         let mut inserted = 0usize;
         for r in records {
             insert_feedback(&tx, now, r)?;
+            inserted += 1;
+        }
+        tx.commit()?;
+        Ok(inserted)
+    }
+
+    /// Persist a batch of TR reconciliation records into the
+    /// `reconciliations` table. Returns the number of rows inserted.
+    pub fn persist_reconciliation_batch(
+        &mut self,
+        records: &[ReconciliationRecord],
+    ) -> Result<usize, StoreError> {
+        let now = Utc::now().timestamp();
+        let tx = self.conn.transaction()?;
+        let mut inserted = 0usize;
+        for r in records {
+            insert_reconciliation(&tx, now, r)?;
             inserted += 1;
         }
         tx.commit()?;
@@ -208,6 +227,65 @@ fn insert_feedback(
         ],
     )?;
     Ok(())
+}
+
+fn insert_reconciliation(
+    tx: &Transaction<'_>,
+    ingested_at: i64,
+    r: &ReconciliationRecord,
+) -> Result<(), StoreError> {
+    let regime = match r.regime {
+        Regime::Emir => "EMIR",
+        Regime::Sftr => "SFTR",
+    };
+    let mismatched_fields_json = serialize_string_array(&r.mismatched_fields);
+    tx.execute(
+        "INSERT INTO reconciliations (
+            regime, uti, reporting_counterparty, other_counterparty,
+            pairing_status, reconciliation_status, mismatched_fields_json,
+            source_file, reconciliation_timestamp, ingested_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        params![
+            regime,
+            r.uti,
+            r.reporting_counterparty,
+            r.other_counterparty,
+            r.pairing_status,
+            r.reconciliation_status,
+            mismatched_fields_json,
+            r.source_file,
+            ts_opt(r.reconciliation_timestamp),
+            ingested_at,
+        ],
+    )?;
+    Ok(())
+}
+
+/// Hand-rolled minimal JSON string-array serialiser. Avoids pulling
+/// in `serde_json` just to encode a `Vec<String>` for storage.
+fn serialize_string_array(values: &[String]) -> String {
+    let mut out = String::with_capacity(values.len() * 16 + 2);
+    out.push('[');
+    for (i, v) in values.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        out.push('"');
+        for ch in v.chars() {
+            match ch {
+                '"' => out.push_str("\\\""),
+                '\\' => out.push_str("\\\\"),
+                '\n' => out.push_str("\\n"),
+                '\r' => out.push_str("\\r"),
+                '\t' => out.push_str("\\t"),
+                c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+                c => out.push(c),
+            }
+        }
+        out.push('"');
+    }
+    out.push(']');
+    out
 }
 
 fn ts_opt(t: Option<DateTime<Utc>>) -> Option<i64> {
