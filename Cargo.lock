@@ -499,6 +499,7 @@ dependencies = [
  "opendqi-core",
  "opendqi-io",
  "opendqi-report",
+ "opendqi-xml",
  "serde_yaml",
  "tracing",
  "tracing-subscriber",
@@ -554,7 +555,12 @@ dependencies = [
 name = "opendqi-xml"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "chrono",
  "opendqi-core",
+ "quick-xml",
+ "rust_decimal",
+ "tracing",
 ]
 
 [[package]]
@@ -608,6 +614,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "quick-xml"
+version = "0.36.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f7649a7b4df05aed9ea7ec6f628c67c9953a43869b8bc50929569b2999d443fe"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]

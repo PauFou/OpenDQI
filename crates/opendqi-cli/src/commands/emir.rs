@@ -1,26 +1,28 @@
 //! `opendqi emir ...` subcommands.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 use clap::Subcommand;
 use opendqi_core::dq::{default_checks, run_all, CheckContext};
 use opendqi_core::{DqDimension, DqIssue, EmirRecord, Regime, ScanSummary, Severity, Thresholds};
-use opendqi_io::{discover_inputs, read_emir_csv, CsvMapping};
+use opendqi_io::{discover_emir_inputs, has_extension, read_emir_csv, CsvMapping};
 use opendqi_report::{write_issues_csv, write_report_html, write_summary_json};
-use tracing::info;
+use opendqi_xml::read_emir_xml;
+use tracing::{info, warn};
 
 #[derive(Subcommand)]
 pub enum EmirAction {
-    /// Run the full DQ scan over a CSV (file or directory of CSVs).
+    /// Run the full DQ scan over a CSV or XML input (file or directory).
     Scan {
-        /// Path to a CSV file or a directory containing CSV files.
+        /// Path to a CSV/XML file or a directory containing such files.
         input: PathBuf,
-        /// Path to the YAML mapping describing the CSV columns.
+        /// Path to the YAML mapping describing CSV columns. Required
+        /// when the input set contains at least one CSV file.
         #[arg(long)]
-        mapping: PathBuf,
+        mapping: Option<PathBuf>,
         /// Directory where reports are written. Created if absent.
         #[arg(long)]
         out: PathBuf,
@@ -53,7 +55,7 @@ pub fn run(action: EmirAction) -> Result<()> {
             mapping,
             out,
             config,
-        } => run_scan(&input, &mapping, &out, config.as_deref()),
+        } => run_scan(&input, mapping.as_deref(), &out, config.as_deref()),
         EmirAction::Validate { .. } => {
             println!("opendqi emir validate: XML/XSD validation is planned for milestone 0.3.");
             Ok(())
@@ -66,14 +68,13 @@ pub fn run(action: EmirAction) -> Result<()> {
 }
 
 fn run_scan(
-    input: &std::path::Path,
-    mapping_path: &std::path::Path,
-    out: &std::path::Path,
-    config_path: Option<&std::path::Path>,
+    input: &Path,
+    mapping_path: Option<&Path>,
+    out: &Path,
+    config_path: Option<&Path>,
 ) -> Result<()> {
     let started_at = Utc::now();
 
-    let mapping = CsvMapping::from_path(mapping_path)?;
     let thresholds = match config_path {
         Some(p) => {
             let text = std::fs::read_to_string(p)
@@ -84,19 +85,48 @@ fn run_scan(
         None => Thresholds::default(),
     };
 
-    let inputs = discover_inputs(input)?;
+    let inputs = discover_emir_inputs(input)?;
     if inputs.is_empty() {
-        return Err(anyhow!("no CSV inputs found at {}", input.display()));
+        return Err(anyhow!("no CSV or XML inputs found at {}", input.display()));
     }
     info!(count = inputs.len(), "discovered inputs");
 
+    let has_csv = inputs.iter().any(|p| has_extension(p, "csv"));
+    let mapping = if has_csv {
+        let path = mapping_path.ok_or_else(|| {
+            anyhow!("--mapping is required because the input contains at least one CSV file")
+        })?;
+        Some(CsvMapping::from_path(path)?)
+    } else {
+        None
+    };
+
     let mut records: Vec<EmirRecord> = Vec::new();
+    let mut format_issues: Vec<DqIssue> = Vec::new();
     let mut sources: Vec<String> = Vec::with_capacity(inputs.len());
+
     for path in &inputs {
-        let mut batch = read_emir_csv(path, &mapping)?;
-        info!(file = %path.display(), rows = batch.len(), "loaded CSV");
         sources.push(path.to_string_lossy().into_owned());
-        records.append(&mut batch);
+        if has_extension(path, "csv") {
+            let mapping = mapping
+                .as_ref()
+                .expect("mapping is loaded when CSV inputs are present");
+            let mut batch = read_emir_csv(path, mapping)?;
+            info!(file = %path.display(), rows = batch.len(), "loaded CSV");
+            records.append(&mut batch);
+        } else if has_extension(path, "xml") {
+            let mut outcome = read_emir_xml(path)?;
+            info!(
+                file = %path.display(),
+                trades = outcome.records.len(),
+                format_issues = outcome.issues.len(),
+                "loaded XML",
+            );
+            records.append(&mut outcome.records);
+            format_issues.append(&mut outcome.issues);
+        } else {
+            warn!(path = %path.display(), "unsupported file extension; skipping");
+        }
     }
 
     let now = Utc::now();
@@ -107,7 +137,9 @@ fn run_scan(
     };
 
     let checks = default_checks();
-    let issues = run_all(&checks, &records, &ctx);
+    let mut issues = run_all(&checks, &records, &ctx);
+    issues.extend(format_issues);
+    sort_issues(&mut issues);
 
     let summary = build_summary(&records, &issues, &inputs, started_at, Utc::now());
 
@@ -138,6 +170,15 @@ fn run_scan(
     );
     println!("Report: {}", out.join("report.html").display());
     Ok(())
+}
+
+fn sort_issues(issues: &mut [DqIssue]) {
+    issues.sort_by(|a, b| {
+        a.check_id
+            .cmp(&b.check_id)
+            .then_with(|| a.source_file.cmp(&b.source_file))
+            .then_with(|| a.record_id.cmp(&b.record_id))
+    });
 }
 
 fn build_summary(

@@ -28,6 +28,7 @@ rust_decimal = { version = "1.36", features = ["serde-with-str"] }
 clap = { version = "4.5", features = ["derive"] }
 csv = "1.3"
 minijinja = "2.5"
+quick-xml = "0.36"
 rayon = "1.10"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

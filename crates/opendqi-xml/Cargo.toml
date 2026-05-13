@@ -6,7 +6,12 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "OpenDQI XML ingestion and XSD validation (planned)."
+description = "OpenDQI XML ingestion: well-formedness checks and simplified EMIR extraction."
 
 [dependencies]
 opendqi-core = { path = "../opendqi-core" }
+anyhow.workspace = true
+quick-xml.workspace = true
+chrono.workspace = true
+rust_decimal.workspace = true
+tracing.workspace = true

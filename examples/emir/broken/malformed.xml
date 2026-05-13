@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Intentionally malformed: <Trade> is never closed, and the report
+  ends with </EmirReport> while <Trade> is still open. Used to verify
+  that opendqi raises EMIR.FMT.XML_NOT_WELLFORMED critical instead of
+  crashing.
+-->
+<EmirReport xmlns="https://opendqi.org/schemas/emir/v0.1">
+  <Trade>
+    <UTI>OPENDQI-XML-BROKEN</UTI>
+    <ActionType>NEWT</ActionType>
+</EmirReport>

@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic OpenDQI EMIR fixture (v0.1 simplified format).
+  Mirrors the DQ patterns covered by sample.csv so the two formats can
+  be compared side by side. Contains zero real data.
+-->
+<EmirReport xmlns="https://opendqi.org/schemas/emir/v0.1">
+  <Header>
+    <EntityResponsibleForReporting>DUMMYERR0000000000AA</EntityResponsibleForReporting>
+    <ReportingTimestamp>2026-05-12T18:00:00Z</ReportingTimestamp>
+  </Header>
+
+  <!-- 1. Clean trade. -->
+  <Trade>
+    <UTI>OPENDQI-XML-CLEAN-0001</UTI>
+    <ActionType>NEWT</ActionType>
+    <EventType>TRAD</EventType>
+    <Counterparty1>DUMMYCPTY100000000AA</Counterparty1>
+    <Counterparty2>DUMMYCPTY200000000AA</Counterparty2>
+    <AssetClass>IR</AssetClass>
+    <Notional currency="EUR">10000000</Notional>
+    <ExecutionTimestamp>2026-02-01T09:00:00Z</ExecutionTimestamp>
+    <EventTimestamp>2026-02-01T09:00:00Z</EventTimestamp>
+    <ReportingTimestamp>2026-02-01T18:00:00Z</ReportingTimestamp>
+    <EffectiveDate>2026-02-02</EffectiveDate>
+    <MaturityDate>2031-02-02</MaturityDate>
+    <Valuation currency="EUR" timestamp="2026-05-12T18:00:00Z">1500.50</Valuation>
+  </Trade>
+
+  <!-- 2. Missing UTI. -->
+  <Trade>
+    <ActionType>NEWT</ActionType>
+    <EventType>TRAD</EventType>
+    <Counterparty1>DUMMYCPTY100000000AA</Counterparty1>
+    <Counterparty2>DUMMYCPTY200000000AA</Counterparty2>
+    <AssetClass>IR</AssetClass>
+    <Notional currency="EUR">5000000</Notional>
+    <ExecutionTimestamp>2026-03-01T09:00:00Z</ExecutionTimestamp>
+    <EventTimestamp>2026-03-01T09:00:00Z</EventTimestamp>
+    <ReportingTimestamp>2026-03-01T17:00:00Z</ReportingTimestamp>
+    <EffectiveDate>2026-03-02</EffectiveDate>
+    <MaturityDate>2030-03-02</MaturityDate>
+    <Valuation currency="EUR" timestamp="2026-05-12T18:00:00Z">800.00</Valuation>
+  </Trade>
+
+  <!-- 3. Outstanding trade, no valuation. -->
+  <Trade>
+    <UTI>OPENDQI-XML-NOVAL-0003</UTI>
+    <ActionType>NEWT</ActionType>
+    <EventType>TRAD</EventType>
+    <Counterparty1>DUMMYCPTY100000000AA</Counterparty1>
+    <Counterparty2>DUMMYCPTY200000000AA</Counterparty2>
+    <AssetClass>IR</AssetClass>
+    <Notional currency="EUR">7500000</Notional>
+    <ExecutionTimestamp>2026-01-15T08:00:00Z</ExecutionTimestamp>
+    <EventTimestamp>2026-01-15T08:00:00Z</EventTimestamp>
+    <ReportingTimestamp>2026-01-15T17:00:00Z</ReportingTimestamp>
+    <EffectiveDate>2026-01-16</EffectiveDate>
+    <MaturityDate>2029-01-16</MaturityDate>
+  </Trade>
+
+  <!-- 4. Placeholder maturity 2099-12-31. -->
+  <Trade>
+    <UTI>OPENDQI-XML-PLACE-0004</UTI>
+    <ActionType>NEWT</ActionType>
+    <EventType>TRAD</EventType>
+    <Counterparty1>DUMMYCPTY100000000AA</Counterparty1>
+    <Counterparty2>DUMMYCPTY200000000AA</Counterparty2>
+    <AssetClass>IR</AssetClass>
+    <Notional currency="EUR">2000000</Notional>
+    <ExecutionTimestamp>2026-04-01T08:00:00Z</ExecutionTimestamp>
+    <EventTimestamp>2026-04-01T08:00:00Z</EventTimestamp>
+    <ReportingTimestamp>2026-04-01T17:00:00Z</ReportingTimestamp>
+    <EffectiveDate>2026-04-02</EffectiveDate>
+    <MaturityDate>2099-12-31</MaturityDate>
+    <Valuation currency="EUR" timestamp="2026-05-12T17:00:00Z">250.00</Valuation>
+  </Trade>
+
+  <!-- 5. Inverted dates (maturity before effective). -->
+  <Trade>
+    <UTI>OPENDQI-XML-INVRT-0005</UTI>
+    <ActionType>NEWT</ActionType>
+    <EventType>TRAD</EventType>
+    <Counterparty1>DUMMYCPTY100000000AA</Counterparty1>
+    <Counterparty2>DUMMYCPTY200000000AA</Counterparty2>
+    <AssetClass>IR</AssetClass>
+    <Notional currency="EUR">1500000</Notional>
+    <ExecutionTimestamp>2026-04-15T08:00:00Z</ExecutionTimestamp>
+    <EventTimestamp>2026-04-15T08:00:00Z</EventTimestamp>
+    <ReportingTimestamp>2026-04-15T17:00:00Z</ReportingTimestamp>
+    <EffectiveDate>2026-06-01</EffectiveDate>
+    <MaturityDate>2026-05-30</MaturityDate>
+    <Valuation currency="EUR" timestamp="2026-05-12T17:00:00Z">400.00</Valuation>
+  </Trade>
+
+  <!-- 6 & 7. Same UTI twice. -->
+  <Trade>
+    <UTI>OPENDQI-XML-DUPE-0006</UTI>
+    <ActionType>NEWT</ActionType>
+    <EventType>TRAD</EventType>
+    <Counterparty1>DUMMYCPTY100000000AA</Counterparty1>
+    <Counterparty2>DUMMYCPTY200000000AA</Counterparty2>
+    <AssetClass>IR</AssetClass>
+    <Notional currency="EUR">3000000</Notional>
+    <ExecutionTimestamp>2026-02-15T09:00:00Z</ExecutionTimestamp>
+    <EventTimestamp>2026-02-15T09:00:00Z</EventTimestamp>
+    <ReportingTimestamp>2026-02-15T17:00:00Z</ReportingTimestamp>
+    <EffectiveDate>2026-02-16</EffectiveDate>
+    <MaturityDate>2028-02-16</MaturityDate>
+    <Valuation currency="EUR" timestamp="2026-05-12T17:00:00Z">950.00</Valuation>
+  </Trade>
+
+  <Trade>
+    <UTI>OPENDQI-XML-DUPE-0006</UTI>
+    <ActionType>MODI</ActionType>
+    <EventType>VALU</EventType>
+    <Counterparty1>DUMMYCPTY100000000AA</Counterparty1>
+    <Counterparty2>DUMMYCPTY200000000AA</Counterparty2>
+    <AssetClass>IR</AssetClass>
+    <Notional currency="EUR">3000000</Notional>
+    <ExecutionTimestamp>2026-02-15T09:00:00Z</ExecutionTimestamp>
+    <EventTimestamp>2026-04-01T09:00:00Z</EventTimestamp>
+    <ReportingTimestamp>2026-04-01T17:00:00Z</ReportingTimestamp>
+    <EffectiveDate>2026-02-16</EffectiveDate>
+    <MaturityDate>2028-02-16</MaturityDate>
+    <Valuation currency="EUR" timestamp="2026-05-12T17:00:00Z">975.00</Valuation>
+  </Trade>
+
+  <!-- 8. Late reporting (event 48h before report). -->
+  <Trade>
+    <UTI>OPENDQI-XML-LATE-0008</UTI>
+    <ActionType>NEWT</ActionType>
+    <EventType>TRAD</EventType>
+    <Counterparty1>DUMMYCPTY100000000AA</Counterparty1>
+    <Counterparty2>DUMMYCPTY200000000AA</Counterparty2>
+    <AssetClass>IR</AssetClass>
+    <Notional currency="EUR">4000000</Notional>
+    <ExecutionTimestamp>2026-03-10T08:00:00Z</ExecutionTimestamp>
+    <EventTimestamp>2026-03-10T08:00:00Z</EventTimestamp>
+    <ReportingTimestamp>2026-03-12T09:00:00Z</ReportingTimestamp>
+    <EffectiveDate>2026-03-11</EffectiveDate>
+    <MaturityDate>2029-03-11</MaturityDate>
+    <Valuation currency="EUR" timestamp="2026-05-12T17:00:00Z">1100.00</Valuation>
+  </Trade>
+</EmirReport>

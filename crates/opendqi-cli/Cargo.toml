@@ -16,6 +16,7 @@ path = "src/main.rs"
 opendqi-core = { path = "../opendqi-core" }
 opendqi-io = { path = "../opendqi-io" }
 opendqi-report = { path = "../opendqi-report" }
+opendqi-xml = { path = "../opendqi-xml" }
 anyhow.workspace = true
 clap.workspace = true
 chrono.workspace = true

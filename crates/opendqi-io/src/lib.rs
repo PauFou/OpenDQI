@@ -8,5 +8,5 @@ pub mod discover;
 pub mod mapping;
 
 pub use csv_in::read_emir_csv;
-pub use discover::discover_inputs;
+pub use discover::{discover_emir_inputs, has_extension};
 pub use mapping::CsvMapping;
