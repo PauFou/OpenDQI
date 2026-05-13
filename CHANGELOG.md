@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (EMIR TSR / `auth.107`) — Phase 1
+
+- New canonical type `TrStateRecord` in `opendqi-core::model`: represents one outstanding-trade line from a Trade Repository Trade State Report, carrying UTI, both counterparty LEIs, TR-side status, notional, valuation amount / currency / timestamp, effective / maturity / termination dates, collateral portfolio code, plus a `state_as_of` header timestamp propagated to every record for deterministic staleness checks.
+- New `TrStateCheck` trait in `opendqi-core::dq` (signature `(records, prior, ctx) -> Vec<DqIssue>`, parallel to the existing `Check` / `FeedbackCheck` / `ReconciliationCheck` traits).
+- **7 EMIR TSR state-health checks** under `EMIR.TST.*`:
+  - `OUTSTANDING_SUMMARY` (Info / Completeness) — one Info issue per outstanding trade, populates the report's outstanding list without polluting the issue count.
+  - `STALE_VALUATION` (Accuracy / High) — valuation older than the configured business-day threshold vs. the TSR's `state_as_of`.
+  - `MISSING_VALUATION` (Completeness / High) — outstanding trade with no valuation amount.
+  - `ACTIVE_PAST_MATURITY` (Consistency / High) — outstanding trade with a past maturity date and no termination.
+  - `PLACEHOLDER_MATURITY` (Accuracy / Warning) — maturity matches a configured placeholder date (1900-01-01 / 2099-12-31 / 9999-12-31).
+  - `DUPLICATE_ACTIVE_UTI` (Uniqueness / Critical) — same UTI appears multiple times among outstanding rows.
+  - `VALUATION_AFTER_TERMINATION` (Consistency / High) — valuation timestamp post-dates the termination date.
+- New `crates/opendqi-xml/src/tr_state.rs`: streaming `NsReader` adapter for ISO 20022 `auth.107.001.01`. Recognises `<TradStat>` blocks plus a header `<StateAsOf>` timestamp propagated to every record. The SWIFT-licensed XSD is not redistributed; the adapter parses a plausible synthetic schema that the firm can adapt when the real XSD is available.
+- New CLI subcommand `opendqi emir tr-state-scan <auth.107.xml> [--store <PATH>] --out <DIR>`. `--store` is optional. Outputs `summary.json`, `tr_state_issues.csv`, `tr_state_report.html` — deliberately distinct filenames so the state layer can coexist with activity / feedback reports in the same `--out` directory.
+- Synthetic fixture `examples/emir/tr_state/auth107-sample.xml` (8 outstanding trades, all 7 check_ids triggered end-to-end).
+- New `docs/tr-state-checks.md` (catalogue) + `docs/auth-messages.md` updated to mark `auth.107` as `verified (synthetic schema)`.
+- Catalog: **129 + 8 lifecycle + 8 feedback + 6 reconciliation + 7 TSR = 158 checks** when all layers are exercised.
+
 ### Changed (positioning + naming discipline) — Phase 0
 
 - README pivoted: OpenDQI is now positioned as a **post-TR intelligence engine** (activity / state / rejection analytics). New one-liner: *"OpenDQI turns EMIR/SFTR Trade Repository activity, state, and rejection files into actionable data quality intelligence."*

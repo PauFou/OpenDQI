@@ -408,6 +408,84 @@ impl Default for FeedbackRecord {
     }
 }
 
+/// One line from a Trade Repository Trade State Report (TSR):
+/// the TR's view of one outstanding trade at a given point in time
+/// (ISO 20022 `auth.107` for EMIR; `auth.079` for SFTR is on the
+/// Phase 6 roadmap).
+///
+/// A TSR is **state-oriented**, not activity-oriented: every line
+/// describes what the TR currently believes is outstanding, not how
+/// the state changed. The companion `state_as_of` timestamp from
+/// the report header is propagated to every record so staleness
+/// checks have a deterministic reference clock.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrStateRecord {
+    /// Source file path (or other origin label).
+    pub source_file: Option<String>,
+    /// Stable identifier of the line within the source.
+    pub record_id: Option<String>,
+    /// Regulatory regime this state belongs to.
+    pub regime: Regime,
+    /// Snapshot timestamp from the report header — every record in
+    /// the same TSR shares this value.
+    pub state_as_of: Option<DateTime<Utc>>,
+    /// UTI of the outstanding trade.
+    pub uti: Option<String>,
+    /// LEI of the reporting counterparty.
+    pub reporting_counterparty: Option<String>,
+    /// LEI of the other counterparty.
+    pub other_counterparty: Option<String>,
+    /// TR-side status — typically `OUTSTANDING`, `MATURED`,
+    /// `TERMINATED`, or a TR-specific code.
+    pub status: Option<String>,
+    /// Notional amount.
+    pub notional_amount: Option<Decimal>,
+    /// Notional currency (ISO 4217).
+    pub notional_currency: Option<String>,
+    /// Latest valuation amount the TR is holding.
+    pub valuation_amount: Option<Decimal>,
+    /// Currency of the latest valuation amount.
+    pub valuation_currency: Option<String>,
+    /// Timestamp of the latest valuation the TR is holding.
+    pub valuation_timestamp: Option<DateTime<Utc>>,
+    /// Effective / event date.
+    pub effective_date: Option<NaiveDate>,
+    /// Contractual maturity date.
+    pub maturity_date: Option<NaiveDate>,
+    /// Termination date, when applicable.
+    pub termination_date: Option<NaiveDate>,
+    /// Collateral portfolio code.
+    pub collateral_portfolio_code: Option<String>,
+    /// Catch-all of XML leaves not promoted to typed fields.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub raw_fields: BTreeMap<String, String>,
+}
+
+impl Default for TrStateRecord {
+    fn default() -> Self {
+        Self {
+            source_file: None,
+            record_id: None,
+            regime: Regime::Emir,
+            state_as_of: None,
+            uti: None,
+            reporting_counterparty: None,
+            other_counterparty: None,
+            status: None,
+            notional_amount: None,
+            notional_currency: None,
+            valuation_amount: None,
+            valuation_currency: None,
+            valuation_timestamp: None,
+            effective_date: None,
+            maturity_date: None,
+            termination_date: None,
+            collateral_portfolio_code: None,
+            raw_fields: BTreeMap::new(),
+        }
+    }
+}
+
 /// One line item from a Trade Repository reconciliation report
 /// (ISO 20022 `auth.106` for EMIR, `auth.083` for SFTR). Each
 /// record describes a UTI's pairing / reconciliation status between

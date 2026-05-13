@@ -5,6 +5,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use crate::config::Thresholds;
 use crate::model::{
     DqDimension, DqIssue, EmirRecord, FeedbackRecord, ReconciliationRecord, Severity, SftrRecord,
+    TrStateRecord,
 };
 
 mod abnormal_maturity;
@@ -698,6 +699,67 @@ pub fn run_all_sftr_reconciliation(
     checks: &[Box<dyn SftrReconciliationCheck>],
     records: &[ReconciliationRecord],
     prior: &[SftrRecord],
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    let mut issues: Vec<DqIssue> = checks
+        .iter()
+        .flat_map(|c| c.run(records, prior, ctx))
+        .collect();
+    sort_issues(&mut issues);
+    issues
+}
+
+// ---- Trade State Report (TR auth.107) checks ---------------------
+//
+// State-oriented checks: each takes a snapshot of what the TR
+// currently believes is outstanding, plus the relevant prior
+// submission history loaded from the store (optional).
+
+mod tr_state;
+
+pub use tr_state::{
+    EmirActivePastMaturity, EmirDuplicateActiveUti, EmirMissingValuationOnTsr,
+    EmirOutstandingSummary, EmirPlaceholderMaturity, EmirStaleValuationOnTsr,
+    EmirTsrValuationAfterTermination,
+};
+
+/// A Trade State Report (TSR) EMIR check.
+pub trait TrStateCheck: Send + Sync {
+    /// Stable identifier, e.g. `EMIR.TST.STALE_VALUATION`.
+    fn id(&self) -> &'static str;
+    /// The DQ dimension this check belongs to.
+    fn dimension(&self) -> DqDimension;
+    /// Default severity for issues raised by this check.
+    fn severity(&self) -> Severity;
+    /// Execute the check against the TSR snapshot + any prior
+    /// EMIR records loaded from the history store.
+    fn run(
+        &self,
+        records: &[TrStateRecord],
+        prior: &[EmirRecord],
+        ctx: &CheckContext,
+    ) -> Vec<DqIssue>;
+}
+
+/// Default EMIR TSR check registry (7 checks).
+pub fn default_tr_state_checks() -> Vec<Box<dyn TrStateCheck>> {
+    vec![
+        Box::new(EmirOutstandingSummary),
+        Box::new(EmirStaleValuationOnTsr),
+        Box::new(EmirMissingValuationOnTsr),
+        Box::new(EmirActivePastMaturity),
+        Box::new(EmirPlaceholderMaturity),
+        Box::new(EmirDuplicateActiveUti),
+        Box::new(EmirTsrValuationAfterTermination),
+    ]
+}
+
+/// Run every EMIR TSR check and return the concatenated, sorted
+/// issues.
+pub fn run_all_tr_state(
+    checks: &[Box<dyn TrStateCheck>],
+    records: &[TrStateRecord],
+    prior: &[EmirRecord],
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
     let mut issues: Vec<DqIssue> = checks

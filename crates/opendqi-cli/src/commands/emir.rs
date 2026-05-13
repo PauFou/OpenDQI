@@ -9,15 +9,15 @@ use chrono::Utc;
 use clap::Subcommand;
 use opendqi_core::dq::{
     default_checks, default_feedback_checks, default_lifecycle_checks,
-    default_reconciliation_checks, run_all, run_all_feedback, run_all_lifecycle,
-    run_all_reconciliation, CheckContext,
+    default_reconciliation_checks, default_tr_state_checks, run_all, run_all_feedback,
+    run_all_lifecycle, run_all_reconciliation, run_all_tr_state, CheckContext,
 };
 use opendqi_core::{DqDimension, DqIssue, EmirRecord, Regime, ScanSummary, Severity, Thresholds};
 use opendqi_io::{discover_emir_inputs, has_extension, read_emir_csv, CsvMapping};
 use opendqi_report::{write_issues_csv, write_report_html, write_summary_json};
 use opendqi_xml::{
-    check_wellformedness, read_emir_feedback_xml, read_emir_reconciliation_xml, read_emir_xml,
-    ExternalXmllintValidator, XsdValidator, XsdViolation,
+    check_wellformedness, read_emir_feedback_xml, read_emir_reconciliation_xml,
+    read_emir_tr_state_xml, read_emir_xml, ExternalXmllintValidator, XsdValidator, XsdViolation,
 };
 use tracing::{info, warn};
 
@@ -78,6 +78,24 @@ pub enum EmirAction {
         #[arg(long)]
         out: PathBuf,
     },
+    /// Ingest an EMIR Trade State Report (ISO 20022 `auth.107`) and
+    /// produce `EMIR.TST.*` issues over the TR's snapshot:
+    /// outstanding summary, stale / missing valuation, active past
+    /// maturity, placeholder maturity, duplicate active UTI,
+    /// valuation after termination. The state layer is reported
+    /// independently from the activity layer; outputs are
+    /// `summary.json`, `tr_state_issues.csv`, `tr_state_report.html`.
+    TrStateScan {
+        /// Path to the `auth.107` XML file received from the TR.
+        input: PathBuf,
+        /// Optional path to the SQLite history store (enriches the
+        /// analysis with submission history when set).
+        #[arg(long)]
+        store: Option<PathBuf>,
+        /// Directory where reports are written.
+        #[arg(long)]
+        out: PathBuf,
+    },
     /// Ingest a TR pairing / matching report and produce
     /// `EMIR.REC.*` issues for UNPAIRED / UNRECONCILED trades and
     /// field-level mismatches.
@@ -133,6 +151,10 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
         }
         EmirAction::Reconcile { input, store, out } => {
             run_reconcile(&input, &store, &out)?;
+            Ok(ExitCode::SUCCESS)
+        }
+        EmirAction::TrStateScan { input, store, out } => {
+            run_tr_state_scan(&input, store.as_deref(), &out)?;
             Ok(ExitCode::SUCCESS)
         }
         EmirAction::Normalize { .. } => {
@@ -552,6 +574,91 @@ fn run_reconcile(input: &Path, store_path: &Path, out: &Path) -> Result<()> {
         summary.records_processed, summary.issues_total, critical, high, summary.quality_score
     );
     println!("Report: {}", out.join("report.html").display());
+    Ok(())
+}
+
+fn run_tr_state_scan(input: &Path, store_path: Option<&Path>, out: &Path) -> Result<()> {
+    let started_at = Utc::now();
+    let outcome = read_emir_tr_state_xml(input)
+        .with_context(|| format!("reading TSR file {}", input.display()))?;
+    info!(
+        file = %input.display(),
+        records = outcome.records.len(),
+        format_issues = outcome.issues.len(),
+        "loaded EMIR TSR XML",
+    );
+
+    let mut issues: Vec<DqIssue> = outcome.issues;
+
+    // Optional store enrichment: load prior EMIR records for the
+    // UTIs present in the TSR (not used by v1 checks but the API
+    // is symmetric and forward-compatible).
+    let prior: Vec<EmirRecord> = if let Some(store_path) = store_path {
+        let store = opendqi_store::open_store(store_path)
+            .with_context(|| format!("opening history store at {}", store_path.display()))?;
+        let utis: Vec<&str> = outcome
+            .records
+            .iter()
+            .filter_map(|r| r.uti.as_deref())
+            .map(str::trim)
+            .filter(|u| !u.is_empty())
+            .collect();
+        let prior = store
+            .load_prior_emir(&utis, i64::MAX)
+            .context("loading prior EMIR records from history store")?;
+        info!(prior_records = prior.len(), "loaded prior records");
+        prior
+    } else {
+        Vec::new()
+    };
+
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+    let tsr_issues = run_all_tr_state(&default_tr_state_checks(), &outcome.records, &prior, &ctx);
+    info!(tsr_issues = tsr_issues.len(), "TSR checks run");
+    issues.extend(tsr_issues);
+    sort_issues(&mut issues);
+
+    let inputs = vec![input.to_path_buf()];
+    let sources = vec![input.to_string_lossy().into_owned()];
+    let summary = build_feedback_summary(
+        outcome.records.len(),
+        &issues,
+        &inputs,
+        started_at,
+        Utc::now(),
+    );
+
+    std::fs::create_dir_all(out)
+        .with_context(|| format!("creating output directory {}", out.display()))?;
+    write_summary_json(&out.join("summary.json"), &summary)?;
+    write_issues_csv(&out.join("tr_state_issues.csv"), &issues)?;
+    write_report_html(
+        &out.join("tr_state_report.html"),
+        &summary,
+        &issues,
+        &sources,
+    )?;
+
+    let critical = summary
+        .issues_by_severity
+        .get(&Severity::Critical)
+        .copied()
+        .unwrap_or(0);
+    let high = summary
+        .issues_by_severity
+        .get(&Severity::High)
+        .copied()
+        .unwrap_or(0);
+    println!(
+        "Scanned {} TSR record(s). {} issues ({} critical, {} high). Score: {:.1}/100.",
+        summary.records_processed, summary.issues_total, critical, high, summary.quality_score
+    );
+    println!("Report: {}", out.join("tr_state_report.html").display());
     Ok(())
 }
 

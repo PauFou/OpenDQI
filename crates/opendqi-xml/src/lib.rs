@@ -15,6 +15,7 @@ pub mod emir;
 pub mod feedback;
 pub mod reconciliation;
 pub mod sftr;
+pub mod tr_state;
 pub mod wellformed;
 pub mod xsd;
 
@@ -24,5 +25,6 @@ pub use reconciliation::{
     read_emir_reconciliation_xml, read_sftr_reconciliation_xml, ReconciliationXmlReadOutcome,
 };
 pub use sftr::{read_sftr_xml, SftrXmlReadOutcome};
+pub use tr_state::{read_emir_tr_state_xml, TrStateXmlReadOutcome};
 pub use wellformed::{check_wellformedness, WellformednessError};
 pub use xsd::{ExternalXmllintValidator, NoopValidator, XsdToolError, XsdValidator, XsdViolation};
