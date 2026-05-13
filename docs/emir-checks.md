@@ -1,10 +1,23 @@
 # EMIR data-quality checks
 
-OpenDQI currently ships **51 EMIR data-quality checks** covering all
+OpenDQI currently ships **81 EMIR data-quality checks** covering all
 six DQ dimensions. Most are aligned with the official ESMA EMIR
 Refit Validation Rules (`EMIR-VR-*`). Each check is a pure function
 from a slice of `EmirRecord` to a list of `DqIssue`. The full
 registry is exposed through [`opendqi_core::dq::default_checks`].
+
+The catalog is layered:
+
+- **Tier 1** — presence / format / enum: ~21 checks for missing fields,
+  LEI/currency/ISIN shape, action-type / event-type / asset-class
+  enumerations.
+- **Tier 2** — cross-field / asset-class-specific / decimal precision /
+  action semantics: ~30 checks that require multiple fields to be
+  inspected together (e.g. FX requires a second-leg currency,
+  notional/valuation currency mismatch, decimal precision per ESMA's
+  `decimal:18.5`).
+- **Tier 3 (roadmap)** — checks requiring historical lookback (MODI
+  without prior NEWT, conflict UTI cross-file).
 
 Severity scale: `info` < `warning` < `high` < `critical`.
 
@@ -63,6 +76,36 @@ Severity scale: `info` < `warning` < `high` < `critical`.
 | `EMIR.CON.TERMINATION_AFTER_MATURITY` | Consistency | High | — | Termination date is after maturity date |
 | `EMIR.CON.EFFECTIVE_AFTER_MATURITY` | Consistency | High | — | Effective date is after maturity date |
 | `EMIR.CON.ETRM_REQUIRES_TERMINATION_DATE` | Consistency | High | — | Action ETRM with no `termination_date` |
+| `EMIR.COMP.PRODUCT_ID_MISSING` | Completeness | Warning | — | Asset class set but no `product_id` |
+| `EMIR.COMP.MASTER_AGREEMENT_VERSION_MISSING` | Completeness | Warning | — | Master agreement type set but version absent |
+| `EMIR.VLD.NOTIONAL_PRECISION` | Validity | Warning | — | Notional exceeds ESMA `decimal:18.5` |
+| `EMIR.VLD.VALUATION_PRECISION` | Validity | Warning | — | Valuation exceeds ESMA `decimal:18.5` |
+| `EMIR.VLD.PRICE_PRECISION` | Validity | Warning | — | Price exceeds ESMA `decimal:18.5` |
+| `EMIR.VLD.MARGIN_PRECISION` | Validity | Warning | — | Any margin field exceeds ESMA `decimal:18.5` |
+| `EMIR.VLD.MASTER_AGREEMENT_VERSION_FORMAT` | Validity | Warning | — | Master agreement version not a 4-digit year |
+| `EMIR.VLD.ISDA_VERSION_PLAUSIBLE` | Validity | Warning | — | ISDA agreement version not in `{1992, 2002, 2017}` |
+| `EMIR.ACC.IR_REQUIRES_NOTIONAL` | Accuracy | High | — | Interest-rate trade without `notional_amount` |
+| `EMIR.ACC.FX_REQUIRES_LEG2_CURRENCY` | Accuracy | High | — | FX trade without `leg2_notional_currency` |
+| `EMIR.ACC.EQ_REQUIRES_UNDERLYING` | Accuracy | High | — | Equity trade without `underlying_id` |
+| `EMIR.ACC.CR_REQUIRES_UNDERLYING` | Accuracy | High | — | Credit trade without `underlying_id` |
+| `EMIR.ACC.COMMODITY_REQUIRES_PRODUCT_ID` | Accuracy | Warning | — | Commodity trade without `product_id` |
+| `EMIR.ACC.IR_REQUIRES_LEG1_FREQ` | Accuracy | Warning | — | Interest-rate trade without first-leg payment frequency |
+| `EMIR.CON.NOTIONAL_VAL_CURRENCY_MISMATCH` | Consistency | Warning | — | `notional_currency` ≠ `valuation_currency` |
+| `EMIR.CON.PRICE_VAL_CURRENCY_MISMATCH` | Consistency | Warning | — | `price_currency` ≠ `valuation_currency` |
+| `EMIR.CON.LEG1_LEG2_SAME_CURRENCY` | Consistency | Warning | — | Both legs reported in the same currency |
+| `EMIR.CON.SELF_DEALING` | Consistency | High | — | Counterparty 1 and 2 are identical |
+| `EMIR.CON.PRICE_REQUIRES_CURRENCY` | Consistency | High | — | Price set without `price_currency` |
+| `EMIR.CON.IM_NEEDS_COLLATERAL_PORTFOLIO` | Consistency | Warning | — | Initial margin posted set without portfolio code |
+| `EMIR.CON.VM_NEEDS_COLLATERAL_PORTFOLIO` | Consistency | Warning | — | Variation margin posted set without portfolio code |
+| `EMIR.CON.LEG2_NOTIONAL_NEEDS_CURRENCY` | Consistency | High | — | Leg-2 notional set without its currency |
+| `EMIR.CON.HEDGING_REQUIRES_NFC` | Consistency | Warning | — | Hedging indicator true but `nature ≠ N` |
+| `EMIR.CON.MTM_CHANGE_REQUIRES_VALUATION` | Consistency | Warning | — | MtM change set without valuation amount |
+| `EMIR.CON.VALU_REQUIRES_VALUATION` | Consistency | High | — | Action VALU without `valuation_amount` |
+| `EMIR.CON.NEWT_FORBIDS_PRIOR_UTI` | Consistency | Warning | — | NEWT with `prior_uti` (belongs to MODI) |
+| `EMIR.CON.POSC_REQUIRES_PORTFOLIO` | Consistency | High | — | Position component without portfolio code |
+| `EMIR.CON.MARU_REQUIRES_PORTFOLIO` | Consistency | Warning | — | Margin update without portfolio code |
+| `EMIR.CON.NEWT_FORBIDS_TERMINATION_DATE` | Consistency | Warning | — | NEWT with `termination_date` |
+| `EMIR.CON.ETRM_REQUIRES_VALUATION` | Consistency | Warning | — | Early termination without final valuation |
 
 `EMIR-VR-*` references map to the official ESMA EMIR Refit
 Validation Rules workbook published by ESMA (not redistributed by

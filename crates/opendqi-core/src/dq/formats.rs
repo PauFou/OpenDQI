@@ -49,6 +49,25 @@ pub fn is_in(value: &str, allowed: &[&'static str]) -> bool {
     allowed.iter().any(|a| a.eq_ignore_ascii_case(value))
 }
 
+/// Returns true if a decimal fits within the given integer-digit and
+/// fractional-digit bounds. ESMA monetary amounts are typically
+/// `decimal:18.5` (max 18 integer digits + 5 fractional digits).
+pub fn within_decimal_bounds(d: &rust_decimal::Decimal, max_int: u32, max_scale: u32) -> bool {
+    if d.scale() > max_scale {
+        return false;
+    }
+    // Integer-digit count = digits of |d.trunc()|. Use absolute value
+    // to handle negatives uniformly.
+    let abs = d.abs();
+    let trunc = abs.trunc();
+    if trunc.is_zero() {
+        return true;
+    }
+    let s = trunc.to_string();
+    // s is like "12345" (no fractional part because trunc).
+    s.len() as u32 <= max_int
+}
+
 /// Returns true if `s` matches the ISO 6166 ISIN shape: 12 characters
 /// total — 2 uppercase letters (country code), 9 alphanumeric, and 1
 /// numeric check digit.
@@ -147,5 +166,36 @@ mod tests {
         assert!(!is_valid_isin("12DE01135275")); // digits in country
         assert!(!is_valid_isin("DE000113527A")); // letter check digit
         assert!(!is_valid_isin(""));
+    }
+
+    #[test]
+    fn within_decimal_bounds_accepts_normal_values() {
+        use rust_decimal::Decimal;
+        use std::str::FromStr;
+        assert!(within_decimal_bounds(&Decimal::from(1000000), 18, 5));
+        assert!(within_decimal_bounds(
+            &Decimal::from_str("123.45").unwrap(),
+            18,
+            5
+        ));
+        assert!(within_decimal_bounds(&Decimal::ZERO, 18, 5));
+    }
+
+    #[test]
+    fn within_decimal_bounds_rejects_too_many_int_digits() {
+        use rust_decimal::Decimal;
+        use std::str::FromStr;
+        // 19 digits before the decimal point.
+        let big = Decimal::from_str("1234567890123456789").unwrap();
+        assert!(!within_decimal_bounds(&big, 18, 5));
+    }
+
+    #[test]
+    fn within_decimal_bounds_rejects_too_much_scale() {
+        use rust_decimal::Decimal;
+        use std::str::FromStr;
+        // 6 fractional digits.
+        let d = Decimal::from_str("1.234567").unwrap();
+        assert!(!within_decimal_bounds(&d, 18, 5));
     }
 }

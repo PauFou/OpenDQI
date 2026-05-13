@@ -72,3 +72,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed (EMIR depth side effects)
 
 - The pre-existing `examples/emir/extended-checks.csv` now produces ~87 issues (up from 17) because the new completeness/enum checks correctly flag many fields that fixture leaves unpopulated. This is expected — the fixture is preserved as-is so the additional coverage is visible.
+
+### Added (EMIR tier 2 — cross-field / asset-class / precision / action semantics)
+
+- **30 additional EMIR data-quality checks**, bringing the EMIR catalog from 51 to **81**.
+  - Cross-field consistency (10): notional/valuation/price currency mismatches, leg-1/leg-2 same currency, self-dealing, price-requires-currency, IM/VM need a portfolio, leg-2 notional needs its currency, hedging indicator requires non-financial nature, MtM change requires valuation.
+  - Asset-class specific (7): IR requires notional / leg-1 frequency, FX requires leg-2 currency, EQ / CR require underlying, commodity requires product id, asset class declared without product id.
+  - Action / event semantics (6): VALU requires valuation, NEWT forbids prior UTI / termination date, POSC / MARU require portfolio code, ETRM expects a final valuation.
+  - Decimal precision (4): notional / valuation / price / margin amounts must fit ESMA `decimal:18.5`.
+  - Master agreement (3): version format (4-digit year), version missing when type set, ISDA version in `{1992, 2002, 2017}`.
+- `is_in` and `within_decimal_bounds` helpers in `opendqi-core/src/dq/formats.rs`.
+- `opendqi-io/src/csv_in.rs` now ingests leg-2 notional/currency, leg-1/leg-2 payment frequency, master-agreement version, mtm value change, hedging indicator, and the option greeks (delta / gamma / vega).
+- Synthetic fixture `examples/emir/tier2.csv` + `tier2.yml`: 31 rows exercising each of the 30 tier-2 check_ids at least once.

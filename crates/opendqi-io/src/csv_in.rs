@@ -104,6 +104,17 @@ pub fn read_emir_csv(path: &Path, mapping: &CsvMapping) -> Result<Vec<EmirRecord
             master_agreement_type: pick("master_agreement_type"),
             master_agreement_version: pick("master_agreement_version"),
             intragroup_indicator: pick("intragroup_indicator").and_then(|v| parse_bool(&v)),
+            hedging_indicator: pick("hedging_indicator").and_then(|v| parse_bool(&v)),
+            leg2_notional_amount: pick("leg2_notional_amount")
+                .and_then(|v| parse_decimal(&v, "leg2_notional_amount", &record_id_label)),
+            leg2_notional_currency: pick("leg2_notional_currency"),
+            leg1_payment_frequency: pick("leg1_payment_frequency"),
+            leg2_payment_frequency: pick("leg2_payment_frequency"),
+            mtm_value_change: pick("mtm_value_change")
+                .and_then(|v| parse_decimal(&v, "mtm_value_change", &record_id_label)),
+            delta: pick("delta").and_then(|v| parse_decimal(&v, "delta", &record_id_label)),
+            gamma: pick("gamma").and_then(|v| parse_decimal(&v, "gamma", &record_id_label)),
+            vega: pick("vega").and_then(|v| parse_decimal(&v, "vega", &record_id_label)),
             ..Default::default()
         };
         out.push(record);

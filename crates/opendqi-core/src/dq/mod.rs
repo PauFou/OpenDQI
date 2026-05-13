@@ -14,29 +14,46 @@ mod clearing_status_enum;
 mod clearing_status_missing;
 mod collateral_portfolio_required_for_full;
 mod collateralisation_category_enum;
+mod commodity_requires_product_id;
 mod counterparty_1_missing;
 mod counterparty_2_missing;
+mod cr_requires_underlying;
 mod currency_notional;
 mod currency_valuation;
 mod duplicate_uti;
 mod effective_after_maturity;
+mod eq_requires_underlying;
 mod etrm_requires_termination_date;
+mod etrm_requires_valuation;
 mod event_before_execution;
 mod event_type_enum;
 mod formats;
+mod fx_requires_leg2_currency;
+mod hedging_requires_nfc;
+mod im_needs_collateral_portfolio;
 mod initial_margin_missing_for_full;
 mod intragroup_indicator_missing;
+mod ir_requires_leg1_freq;
+mod ir_requires_notional;
+mod isda_version_plausible;
 mod late_reporting;
+mod leg1_leg2_same_currency;
+mod leg2_notional_needs_currency;
 mod lei_format_ccp;
 mod lei_format_err;
 mod lei_format_oc;
 mod lei_format_rc;
+mod margin_precision;
 mod maru_requires_margin;
+mod maru_requires_portfolio;
 mod master_agreement_type_enum;
 mod master_agreement_type_missing;
+mod master_agreement_version_format;
+mod master_agreement_version_missing;
 mod maturity_in_past;
 mod missing_uti;
 mod missing_valuation;
+mod mtm_change_requires_valuation;
 mod nature_enum;
 mod nature_missing;
 mod nclr_forbids_ccp;
@@ -45,17 +62,30 @@ mod negative_initial_margin_posted;
 mod negative_notional;
 mod negative_variation_margin_collected;
 mod negative_variation_margin_posted;
+mod newt_forbids_prior_uti;
+mod newt_forbids_termination_date;
 mod notional_currency_missing;
+mod notional_precision;
+mod notional_val_currency_mismatch;
+mod posc_requires_portfolio;
+mod price_precision;
+mod price_requires_currency;
+mod price_val_currency_mismatch;
+mod product_id_missing;
 mod reporting_before_execution;
+mod self_dealing;
 mod termination_after_maturity;
 mod trading_capacity_enum;
 mod trading_capacity_missing;
+mod valu_requires_valuation;
 mod valuation_after_reporting;
 mod valuation_after_termination;
 mod valuation_currency_missing;
+mod valuation_precision;
 mod valuation_timestamp_missing;
 mod valuation_type_enum;
 mod variation_margin_missing_for_full;
+mod vm_needs_collateral_portfolio;
 mod zero_notional;
 
 pub use abnormal_maturity::AbnormalMaturity;
@@ -67,28 +97,45 @@ pub use clearing_status_enum::ClearingStatusEnum;
 pub use clearing_status_missing::ClearingStatusMissing;
 pub use collateral_portfolio_required_for_full::CollateralPortfolioRequiredForFull;
 pub use collateralisation_category_enum::CollateralisationCategoryEnum;
+pub use commodity_requires_product_id::CommodityRequiresProductId;
 pub use counterparty_1_missing::Counterparty1Missing;
 pub use counterparty_2_missing::Counterparty2Missing;
+pub use cr_requires_underlying::CrRequiresUnderlying;
 pub use currency_notional::CurrencyNotional;
 pub use currency_valuation::CurrencyValuation;
 pub use duplicate_uti::DuplicateUti;
 pub use effective_after_maturity::EffectiveAfterMaturity;
+pub use eq_requires_underlying::EqRequiresUnderlying;
 pub use etrm_requires_termination_date::EtrmRequiresTerminationDate;
+pub use etrm_requires_valuation::EtrmRequiresValuation;
 pub use event_before_execution::EventBeforeExecution;
 pub use event_type_enum::EventTypeEnum;
+pub use fx_requires_leg2_currency::FxRequiresLeg2Currency;
+pub use hedging_requires_nfc::HedgingRequiresNfc;
+pub use im_needs_collateral_portfolio::ImNeedsCollateralPortfolio;
 pub use initial_margin_missing_for_full::InitialMarginMissingForFull;
 pub use intragroup_indicator_missing::IntragroupIndicatorMissing;
+pub use ir_requires_leg1_freq::IrRequiresLeg1Freq;
+pub use ir_requires_notional::IrRequiresNotional;
+pub use isda_version_plausible::IsdaVersionPlausible;
 pub use late_reporting::LateReporting;
+pub use leg1_leg2_same_currency::Leg1Leg2SameCurrency;
+pub use leg2_notional_needs_currency::Leg2NotionalNeedsCurrency;
 pub use lei_format_ccp::LeiFormatCcp;
 pub use lei_format_err::LeiFormatErr;
 pub use lei_format_oc::LeiFormatOc;
 pub use lei_format_rc::LeiFormatRc;
+pub use margin_precision::MarginPrecision;
 pub use maru_requires_margin::MaruRequiresMargin;
+pub use maru_requires_portfolio::MaruRequiresPortfolio;
 pub use master_agreement_type_enum::MasterAgreementTypeEnum;
 pub use master_agreement_type_missing::MasterAgreementTypeMissing;
+pub use master_agreement_version_format::MasterAgreementVersionFormat;
+pub use master_agreement_version_missing::MasterAgreementVersionMissing;
 pub use maturity_in_past::MaturityInPast;
 pub use missing_uti::MissingUti;
 pub use missing_valuation::MissingValuation;
+pub use mtm_change_requires_valuation::MtmChangeRequiresValuation;
 pub use nature_enum::NatureEnum;
 pub use nature_missing::NatureMissing;
 pub use nclr_forbids_ccp::NclrForbidsCcp;
@@ -97,17 +144,30 @@ pub use negative_initial_margin_posted::NegativeInitialMarginPosted;
 pub use negative_notional::NegativeNotional;
 pub use negative_variation_margin_collected::NegativeVariationMarginCollected;
 pub use negative_variation_margin_posted::NegativeVariationMarginPosted;
+pub use newt_forbids_prior_uti::NewtForbidsPriorUti;
+pub use newt_forbids_termination_date::NewtForbidsTerminationDate;
 pub use notional_currency_missing::NotionalCurrencyMissing;
+pub use notional_precision::NotionalPrecision;
+pub use notional_val_currency_mismatch::NotionalValCurrencyMismatch;
+pub use posc_requires_portfolio::PoscRequiresPortfolio;
+pub use price_precision::PricePrecision;
+pub use price_requires_currency::PriceRequiresCurrency;
+pub use price_val_currency_mismatch::PriceValCurrencyMismatch;
+pub use product_id_missing::ProductIdMissing;
 pub use reporting_before_execution::ReportingBeforeExecution;
+pub use self_dealing::SelfDealing;
 pub use termination_after_maturity::TerminationAfterMaturity;
 pub use trading_capacity_enum::TradingCapacityEnum;
 pub use trading_capacity_missing::TradingCapacityMissing;
+pub use valu_requires_valuation::ValuRequiresValuation;
 pub use valuation_after_reporting::ValuationAfterReporting;
 pub use valuation_after_termination::ValuationAfterTermination;
 pub use valuation_currency_missing::ValuationCurrencyMissing;
+pub use valuation_precision::ValuationPrecision;
 pub use valuation_timestamp_missing::ValuationTimestampMissing;
 pub use valuation_type_enum::ValuationTypeEnum;
 pub use variation_margin_missing_for_full::VariationMarginMissingForFull;
+pub use vm_needs_collateral_portfolio::VmNeedsCollateralPortfolio;
 pub use zero_notional::ZeroNotional;
 
 /// Read-only context passed to every check.
@@ -214,6 +274,41 @@ pub fn default_checks() -> Vec<Box<dyn Check>> {
         Box::new(TerminationAfterMaturity),
         Box::new(EffectiveAfterMaturity),
         Box::new(EtrmRequiresTerminationDate),
+        // ---- Tier 2 additions (30) ----
+        // Completeness
+        Box::new(ProductIdMissing),
+        Box::new(MasterAgreementVersionMissing),
+        // Validity
+        Box::new(NotionalPrecision),
+        Box::new(ValuationPrecision),
+        Box::new(PricePrecision),
+        Box::new(MarginPrecision),
+        Box::new(MasterAgreementVersionFormat),
+        Box::new(IsdaVersionPlausible),
+        // Accuracy
+        Box::new(IrRequiresNotional),
+        Box::new(FxRequiresLeg2Currency),
+        Box::new(EqRequiresUnderlying),
+        Box::new(CrRequiresUnderlying),
+        Box::new(CommodityRequiresProductId),
+        Box::new(IrRequiresLeg1Freq),
+        // Consistency
+        Box::new(NotionalValCurrencyMismatch),
+        Box::new(PriceValCurrencyMismatch),
+        Box::new(Leg1Leg2SameCurrency),
+        Box::new(SelfDealing),
+        Box::new(PriceRequiresCurrency),
+        Box::new(ImNeedsCollateralPortfolio),
+        Box::new(VmNeedsCollateralPortfolio),
+        Box::new(Leg2NotionalNeedsCurrency),
+        Box::new(HedgingRequiresNfc),
+        Box::new(MtmChangeRequiresValuation),
+        Box::new(ValuRequiresValuation),
+        Box::new(NewtForbidsPriorUti),
+        Box::new(PoscRequiresPortfolio),
+        Box::new(MaruRequiresPortfolio),
+        Box::new(NewtForbidsTerminationDate),
+        Box::new(EtrmRequiresValuation),
     ]
 }
 

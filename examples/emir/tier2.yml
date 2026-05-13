@@ -1,0 +1,51 @@
+# Mapping for the synthetic fixture that exercises the 30 tier-2
+# EMIR checks (cross-field, asset-class, precision, action semantics,
+# master agreement).
+
+fields:
+  uti: trade_uti
+  prior_uti: prior_uti
+  action_type: action
+  event_type: event
+  entity_responsible_for_reporting: err_lei
+  counterparty_1: cpty1_lei
+  counterparty_2: cpty2_lei
+  asset_class: asset_class
+  product_id: product_id
+  underlying_id: underlying_id
+  notional_amount: notional
+  notional_currency: notional_ccy
+  price: price
+  price_currency: price_ccy
+  execution_timestamp: exec_ts
+  event_timestamp: event_ts
+  reporting_timestamp: report_ts
+  effective_date: effective
+  maturity_date: maturity
+  termination_date: terminated_on
+  valuation_amount: valuation
+  valuation_currency: valuation_ccy
+  valuation_timestamp: valuation_ts
+  initial_margin_posted: im_posted
+  initial_margin_collected: im_collected
+  variation_margin_posted: vm_posted
+  variation_margin_collected: vm_collected
+  collateral_portfolio_code: portfolio_code
+  clearing_status: clearing_status
+  clearing_ccp_lei: ccp_lei
+  collateralisation_category: coll_category
+  nature: nature
+  trading_capacity: trading_capacity
+  master_agreement_type: ma_type
+  master_agreement_version: ma_version
+  valuation_type: valuation_type
+  intragroup_indicator: intragroup
+  hedging_indicator: hedging
+  leg2_notional_amount: leg2_notional
+  leg2_notional_currency: leg2_ccy
+  leg1_payment_frequency: leg1_freq
+  leg2_payment_frequency: leg2_freq
+  mtm_value_change: mtm_change
+
+date_format: "%Y-%m-%d"
+datetime_format: "%Y-%m-%dT%H:%M:%S%.fZ"
