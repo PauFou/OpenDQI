@@ -109,7 +109,7 @@ Public summary; see [`docs/positioning.md`](docs/positioning.md) for context.
 - **Phase 2** — EMIR TAR activity intelligence (`tr-activity-scan`). ✅
 - **Phase 3** — Rejection analytics (`feedback analytics`). ✅
 - **Phase 4** — Combined `tr-audit` command. ✅
-- **Phase 5** — Book vs TSR reconciliation.
+- **Phase 5** — Book vs TSR reconciliation (`book-reconcile`). ✅
 - **Phase 6** — SFTR equivalent modules.
 - **Phase 7** — Local web UI.
 

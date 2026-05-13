@@ -561,6 +561,8 @@ dependencies = [
  "opendqi-report",
  "opendqi-store",
  "opendqi-xml",
+ "rust_decimal",
+ "serde_json",
  "serde_yaml",
  "tracing",
  "tracing-subscriber",

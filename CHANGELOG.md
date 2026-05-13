@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (Book vs TSR reconciliation) — Phase 5
+
+- New CLI subcommand `opendqi emir book-reconcile --book <CSV> --tsr <auth.107.xml> --mapping <YAML> --out <DIR>`. Reuses the existing EMIR CSV ingestion + `CsvMapping` + TSR adapter as-is — no new crate, no new trait.
+- New pure helper `compute_book_reconcile_issues(book, tsr) -> Vec<DqIssue>` (in the CLI module) implements the 7 checks below. Extracted for testability — 9 inline unit tests cover one positive case per check plus a clean-baseline.
+- **7 new `EMIR.BREC.*` checks** (inline, count toward the public catalog):
+  - `EMIR.BREC.IN_BOOK_NOT_IN_TSR` (Consistency / High) — UTI in book, absent from TSR.
+  - `EMIR.BREC.IN_TSR_NOT_IN_BOOK` (Consistency / High) — UTI outstanding at TSR, absent from book.
+  - `EMIR.BREC.NOTIONAL_MISMATCH` (Accuracy / High) — `notional_amount` differs.
+  - `EMIR.BREC.NOTIONAL_CURRENCY_MISMATCH` (Validity / Warning) — `notional_currency` differs.
+  - `EMIR.BREC.VALUATION_MISMATCH` (Accuracy / Warning) — divergence > 1% (compile-time tolerance).
+  - `EMIR.BREC.MATURITY_MISMATCH` (Accuracy / High) — `maturity_date` differs.
+  - `EMIR.BREC.STATUS_MISMATCH` (Consistency / Warning) — book has no termination but TSR reports `TERMINATED`.
+- Outputs `summary.json` / `book_vs_tsr_issues.csv` / `book_vs_tsr_report.html` — distinct names so the book reconciliation report coexists with scan / feedback / tr_state / tr_audit outputs in the same `--out` directory.
+- Synthetic fixtures `examples/emir/book_reconcile/book.csv` + `book_mapping.yml`, designed to trigger every check_id end-to-end against `examples/emir/tr_state/auth107-sample.xml`.
+- New `docs/book-reconcile.md` (catalog + algorithm + design notes).
+- Catalog: **166 → 173 checks**.
+
 ### Added (Consolidated `tr-audit`) — Phase 4
 
 - New CLI subcommand `opendqi emir tr-audit --tar <input> --tsr <input> --feedback <input> [--store <PATH>] --out <DIR>`. Loads all three TR-side layers in a single pass and runs every layer's checks plus 3 cross-layer coherence checks.

@@ -163,6 +163,26 @@ pub enum EmirAction {
         #[arg(long)]
         out: PathBuf,
     },
+    /// Reconcile a firm's internal booking system export against a
+    /// TR Trade State Report (auth.107). Produces `EMIR.BREC.*`
+    /// issues for missing UTIs (in either direction) and field
+    /// mismatches (notional, currency, valuation, maturity, status).
+    /// Outputs `summary.json`, `book_vs_tsr_issues.csv`,
+    /// `book_vs_tsr_report.html`.
+    BookReconcile {
+        /// Path to the internal book export (CSV).
+        #[arg(long)]
+        book: PathBuf,
+        /// Path to the TR `auth.107` Trade State Report XML.
+        #[arg(long)]
+        tsr: PathBuf,
+        /// Path to the YAML mapping describing book CSV columns.
+        #[arg(long)]
+        mapping: PathBuf,
+        /// Directory where reports are written.
+        #[arg(long)]
+        out: PathBuf,
+    },
     /// Normalize input into a canonical Parquet file — planned for 0.2.
     Normalize {
         /// Path to the input file.
@@ -223,6 +243,15 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
             out,
         } => {
             run_tr_audit(&tar, &tsr, &feedback, store.as_deref(), &out)?;
+            Ok(ExitCode::SUCCESS)
+        }
+        EmirAction::BookReconcile {
+            book,
+            tsr,
+            mapping,
+            out,
+        } => {
+            run_book_reconcile(&book, &tsr, &mapping, &out)?;
             Ok(ExitCode::SUCCESS)
         }
         EmirAction::Normalize { .. } => {
@@ -1131,6 +1160,430 @@ fn run_tr_audit(
     );
     println!("Report: {}", out.join("tr_audit_report.html").display());
     Ok(())
+}
+
+/// Valuation-mismatch threshold (relative): book vs TSR must agree
+/// within 1% on `valuation_amount`. Compile-time constant in v1;
+/// will migrate to `Thresholds` config when a real profile emerges.
+const BOOK_VALUATION_TOLERANCE_PCT: f64 = 1.0;
+
+fn run_book_reconcile(
+    book_path: &Path,
+    tsr_path: &Path,
+    mapping_path: &Path,
+    out: &Path,
+) -> Result<()> {
+    let started_at = Utc::now();
+
+    let mapping = CsvMapping::from_path(mapping_path)
+        .with_context(|| format!("loading mapping {}", mapping_path.display()))?;
+    let book_records = read_emir_csv(book_path, &mapping)
+        .with_context(|| format!("reading book CSV {}", book_path.display()))?;
+    info!(records = book_records.len(), "loaded book");
+
+    let tsr_outcome = read_emir_tr_state_xml(tsr_path)
+        .with_context(|| format!("reading TSR {}", tsr_path.display()))?;
+    info!(records = tsr_outcome.records.len(), "loaded TSR");
+
+    let mut issues: Vec<DqIssue> = tsr_outcome.issues.clone();
+    issues.extend(compute_book_reconcile_issues(
+        &book_records,
+        &tsr_outcome.records,
+    ));
+    sort_issues(&mut issues);
+
+    let inputs = vec![book_path.to_path_buf(), tsr_path.to_path_buf()];
+    let sources: Vec<String> = inputs
+        .iter()
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect();
+    let summary = build_summary(&book_records, &issues, &inputs, started_at, Utc::now());
+
+    std::fs::create_dir_all(out)
+        .with_context(|| format!("creating output directory {}", out.display()))?;
+    write_summary_json(&out.join("summary.json"), &summary)?;
+    write_issues_csv(&out.join("book_vs_tsr_issues.csv"), &issues)?;
+    write_report_html(
+        &out.join("book_vs_tsr_report.html"),
+        &summary,
+        &issues,
+        &sources,
+    )?;
+
+    let critical = summary
+        .issues_by_severity
+        .get(&Severity::Critical)
+        .copied()
+        .unwrap_or(0);
+    let high = summary
+        .issues_by_severity
+        .get(&Severity::High)
+        .copied()
+        .unwrap_or(0);
+    println!(
+        "Book vs TSR: book={} tsr={}. {} issues ({} critical, {} high). Score: {:.1}/100.",
+        book_records.len(),
+        tsr_outcome.records.len(),
+        summary.issues_total,
+        critical,
+        high,
+        summary.quality_score
+    );
+    println!("Report: {}", out.join("book_vs_tsr_report.html").display());
+    Ok(())
+}
+
+/// Pure function that compares a book batch (as `EmirRecord`s) to a
+/// TSR snapshot (`TrStateRecord`s) and produces the 7
+/// `EMIR.BREC.*` issues. Extracted from the CLI runner for testability.
+fn compute_book_reconcile_issues(
+    book: &[EmirRecord],
+    tsr: &[opendqi_core::TrStateRecord],
+) -> Vec<DqIssue> {
+    use std::collections::BTreeMap;
+
+    fn uti_key(s: &Option<String>) -> Option<&str> {
+        s.as_deref().map(str::trim).filter(|t| !t.is_empty())
+    }
+
+    let book_by_uti: BTreeMap<&str, &EmirRecord> = book
+        .iter()
+        .filter_map(|r| uti_key(&r.uti).map(|u| (u, r)))
+        .collect();
+    let tsr_by_uti: BTreeMap<&str, &opendqi_core::TrStateRecord> = tsr
+        .iter()
+        .filter_map(|r| uti_key(&r.uti).map(|u| (u, r)))
+        .collect();
+
+    let mut all_utis: Vec<&str> = book_by_uti
+        .keys()
+        .chain(tsr_by_uti.keys())
+        .copied()
+        .collect();
+    all_utis.sort();
+    all_utis.dedup();
+
+    let mut out = Vec::new();
+    for uti in all_utis {
+        match (book_by_uti.get(uti), tsr_by_uti.get(uti)) {
+            (Some(b), None) => {
+                out.push(brec_issue(
+                    "EMIR.BREC.IN_BOOK_NOT_IN_TSR",
+                    Severity::High,
+                    DqDimension::Consistency,
+                    uti,
+                    b.record_id.clone(),
+                    b.source_file.clone(),
+                    Some("uti".into()),
+                    None,
+                    format!(
+                        "UTI {uti} appears in the firm's book but is absent from the TR State Report."
+                    ),
+                ));
+            }
+            (None, Some(t)) => {
+                if !tsr_is_outstanding(t) {
+                    continue;
+                }
+                out.push(brec_issue(
+                    "EMIR.BREC.IN_TSR_NOT_IN_BOOK",
+                    Severity::High,
+                    DqDimension::Consistency,
+                    uti,
+                    t.record_id.clone(),
+                    t.source_file.clone(),
+                    Some("uti".into()),
+                    None,
+                    format!(
+                        "UTI {uti} is outstanding at the TR but is absent from the firm's book."
+                    ),
+                ));
+            }
+            (Some(b), Some(t)) => {
+                // Notional amount mismatch.
+                if let (Some(bn), Some(tn)) = (b.notional_amount, t.notional_amount) {
+                    if bn != tn {
+                        out.push(brec_issue(
+                            "EMIR.BREC.NOTIONAL_MISMATCH",
+                            Severity::High,
+                            DqDimension::Accuracy,
+                            uti,
+                            b.record_id.clone(),
+                            b.source_file.clone(),
+                            Some("notional_amount".into()),
+                            Some(format!("book={bn} tsr={tn}")),
+                            format!("Notional mismatch on UTI {uti}: book {bn} vs TSR {tn}."),
+                        ));
+                    }
+                }
+                // Notional currency mismatch.
+                if let (Some(bc), Some(tc)) = (
+                    b.notional_currency.as_deref(),
+                    t.notional_currency.as_deref(),
+                ) {
+                    if !bc.eq_ignore_ascii_case(tc) {
+                        out.push(brec_issue(
+                            "EMIR.BREC.NOTIONAL_CURRENCY_MISMATCH",
+                            Severity::Warning,
+                            DqDimension::Validity,
+                            uti,
+                            b.record_id.clone(),
+                            b.source_file.clone(),
+                            Some("notional_currency".into()),
+                            Some(format!("book={bc} tsr={tc}")),
+                            format!(
+                                "Notional currency mismatch on UTI {uti}: book {bc} vs TSR {tc}."
+                            ),
+                        ));
+                    }
+                }
+                // Valuation mismatch (relative threshold).
+                if let (Some(bv), Some(tv)) = (b.valuation_amount, t.valuation_amount) {
+                    if !valuation_within_tolerance(bv, tv) {
+                        out.push(brec_issue(
+                            "EMIR.BREC.VALUATION_MISMATCH",
+                            Severity::Warning,
+                            DqDimension::Accuracy,
+                            uti,
+                            b.record_id.clone(),
+                            b.source_file.clone(),
+                            Some("valuation_amount".into()),
+                            Some(format!("book={bv} tsr={tv}")),
+                            format!(
+                                "Valuation mismatch on UTI {uti}: book {bv} vs TSR {tv} (tolerance {BOOK_VALUATION_TOLERANCE_PCT}%)."
+                            ),
+                        ));
+                    }
+                }
+                // Maturity mismatch.
+                if let (Some(bm), Some(tm)) = (b.maturity_date, t.maturity_date) {
+                    if bm != tm {
+                        out.push(brec_issue(
+                            "EMIR.BREC.MATURITY_MISMATCH",
+                            Severity::High,
+                            DqDimension::Accuracy,
+                            uti,
+                            b.record_id.clone(),
+                            b.source_file.clone(),
+                            Some("maturity_date".into()),
+                            Some(format!("book={bm} tsr={tm}")),
+                            format!("Maturity mismatch on UTI {uti}: book {bm} vs TSR {tm}."),
+                        ));
+                    }
+                }
+                // Status mismatch: book sees the trade as active (no
+                // termination_date) but the TSR reports it as
+                // terminated. (We don't fire the inverse: book
+                // terminated vs TSR active rarely warrants a warning.)
+                let book_active = b.termination_date.is_none();
+                let tsr_terminated = t
+                    .status
+                    .as_deref()
+                    .map(|s| s.trim().eq_ignore_ascii_case("TERMINATED"))
+                    .unwrap_or(false);
+                if book_active && tsr_terminated {
+                    out.push(brec_issue(
+                        "EMIR.BREC.STATUS_MISMATCH",
+                        Severity::Warning,
+                        DqDimension::Consistency,
+                        uti,
+                        b.record_id.clone(),
+                        b.source_file.clone(),
+                        Some("status".into()),
+                        Some("book=active tsr=TERMINATED".into()),
+                        format!(
+                            "Status mismatch on UTI {uti}: book has no termination but TSR reports the trade as TERMINATED."
+                        ),
+                    ));
+                }
+            }
+            (None, None) => unreachable!(),
+        }
+    }
+    out
+}
+
+fn tsr_is_outstanding(t: &opendqi_core::TrStateRecord) -> bool {
+    match t.status.as_deref() {
+        None => true,
+        Some(s) => {
+            let s = s.trim();
+            s.is_empty()
+                || s.eq_ignore_ascii_case("OUTSTANDING")
+                || s.eq_ignore_ascii_case("ACTIVE")
+                || s.eq_ignore_ascii_case("LIVE")
+        }
+    }
+}
+
+fn valuation_within_tolerance(book: rust_decimal::Decimal, tsr: rust_decimal::Decimal) -> bool {
+    if book == tsr {
+        return true;
+    }
+    let book_f = book.to_string().parse::<f64>().unwrap_or(f64::NAN);
+    let tsr_f = tsr.to_string().parse::<f64>().unwrap_or(f64::NAN);
+    if !book_f.is_finite() || !tsr_f.is_finite() {
+        return false;
+    }
+    if tsr_f.abs() < f64::EPSILON {
+        return book_f.abs() < f64::EPSILON;
+    }
+    let diff_pct = ((book_f - tsr_f).abs() / tsr_f.abs()) * 100.0;
+    diff_pct <= BOOK_VALUATION_TOLERANCE_PCT
+}
+
+#[allow(clippy::too_many_arguments)]
+fn brec_issue(
+    check_id: &str,
+    severity: Severity,
+    dimension: DqDimension,
+    uti: &str,
+    record_id: Option<String>,
+    source_file: Option<String>,
+    field: Option<String>,
+    value: Option<String>,
+    message: String,
+) -> DqIssue {
+    DqIssue {
+        check_id: check_id.into(),
+        regime: Regime::Emir,
+        severity,
+        dimension,
+        record_id,
+        uti: Some(uti.to_owned()),
+        field,
+        value,
+        message,
+        source_file,
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::items_after_test_module)]
+mod book_reconcile_tests {
+    use super::*;
+    use chrono::NaiveDate;
+    use opendqi_core::TrStateRecord;
+    use rust_decimal::Decimal;
+
+    fn book_baseline(uti: &str) -> EmirRecord {
+        EmirRecord {
+            uti: Some(uti.into()),
+            notional_amount: Some(Decimal::from(1_000_000)),
+            notional_currency: Some("EUR".into()),
+            valuation_amount: Some(Decimal::new(15050, 2)),
+            valuation_currency: Some("EUR".into()),
+            maturity_date: NaiveDate::from_ymd_opt(2031, 4, 2),
+            ..Default::default()
+        }
+    }
+
+    fn tsr_baseline(uti: &str) -> TrStateRecord {
+        TrStateRecord {
+            uti: Some(uti.into()),
+            notional_amount: Some(Decimal::from(1_000_000)),
+            notional_currency: Some("EUR".into()),
+            valuation_amount: Some(Decimal::new(15050, 2)),
+            valuation_currency: Some("EUR".into()),
+            maturity_date: NaiveDate::from_ymd_opt(2031, 4, 2),
+            status: Some("OUTSTANDING".into()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn baseline_match_emits_nothing() {
+        let book = vec![book_baseline("U1")];
+        let tsr = vec![tsr_baseline("U1")];
+        let issues = compute_book_reconcile_issues(&book, &tsr);
+        assert!(issues.is_empty(), "expected no issues, got {issues:?}");
+    }
+
+    #[test]
+    fn in_book_not_in_tsr() {
+        let book = vec![book_baseline("U-ONLY-BOOK")];
+        let tsr = vec![];
+        let issues = compute_book_reconcile_issues(&book, &tsr);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].check_id, "EMIR.BREC.IN_BOOK_NOT_IN_TSR");
+    }
+
+    #[test]
+    fn in_tsr_not_in_book_fires_only_when_outstanding() {
+        let book = vec![];
+        let mut t = tsr_baseline("U-ONLY-TSR");
+        let outstanding = vec![t.clone()];
+        let issues = compute_book_reconcile_issues(&book, &outstanding);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].check_id, "EMIR.BREC.IN_TSR_NOT_IN_BOOK");
+        // Now mark as TERMINATED → should NOT fire.
+        t.status = Some("TERMINATED".into());
+        let terminated = vec![t];
+        let issues = compute_book_reconcile_issues(&book, &terminated);
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn notional_mismatch() {
+        let mut b = book_baseline("U1");
+        b.notional_amount = Some(Decimal::from(9_999_999));
+        let issues = compute_book_reconcile_issues(&[b], &[tsr_baseline("U1")]);
+        assert!(issues
+            .iter()
+            .any(|i| i.check_id == "EMIR.BREC.NOTIONAL_MISMATCH"));
+    }
+
+    #[test]
+    fn notional_currency_mismatch() {
+        let mut b = book_baseline("U1");
+        b.notional_currency = Some("USD".into());
+        let issues = compute_book_reconcile_issues(&[b], &[tsr_baseline("U1")]);
+        assert!(issues
+            .iter()
+            .any(|i| i.check_id == "EMIR.BREC.NOTIONAL_CURRENCY_MISMATCH"));
+    }
+
+    #[test]
+    fn valuation_mismatch_outside_tolerance() {
+        let mut b = book_baseline("U1");
+        // 50% difference — well beyond 1% tolerance.
+        b.valuation_amount = Some(Decimal::new(22575, 2));
+        let issues = compute_book_reconcile_issues(&[b], &[tsr_baseline("U1")]);
+        assert!(issues
+            .iter()
+            .any(|i| i.check_id == "EMIR.BREC.VALUATION_MISMATCH"));
+    }
+
+    #[test]
+    fn valuation_within_tolerance_is_clean() {
+        let mut b = book_baseline("U1");
+        // 0.5% off — within 1% tolerance.
+        b.valuation_amount = Some(Decimal::new(15125, 2));
+        let issues = compute_book_reconcile_issues(&[b], &[tsr_baseline("U1")]);
+        assert!(issues
+            .iter()
+            .all(|i| i.check_id != "EMIR.BREC.VALUATION_MISMATCH"));
+    }
+
+    #[test]
+    fn maturity_mismatch() {
+        let mut b = book_baseline("U1");
+        b.maturity_date = NaiveDate::from_ymd_opt(2099, 12, 31);
+        let issues = compute_book_reconcile_issues(&[b], &[tsr_baseline("U1")]);
+        assert!(issues
+            .iter()
+            .any(|i| i.check_id == "EMIR.BREC.MATURITY_MISMATCH"));
+    }
+
+    #[test]
+    fn status_mismatch_book_active_tsr_terminated() {
+        let mut t = tsr_baseline("U1");
+        t.status = Some("TERMINATED".into());
+        let issues = compute_book_reconcile_issues(&[book_baseline("U1")], &[t]);
+        assert!(issues
+            .iter()
+            .any(|i| i.check_id == "EMIR.BREC.STATUS_MISMATCH"));
+    }
 }
 
 fn sort_issues(issues: &mut [DqIssue]) {
