@@ -338,6 +338,76 @@ impl SftrRecord {
     }
 }
 
+/// Type of feedback a Trade Repository sends back about a previously
+/// submitted report.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum FeedbackType {
+    /// TR rejected the report at ingestion (validation failure).
+    #[default]
+    Rejected,
+    /// TR signals the UTI is missing from its records.
+    Missing,
+    /// TR accepted the report but flagged inaccurate fields.
+    Inaccurate,
+    /// TR signals a reconciliation break with the counterparty's submission.
+    ReconciliationBreak,
+}
+
+impl std::fmt::Display for FeedbackType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FeedbackType::Rejected => f.write_str("rejected"),
+            FeedbackType::Missing => f.write_str("missing"),
+            FeedbackType::Inaccurate => f.write_str("inaccurate"),
+            FeedbackType::ReconciliationBreak => f.write_str("reconciliation_break"),
+        }
+    }
+}
+
+/// One feedback line item from a Trade Repository auth.092 (EMIR) or
+/// auth.080 (SFTR) message. Each record references a UTI the firm
+/// previously submitted, along with the TR's diagnosis.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeedbackRecord {
+    /// Source file path (or other origin label).
+    pub source_file: Option<String>,
+    /// Stable identifier of the line within the source (e.g. Sts index).
+    pub record_id: Option<String>,
+    /// Regulatory regime this feedback applies to.
+    pub regime: Regime,
+    /// Type of feedback signalled by the TR.
+    pub feedback_type: FeedbackType,
+    /// UTI of the submission the feedback refers to.
+    pub uti: Option<String>,
+    /// Machine-readable reason code (e.g. `VAL01`).
+    pub reason_code: Option<String>,
+    /// Human-readable reason description provided by the TR.
+    pub reason_description: Option<String>,
+    /// For `Inaccurate` feedback: which field is flagged.
+    pub reported_field: Option<String>,
+    /// Timestamp of the feedback message itself.
+    pub feedback_timestamp: Option<DateTime<Utc>>,
+}
+
+impl Default for FeedbackRecord {
+    fn default() -> Self {
+        Self {
+            source_file: None,
+            record_id: None,
+            regime: Regime::Emir,
+            feedback_type: FeedbackType::default(),
+            uti: None,
+            reason_code: None,
+            reason_description: None,
+            reported_field: None,
+            feedback_timestamp: None,
+        }
+    }
+}
+
 /// Aggregate statistics for a scan run.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanSummary {

@@ -16,6 +16,7 @@ pub trait SftrCheck: Send + Sync {
     fn run(&self, records: &[SftrRecord], ctx: &CheckContext) -> Vec<DqIssue>;
 }
 
+pub(crate) mod feedback;
 pub(crate) mod lifecycle;
 
 mod action_type_enum;

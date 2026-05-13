@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic ISO 20022 auth.092 EMIR feedback fixture for OpenDQI tests.
+  Hand-authored — not derived from any ESMA or SWIFT example.
+
+  Each <Sts> below exercises one of the four EMIR feedback checks:
+   1. Rjctd  → EMIR.FBK.TR_REJECTED_UTI
+   2. Mssng  with UTI present in tier2.csv → EMIR.FBK.TR_MISSING_DESPITE_SUBMISSION
+   3. Mssng  with UTI NOT in tier2.csv     → EMIR.FBK.TR_MISSING_BUT_NOT_SENT
+   4. Inaccrt → EMIR.FBK.TR_INACCURATE_REPORTED
+   5. RcncltnBrk → ingested but no check fires for v1 (reserved).
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.092.001.01">
+  <FeedbackToReportingMembers>
+    <Hdr>
+      <RptgPty><LEI>12345678901234567890</LEI></RptgPty>
+      <FdbckDtTm>2026-05-13T08:00:00Z</FdbckDtTm>
+    </Hdr>
+    <Sts>
+      <Rjctd>
+        <UnqTxIdr>OPENDQI-T2-CLEAN-0001</UnqTxIdr>
+        <RsnCd>VAL01</RsnCd>
+        <RsnDesc>Notional currency code invalid.</RsnDesc>
+      </Rjctd>
+    </Sts>
+    <Sts>
+      <Mssng>
+        <UnqTxIdr>OPENDQI-T2-CLEAN-0001</UnqTxIdr>
+      </Mssng>
+    </Sts>
+    <Sts>
+      <Mssng>
+        <UnqTxIdr>OPENDQI-NEVER-SUBMITTED-9999</UnqTxIdr>
+      </Mssng>
+    </Sts>
+    <Sts>
+      <Inaccrt>
+        <UnqTxIdr>OPENDQI-T2-SELFDEAL-0005</UnqTxIdr>
+        <FldNm>NotionalAmount</FldNm>
+        <RsnDesc>Counterparty 2 identical to counterparty 1.</RsnDesc>
+      </Inaccrt>
+    </Sts>
+    <Sts>
+      <RcncltnBrk>
+        <UnqTxIdr>OPENDQI-T2-NOTVALCCY-0002</UnqTxIdr>
+        <RsnDesc>Counterparty reports a different notional value.</RsnDesc>
+      </RcncltnBrk>
+    </Sts>
+  </FeedbackToReportingMembers>
+</Document>

@@ -8,14 +8,15 @@ use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 use clap::Subcommand;
 use opendqi_core::dq::{
-    default_sftr_checks, default_sftr_lifecycle_checks, run_all_sftr, run_all_sftr_lifecycle,
-    CheckContext,
+    default_sftr_checks, default_sftr_feedback_checks, default_sftr_lifecycle_checks, run_all_sftr,
+    run_all_sftr_feedback, run_all_sftr_lifecycle, CheckContext,
 };
 use opendqi_core::{DqDimension, DqIssue, Regime, ScanSummary, Severity, SftrRecord, Thresholds};
 use opendqi_io::{discover_emir_inputs, has_extension};
 use opendqi_report::{write_issues_csv, write_report_html, write_summary_json};
 use opendqi_xml::{
-    check_wellformedness, read_sftr_xml, ExternalXmllintValidator, XsdValidator, XsdViolation,
+    check_wellformedness, read_sftr_feedback_xml, read_sftr_xml, ExternalXmllintValidator,
+    XsdValidator, XsdViolation,
 };
 use tracing::{info, warn};
 
@@ -55,6 +56,20 @@ pub enum SftrAction {
         #[arg(long)]
         xsd: PathBuf,
     },
+    /// Ingest an SFTR Trade Repository feedback file (`auth.080`) and
+    /// cross-reference each UTI against the local SQLite history
+    /// store. Produces `SFTR.FBK.*` issues.
+    Feedback {
+        /// Path to the `auth.080` XML file received from the TR.
+        input: PathBuf,
+        /// Required path to the SQLite history store containing prior
+        /// SFTR scans.
+        #[arg(long)]
+        store: PathBuf,
+        /// Directory where reports are written.
+        #[arg(long)]
+        out: PathBuf,
+    },
     /// Normalize an SFTR file into Parquet — planned milestone.
     Normalize {
         /// Path to the input file.
@@ -84,6 +99,10 @@ pub fn run(action: SftrAction) -> Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
         SftrAction::Validate { input, xsd } => run_validate(&input, &xsd),
+        SftrAction::Feedback { input, store, out } => {
+            run_feedback(&input, &store, &out)?;
+            Ok(ExitCode::SUCCESS)
+        }
         SftrAction::Normalize { .. } => {
             println!(
                 "opendqi sftr normalize: Parquet normalization is planned for a future milestone."
@@ -290,6 +309,109 @@ fn run_validate(input: &Path, xsd_path: &Path) -> Result<ExitCode> {
     } else {
         ExitCode::from(1)
     })
+}
+
+fn run_feedback(input: &Path, store_path: &Path, out: &Path) -> Result<()> {
+    let started_at = Utc::now();
+    let outcome = read_sftr_feedback_xml(input)
+        .with_context(|| format!("reading feedback file {}", input.display()))?;
+    info!(
+        file = %input.display(),
+        records = outcome.records.len(),
+        format_issues = outcome.issues.len(),
+        "loaded SFTR feedback XML",
+    );
+
+    let mut issues: Vec<DqIssue> = outcome.issues;
+
+    let store = opendqi_store::open_store(store_path)
+        .with_context(|| format!("opening history store at {}", store_path.display()))?;
+    let utis: Vec<&str> = outcome
+        .records
+        .iter()
+        .filter_map(|r| r.uti.as_deref())
+        .map(str::trim)
+        .filter(|u| !u.is_empty())
+        .collect();
+    let prior = store
+        .load_prior_sftr(&utis, i64::MAX)
+        .context("loading prior SFTR records from history store")?;
+    info!(prior_records = prior.len(), "loaded prior records");
+
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+    let fbk_issues = run_all_sftr_feedback(
+        &default_sftr_feedback_checks(),
+        &outcome.records,
+        &prior,
+        &ctx,
+    );
+    info!(feedback_issues = fbk_issues.len(), "feedback checks run");
+    issues.extend(fbk_issues);
+    sort_issues(&mut issues);
+
+    let inputs = vec![input.to_path_buf()];
+    let sources = vec![input.to_string_lossy().into_owned()];
+    let summary = build_feedback_summary(
+        outcome.records.len(),
+        &issues,
+        &inputs,
+        started_at,
+        Utc::now(),
+    );
+
+    std::fs::create_dir_all(out)
+        .with_context(|| format!("creating output directory {}", out.display()))?;
+    write_summary_json(&out.join("summary.json"), &summary)?;
+    write_issues_csv(&out.join("issues.csv"), &issues)?;
+    write_report_html(&out.join("report.html"), &summary, &issues, &sources)?;
+
+    let critical = summary
+        .issues_by_severity
+        .get(&Severity::Critical)
+        .copied()
+        .unwrap_or(0);
+    let high = summary
+        .issues_by_severity
+        .get(&Severity::High)
+        .copied()
+        .unwrap_or(0);
+    println!(
+        "Ingested {} SFTR feedback record(s). {} issues ({} critical, {} high). Score: {:.1}/100.",
+        summary.records_processed, summary.issues_total, critical, high, summary.quality_score
+    );
+    println!("Report: {}", out.join("report.html").display());
+    Ok(())
+}
+
+fn build_feedback_summary(
+    feedback_count: usize,
+    issues: &[DqIssue],
+    inputs: &[PathBuf],
+    started_at: chrono::DateTime<Utc>,
+    finished_at: chrono::DateTime<Utc>,
+) -> ScanSummary {
+    let mut by_sev: BTreeMap<Severity, u32> = BTreeMap::new();
+    let mut by_dim: BTreeMap<DqDimension, u32> = BTreeMap::new();
+    for i in issues {
+        *by_sev.entry(i.severity).or_insert(0) += 1;
+        *by_dim.entry(i.dimension).or_insert(0) += 1;
+    }
+    ScanSummary {
+        regime: Regime::Sftr,
+        files_processed: inputs.len() as u32,
+        records_processed: feedback_count as u32,
+        issues_total: issues.len() as u32,
+        issues_by_severity: by_sev,
+        issues_by_dimension: by_dim,
+        quality_score: opendqi_core::quality_score(feedback_count as u32, issues),
+        started_at,
+        finished_at,
+    }
 }
 
 fn sort_issues(issues: &mut [DqIssue]) {

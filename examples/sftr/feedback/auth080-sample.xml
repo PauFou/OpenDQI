@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic ISO 20022 auth.080 SFTR feedback fixture for OpenDQI tests.
+  Hand-authored — not derived from any ESMA or SWIFT example.
+
+  Each <Sts> exercises one of the four SFTR feedback checks:
+   1. Rjctd  → SFTR.FBK.TR_REJECTED_UTI
+   2. Mssng  with UTI present in tier2.xml → SFTR.FBK.TR_MISSING_DESPITE_SUBMISSION
+   3. Mssng  with UTI NOT in tier2.xml     → SFTR.FBK.TR_MISSING_BUT_NOT_SENT
+   4. Inaccrt → SFTR.FBK.TR_INACCURATE_REPORTED
+   5. RcncltnBrk → ingested but no check fires for v1.
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.080.001.01">
+  <FeedbackToReportingMembers>
+    <Hdr>
+      <RptgPty><LEI>12345678901234567890</LEI></RptgPty>
+      <FdbckDtTm>2026-05-13T08:00:00Z</FdbckDtTm>
+    </Hdr>
+    <Sts>
+      <Rjctd>
+        <UnqTxIdr>OPENDQI-SFTR-T2-CLEAN-0001</UnqTxIdr>
+        <RsnCd>VAL07</RsnCd>
+        <RsnDesc>Loan currency missing.</RsnDesc>
+      </Rjctd>
+    </Sts>
+    <Sts>
+      <Mssng>
+        <UnqTxIdr>OPENDQI-SFTR-T2-CLEAN-0001</UnqTxIdr>
+      </Mssng>
+    </Sts>
+    <Sts>
+      <Mssng>
+        <UnqTxIdr>OPENDQI-SFTR-NEVER-SUBMITTED-9999</UnqTxIdr>
+      </Mssng>
+    </Sts>
+    <Sts>
+      <Inaccrt>
+        <UnqTxIdr>OPENDQI-SFTR-T2-SELF-0002</UnqTxIdr>
+        <FldNm>Counterparty2</FldNm>
+        <RsnDesc>Other counterparty LEI identical to reporting counterparty.</RsnDesc>
+      </Inaccrt>
+    </Sts>
+    <Sts>
+      <RcncltnBrk>
+        <UnqTxIdr>OPENDQI-SFTR-T2-CCYMIS-0005</UnqTxIdr>
+        <RsnDesc>Counterparty reports a different collateral currency.</RsnDesc>
+      </RcncltnBrk>
+    </Sts>
+  </FeedbackToReportingMembers>
+</Document>

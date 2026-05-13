@@ -8,13 +8,15 @@ use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 use clap::Subcommand;
 use opendqi_core::dq::{
-    default_checks, default_lifecycle_checks, run_all, run_all_lifecycle, CheckContext,
+    default_checks, default_feedback_checks, default_lifecycle_checks, run_all, run_all_feedback,
+    run_all_lifecycle, CheckContext,
 };
 use opendqi_core::{DqDimension, DqIssue, EmirRecord, Regime, ScanSummary, Severity, Thresholds};
 use opendqi_io::{discover_emir_inputs, has_extension, read_emir_csv, CsvMapping};
 use opendqi_report::{write_issues_csv, write_report_html, write_summary_json};
 use opendqi_xml::{
-    check_wellformedness, read_emir_xml, ExternalXmllintValidator, XsdValidator, XsdViolation,
+    check_wellformedness, read_emir_feedback_xml, read_emir_xml, ExternalXmllintValidator,
+    XsdValidator, XsdViolation,
 };
 use tracing::{info, warn};
 
@@ -59,6 +61,22 @@ pub enum EmirAction {
         #[arg(long)]
         xsd: PathBuf,
     },
+    /// Ingest a Trade Repository feedback file (ISO 20022 `auth.092`,
+    /// "Missing / Inaccurate Trade Reports") and cross-reference each
+    /// UTI against the local SQLite history store. Produces
+    /// `EMIR.FBK.*` issues — confirmed gaps, rejected submissions,
+    /// inaccurate fields, TR/firm discrepancies.
+    Feedback {
+        /// Path to the `auth.092` XML file received from the TR.
+        input: PathBuf,
+        /// Required path to the SQLite history store containing
+        /// prior scans.
+        #[arg(long)]
+        store: PathBuf,
+        /// Directory where reports are written.
+        #[arg(long)]
+        out: PathBuf,
+    },
     /// Normalize input into a canonical Parquet file — planned for 0.2.
     Normalize {
         /// Path to the input file.
@@ -90,6 +108,10 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
         EmirAction::Validate { input, xsd } => run_validate(&input, &xsd),
+        EmirAction::Feedback { input, store, out } => {
+            run_feedback(&input, &store, &out)?;
+            Ok(ExitCode::SUCCESS)
+        }
         EmirAction::Normalize { .. } => {
             println!("opendqi emir normalize: Parquet normalization is planned for milestone 0.2.");
             Ok(ExitCode::SUCCESS)
@@ -314,6 +336,106 @@ fn run_validate(input: &Path, xsd_path: &Path) -> Result<ExitCode> {
     } else {
         ExitCode::from(1)
     })
+}
+
+fn run_feedback(input: &Path, store_path: &Path, out: &Path) -> Result<()> {
+    let started_at = Utc::now();
+    let outcome = read_emir_feedback_xml(input)
+        .with_context(|| format!("reading feedback file {}", input.display()))?;
+    info!(
+        file = %input.display(),
+        records = outcome.records.len(),
+        format_issues = outcome.issues.len(),
+        "loaded EMIR feedback XML",
+    );
+
+    let mut issues: Vec<DqIssue> = outcome.issues;
+
+    let store = opendqi_store::open_store(store_path)
+        .with_context(|| format!("opening history store at {}", store_path.display()))?;
+    let utis: Vec<&str> = outcome
+        .records
+        .iter()
+        .filter_map(|r| r.uti.as_deref())
+        .map(str::trim)
+        .filter(|u| !u.is_empty())
+        .collect();
+    let prior = store
+        .load_prior_emir(&utis, i64::MAX)
+        .context("loading prior EMIR records from history store")?;
+    info!(prior_records = prior.len(), "loaded prior records");
+
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+    let fbk_issues = run_all_feedback(&default_feedback_checks(), &outcome.records, &prior, &ctx);
+    info!(feedback_issues = fbk_issues.len(), "feedback checks run");
+    issues.extend(fbk_issues);
+    sort_issues(&mut issues);
+
+    // Build a minimal summary. records_processed = number of feedback
+    // lines parsed (acts as the "throughput" indicator).
+    let inputs = vec![input.to_path_buf()];
+    let sources = vec![input.to_string_lossy().into_owned()];
+    let summary = build_feedback_summary(
+        outcome.records.len(),
+        &issues,
+        &inputs,
+        started_at,
+        Utc::now(),
+    );
+
+    std::fs::create_dir_all(out)
+        .with_context(|| format!("creating output directory {}", out.display()))?;
+    write_summary_json(&out.join("summary.json"), &summary)?;
+    write_issues_csv(&out.join("issues.csv"), &issues)?;
+    write_report_html(&out.join("report.html"), &summary, &issues, &sources)?;
+
+    let critical = summary
+        .issues_by_severity
+        .get(&Severity::Critical)
+        .copied()
+        .unwrap_or(0);
+    let high = summary
+        .issues_by_severity
+        .get(&Severity::High)
+        .copied()
+        .unwrap_or(0);
+    println!(
+        "Ingested {} feedback record(s). {} issues ({} critical, {} high). Score: {:.1}/100.",
+        summary.records_processed, summary.issues_total, critical, high, summary.quality_score
+    );
+    println!("Report: {}", out.join("report.html").display());
+    Ok(())
+}
+
+fn build_feedback_summary(
+    feedback_count: usize,
+    issues: &[DqIssue],
+    inputs: &[PathBuf],
+    started_at: chrono::DateTime<Utc>,
+    finished_at: chrono::DateTime<Utc>,
+) -> ScanSummary {
+    let mut by_sev: BTreeMap<Severity, u32> = BTreeMap::new();
+    let mut by_dim: BTreeMap<DqDimension, u32> = BTreeMap::new();
+    for i in issues {
+        *by_sev.entry(i.severity).or_insert(0) += 1;
+        *by_dim.entry(i.dimension).or_insert(0) += 1;
+    }
+    ScanSummary {
+        regime: Regime::Emir,
+        files_processed: inputs.len() as u32,
+        records_processed: feedback_count as u32,
+        issues_total: issues.len() as u32,
+        issues_by_severity: by_sev,
+        issues_by_dimension: by_dim,
+        quality_score: opendqi_core::quality_score(feedback_count as u32, issues),
+        started_at,
+        finished_at,
+    }
 }
 
 fn sort_issues(issues: &mut [DqIssue]) {

@@ -73,6 +73,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The pre-existing `examples/emir/extended-checks.csv` now produces ~87 issues (up from 17) because the new completeness/enum checks correctly flag many fields that fixture leaves unpopulated. This is expected — the fixture is preserved as-is so the additional coverage is visible.
 
+### Added (TR feedback ingestion + 8 `*.FBK.*` checks)
+
+- New canonical types `FeedbackType` (`Rejected` / `Missing` / `Inaccurate` / `ReconciliationBreak`) and `FeedbackRecord` in `opendqi-core::model`.
+- New `FeedbackCheck` / `SftrFeedbackCheck` traits in `opendqi-core::dq` — pure functions of `(feedback, prior, ctx)`, parallel to the existing `Check` / `SftrCheck` / `LifecycleCheck` traits.
+- **8 TR feedback checks** (4 EMIR + 4 SFTR), bringing the catalog to **129 single-batch + lifecycle + 8 feedback = 137 checks** when the history store is enabled:
+  - `EMIR.FBK.TR_REJECTED_UTI` / `SFTR.FBK.TR_REJECTED_UTI` — TR rejected the submission (Validity / Critical).
+  - `EMIR.FBK.TR_MISSING_BUT_NOT_SENT` / `SFTR.FBK.TR_MISSING_BUT_NOT_SENT` — TR signals missing, no prior NEWT in store, confirmed gap (Completeness / High).
+  - `EMIR.FBK.TR_MISSING_DESPITE_SUBMISSION` / `SFTR.FBK.TR_MISSING_DESPITE_SUBMISSION` — TR signals missing but a prior NEWT exists, TR ingestion failure or stale feedback (Consistency / Critical).
+  - `EMIR.FBK.TR_INACCURATE_REPORTED` / `SFTR.FBK.TR_INACCURATE_REPORTED` — TR flagged inaccurate field (Accuracy / High).
+- New `crates/opendqi-xml/src/feedback.rs`: streaming `NsReader` adapter for ISO 20022 `auth.092` (EMIR) and `auth.080` (SFTR) feedback messages. Detects `<Rjctd>` / `<Mssng>` / `<Inaccrt>` / `<RcncltnBrk>` wrappers, captures `UnqTxIdr` / `RsnCd` / `RsnDesc` / `FldNm` leaves, and propagates the header `FdbckDtTm` to every record. The XSDs are SWIFT-licensed and not redistributed; the adapter parses a plausible structure aligned with the public ISO 20022 catalog.
+- New CLI subcommands `opendqi emir feedback <input> --store <PATH> --out <DIR>` and `opendqi sftr feedback <input> --store <PATH> --out <DIR>`. `--store` is required (the cross-reference is the value-add of the flow).
+- Synthetic fixtures `examples/emir/feedback/auth092-sample.xml` and `examples/sftr/feedback/auth080-sample.xml`, each exercising all 4 check_ids of its regime end-to-end.
+- Documentation: new `docs/feedback-checks.md` (catalog) and `docs/tr-feedback.md` (usage, expected XML structure, legal note).
+
 ### Added (History store + cross-batch lifecycle checks)
 
 - New `opendqi-store` crate: SQLite-backed history store (`rusqlite` with `bundled` feature, no system libsqlite dependency). Persists scanned EMIR / SFTR records into `scans` + `emir_records` + `sftr_records` tables, with indexes on `(uti)` and `(uti, action_type)`.

@@ -3,7 +3,7 @@
 use chrono::{DateTime, NaiveDate, Utc};
 
 use crate::config::Thresholds;
-use crate::model::{DqDimension, DqIssue, EmirRecord, Severity, SftrRecord};
+use crate::model::{DqDimension, DqIssue, EmirRecord, FeedbackRecord, Severity, SftrRecord};
 
 mod abnormal_maturity;
 mod action_type_enum;
@@ -500,6 +500,94 @@ pub fn run_all_sftr_lifecycle(
     let mut issues: Vec<DqIssue> = checks
         .iter()
         .flat_map(|c| c.run(current, prior, ctx))
+        .collect();
+    sort_issues(&mut issues);
+    issues
+}
+
+// ---- Feedback (TR → firm) checks ----------------------------------
+//
+// Feedback checks ingest TR-side ISO 20022 messages (auth.092 for EMIR,
+// auth.080 for SFTR) and cross-reference them against the local history
+// store. They are opt-in via the `opendqi {emir,sftr} feedback`
+// subcommand.
+
+mod feedback;
+
+pub use feedback::{
+    TrInaccurateReported, TrMissingButNotSent, TrMissingDespiteSubmission, TrRejectedUti,
+};
+
+/// A feedback (TR → firm) EMIR check.
+pub trait FeedbackCheck: Send + Sync {
+    /// Stable identifier, e.g. `EMIR.FBK.TR_REJECTED_UTI`.
+    fn id(&self) -> &'static str;
+    /// The DQ dimension this check belongs to.
+    fn dimension(&self) -> DqDimension;
+    /// Default severity for issues raised by this check.
+    fn severity(&self) -> Severity;
+    /// Execute the check against feedback records + previously
+    /// persisted EMIR records.
+    fn run(
+        &self,
+        feedback: &[FeedbackRecord],
+        prior: &[EmirRecord],
+        ctx: &CheckContext,
+    ) -> Vec<DqIssue>;
+}
+
+/// Default EMIR feedback check registry (4 checks).
+pub fn default_feedback_checks() -> Vec<Box<dyn FeedbackCheck>> {
+    vec![
+        Box::new(TrRejectedUti),
+        Box::new(TrMissingButNotSent),
+        Box::new(TrMissingDespiteSubmission),
+        Box::new(TrInaccurateReported),
+    ]
+}
+
+/// Run every EMIR feedback check and return the concatenated, sorted
+/// issues.
+pub fn run_all_feedback(
+    checks: &[Box<dyn FeedbackCheck>],
+    feedback: &[FeedbackRecord],
+    prior: &[EmirRecord],
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    let mut issues: Vec<DqIssue> = checks
+        .iter()
+        .flat_map(|c| c.run(feedback, prior, ctx))
+        .collect();
+    sort_issues(&mut issues);
+    issues
+}
+
+pub use sftr::feedback::{
+    SftrFeedbackCheck, SftrTrInaccurateReported, SftrTrMissingButNotSent,
+    SftrTrMissingDespiteSubmission, SftrTrRejectedUti,
+};
+
+/// Default SFTR feedback check registry (4 checks).
+pub fn default_sftr_feedback_checks() -> Vec<Box<dyn SftrFeedbackCheck>> {
+    vec![
+        Box::new(SftrTrRejectedUti),
+        Box::new(SftrTrMissingButNotSent),
+        Box::new(SftrTrMissingDespiteSubmission),
+        Box::new(SftrTrInaccurateReported),
+    ]
+}
+
+/// Run every SFTR feedback check and return the concatenated, sorted
+/// issues.
+pub fn run_all_sftr_feedback(
+    checks: &[Box<dyn SftrFeedbackCheck>],
+    feedback: &[FeedbackRecord],
+    prior: &[SftrRecord],
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    let mut issues: Vec<DqIssue> = checks
+        .iter()
+        .flat_map(|c| c.run(feedback, prior, ctx))
         .collect();
     sort_issues(&mut issues);
     issues
