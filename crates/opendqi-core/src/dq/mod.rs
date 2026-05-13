@@ -22,6 +22,7 @@ mod commodity_base_enum;
 mod commodity_requires_product_id;
 mod counterparty_1_missing;
 mod counterparty_2_missing;
+mod coverage;
 mod cr_requires_underlying;
 mod credit_sector_enum;
 mod currency_notional;
@@ -114,6 +115,11 @@ pub use commodity_base_enum::CommodityBaseEnum;
 pub use commodity_requires_product_id::CommodityRequiresProductId;
 pub use counterparty_1_missing::Counterparty1Missing;
 pub use counterparty_2_missing::Counterparty2Missing;
+pub use coverage::{
+    EmirCommercialOrTreasuryRequiresNfc, EmirCorporateSectorEnum, EmirDeltaOutOfRange,
+    EmirGammaNegative, EmirPriceNegative, EmirReportingObligationIndicatorEnum, SftrEventTypeEnum,
+    SftrLendingFeeNegative, SftrMasterAgreementTypeEnum, SftrReuseIndicatorRequiresPortfolio,
+};
 pub use cr_requires_underlying::CrRequiresUnderlying;
 pub use credit_sector_enum::CreditSectorEnum;
 pub use currency_notional::CurrencyNotional;
@@ -360,6 +366,13 @@ pub fn default_checks() -> Vec<Box<dyn Check>> {
         Box::new(EmirRmtNfcAboveClearingThreshold),
         Box::new(EmirRmtIntragroupNeedsIndicator),
         Box::new(EmirRmtMasterAgreementRequired),
+        // ---- Field-coverage gap-fillers (6) ----
+        Box::new(EmirCorporateSectorEnum),
+        Box::new(EmirReportingObligationIndicatorEnum),
+        Box::new(EmirPriceNegative),
+        Box::new(EmirDeltaOutOfRange),
+        Box::new(EmirGammaNegative),
+        Box::new(EmirCommercialOrTreasuryRequiresNfc),
     ]
 }
 
@@ -458,6 +471,11 @@ pub fn default_sftr_checks() -> Vec<Box<dyn SftrCheck>> {
         Box::new(SftrEtrmRequiresTerminationDate),
         Box::new(SftrColuRequiresPortfolio),
         Box::new(SftrReuuRequiresReuseIndicator),
+        // ---- Field-coverage gap-fillers (4) ----
+        Box::new(SftrReuseIndicatorRequiresPortfolio),
+        Box::new(SftrEventTypeEnum),
+        Box::new(SftrMasterAgreementTypeEnum),
+        Box::new(SftrLendingFeeNegative),
     ]
 }
 
