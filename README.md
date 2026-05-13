@@ -108,9 +108,7 @@ Public summary; see [`docs/positioning.md`](docs/positioning.md) for context.
 - **Phase 1** — EMIR TSR health (`tr-state-scan` over `auth.107`). ✅
 - **Phase 2** — EMIR TAR activity intelligence (`tr-activity-scan`). ✅
 - **Phase 3** — Rejection analytics (`feedback analytics`). ✅
-- **Phase 2** — EMIR TAR activity intelligence (`tr-activity-scan`).
-- **Phase 3** — Rejection analytics (deepened `auth.092`).
-- **Phase 4** — Combined `tr-audit` command.
+- **Phase 4** — Combined `tr-audit` command. ✅
 - **Phase 5** — Book vs TSR reconciliation.
 - **Phase 6** — SFTR equivalent modules.
 - **Phase 7** — Local web UI.

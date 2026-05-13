@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (Consolidated `tr-audit`) — Phase 4
+
+- New CLI subcommand `opendqi emir tr-audit --tar <input> --tsr <input> --feedback <input> [--store <PATH>] --out <DIR>`. Loads all three TR-side layers in a single pass and runs every layer's checks plus 3 cross-layer coherence checks.
+- **3 new `EMIR.AUD.*` cross-layer coherence checks** (implemented inline in the CLI runner):
+  - `EMIR.AUD.NEWT_IN_TAR_NOT_IN_TSR` (Consistency / High) — UTI NEWT'd in the TAR but missing from the TSR.
+  - `EMIR.AUD.OUTSTANDING_IN_TSR_NOT_IN_TAR` (Consistency / Warning) — UTI outstanding in the TSR but absent from the TAR period.
+  - `EMIR.AUD.REJECTED_BUT_OUTSTANDING_IN_TSR` (Consistency / Critical) — UTI rejected in the feedback yet listed as outstanding in the TSR (major TR-side inconsistency).
+- Outputs a single `summary.json` / `tr_audit_issues.csv` / `tr_audit_report.html`. Issues from every layer are merged with a deterministic sort key, so layer-by-layer grep (`EMIR.COMP.*`, `EMIR.TST.*`, `EMIR.FBK.*`, `EMIR.TRA.*`, `EMIR.AUD.*`) gives a clean slice.
+- New `docs/tr-audit.md` documenting the layered run + the 3 coherence checks.
+
 ### Added (Rejection analytics) — Phase 3
 
 - New CLI sub-action `opendqi feedback analytics --store <PATH> [--regime emir|sftr] --out <DIR>`. Aggregates every persisted feedback row and produces a rejection profile.

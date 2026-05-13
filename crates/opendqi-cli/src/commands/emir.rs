@@ -139,6 +139,30 @@ pub enum EmirAction {
         #[arg(long)]
         out: PathBuf,
     },
+    /// Consolidated TR audit. Ingests a TAR (`auth.030`), a TSR
+    /// (`auth.107`), and a feedback file (`auth.092`) together,
+    /// runs every layer's checks, plus 3 cross-layer coherence
+    /// checks (`EMIR.AUD.*`), and writes a single
+    /// `tr_audit_report.html` consolidating all three layers.
+    /// `--store` is optional and enables lifecycle checks on the
+    /// TAR records.
+    TrAudit {
+        /// Path to the TAR `auth.030` XML file (or directory).
+        #[arg(long)]
+        tar: PathBuf,
+        /// Path to the TSR `auth.107` XML file.
+        #[arg(long)]
+        tsr: PathBuf,
+        /// Path to the feedback `auth.092` XML file.
+        #[arg(long)]
+        feedback: PathBuf,
+        /// Optional path to the SQLite history store.
+        #[arg(long)]
+        store: Option<PathBuf>,
+        /// Directory where reports are written.
+        #[arg(long)]
+        out: PathBuf,
+    },
     /// Normalize input into a canonical Parquet file — planned for 0.2.
     Normalize {
         /// Path to the input file.
@@ -189,6 +213,16 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
             out,
         } => {
             run_tr_activity_scan(&input, store.as_deref(), tsr.as_deref(), &out)?;
+            Ok(ExitCode::SUCCESS)
+        }
+        EmirAction::TrAudit {
+            tar,
+            tsr,
+            feedback,
+            store,
+            out,
+        } => {
+            run_tr_audit(&tar, &tsr, &feedback, store.as_deref(), &out)?;
             Ok(ExitCode::SUCCESS)
         }
         EmirAction::Normalize { .. } => {
@@ -827,6 +861,275 @@ fn run_tr_activity_scan(
         summary.records_processed, summary.issues_total, critical, high, summary.quality_score
     );
     println!("Report: {}", out.join("tr_activity_report.html").display());
+    Ok(())
+}
+
+fn run_tr_audit(
+    tar_path: &Path,
+    tsr_path: &Path,
+    feedback_path: &Path,
+    store_path: Option<&Path>,
+    out: &Path,
+) -> Result<()> {
+    use std::collections::HashSet;
+
+    let started_at = Utc::now();
+
+    // 1. Load all three layers.
+    let tar_inputs = discover_emir_inputs(tar_path)?;
+    let mut tar_records: Vec<EmirRecord> = Vec::new();
+    let mut tar_issues: Vec<DqIssue> = Vec::new();
+    for p in &tar_inputs {
+        if !has_extension(p, "xml") {
+            warn!(path = %p.display(), "skipping non-XML file in TAR input");
+            continue;
+        }
+        let mut outcome = read_emir_xml(p)?;
+        tar_records.append(&mut outcome.records);
+        tar_issues.append(&mut outcome.issues);
+    }
+    info!(records = tar_records.len(), "loaded TAR");
+
+    let tsr_outcome = read_emir_tr_state_xml(tsr_path)
+        .with_context(|| format!("reading TSR {}", tsr_path.display()))?;
+    info!(records = tsr_outcome.records.len(), "loaded TSR");
+
+    let feedback_outcome = read_emir_feedback_xml(feedback_path)
+        .with_context(|| format!("reading feedback {}", feedback_path.display()))?;
+    info!(records = feedback_outcome.records.len(), "loaded feedback");
+
+    let mut issues: Vec<DqIssue> = tar_issues;
+    issues.extend(tsr_outcome.issues.clone());
+    issues.extend(feedback_outcome.issues.clone());
+
+    // 2. Optional store enrichment.
+    let prior: Vec<EmirRecord> = if let Some(sp) = store_path {
+        let store = opendqi_store::open_store(sp)
+            .with_context(|| format!("opening history store at {}", sp.display()))?;
+        let mut utis: Vec<&str> = tar_records
+            .iter()
+            .filter_map(|r| r.uti.as_deref())
+            .map(str::trim)
+            .filter(|u| !u.is_empty())
+            .collect();
+        utis.extend(
+            tsr_outcome
+                .records
+                .iter()
+                .filter_map(|r| r.uti.as_deref())
+                .map(str::trim)
+                .filter(|u| !u.is_empty()),
+        );
+        utis.extend(
+            feedback_outcome
+                .records
+                .iter()
+                .filter_map(|r| r.uti.as_deref())
+                .map(str::trim)
+                .filter(|u| !u.is_empty()),
+        );
+        let prior = store
+            .load_prior_emir(&utis, i64::MAX)
+            .context("loading prior EMIR records from history store")?;
+        info!(prior_records = prior.len(), "loaded prior records");
+        prior
+    } else {
+        Vec::new()
+    };
+
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+
+    // 3. Run each layer's checks.
+    let tar_checks = run_all(&default_checks(), &tar_records, &ctx);
+    issues.extend(tar_checks);
+    let lifecycle = run_all_lifecycle(&default_lifecycle_checks(), &tar_records, &prior, &ctx);
+    issues.extend(lifecycle);
+    let tsr_checks = run_all_tr_state(
+        &default_tr_state_checks(),
+        &tsr_outcome.records,
+        &prior,
+        &ctx,
+    );
+    issues.extend(tsr_checks);
+    let fbk_checks = run_all_feedback(
+        &default_feedback_checks(),
+        &feedback_outcome.records,
+        &prior,
+        &ctx,
+    );
+    issues.extend(fbk_checks);
+    let activity_checks = run_all_tr_activity(
+        &default_tr_activity_checks(),
+        &tar_records,
+        &prior,
+        Some(&tsr_outcome.records),
+        &ctx,
+    );
+    issues.extend(activity_checks);
+
+    // 4. Cross-layer coherence checks (EMIR.AUD.*).
+    let tsr_utis: HashSet<&str> = tsr_outcome
+        .records
+        .iter()
+        .filter_map(|r| r.uti.as_deref())
+        .map(str::trim)
+        .filter(|u| !u.is_empty())
+        .collect();
+    let tar_utis: HashSet<&str> = tar_records
+        .iter()
+        .filter_map(|r| r.uti.as_deref())
+        .map(str::trim)
+        .filter(|u| !u.is_empty())
+        .collect();
+    let rejected_utis: HashSet<&str> = feedback_outcome
+        .records
+        .iter()
+        .filter(|f| matches!(f.feedback_type, opendqi_core::FeedbackType::Rejected))
+        .filter_map(|f| f.uti.as_deref())
+        .map(str::trim)
+        .filter(|u| !u.is_empty())
+        .collect();
+    let tsr_outstanding_utis: HashSet<&str> = tsr_outcome
+        .records
+        .iter()
+        .filter(|r| {
+            r.status
+                .as_deref()
+                .map(|s| {
+                    let s = s.trim();
+                    s.is_empty()
+                        || s.eq_ignore_ascii_case("OUTSTANDING")
+                        || s.eq_ignore_ascii_case("ACTIVE")
+                })
+                .unwrap_or(true)
+        })
+        .filter_map(|r| r.uti.as_deref())
+        .map(str::trim)
+        .filter(|u| !u.is_empty())
+        .collect();
+
+    // EMIR.AUD.NEWT_IN_TAR_NOT_IN_TSR
+    for r in &tar_records {
+        let is_newt = r
+            .action_type
+            .as_deref()
+            .map(|a| a.eq_ignore_ascii_case("NEWT"))
+            .unwrap_or(false);
+        if !is_newt {
+            continue;
+        }
+        if let Some(uti) = r.uti.as_deref() {
+            let uti = uti.trim();
+            if !uti.is_empty() && !tsr_utis.contains(uti) {
+                issues.push(DqIssue {
+                    check_id: "EMIR.AUD.NEWT_IN_TAR_NOT_IN_TSR".into(),
+                    regime: Regime::Emir,
+                    severity: Severity::High,
+                    dimension: DqDimension::Consistency,
+                    record_id: r.record_id.clone(),
+                    uti: Some(uti.to_owned()),
+                    field: Some("uti".into()),
+                    value: Some(uti.to_owned()),
+                    message: format!(
+                        "UTI {uti} was NEWT'd in the TAR but is absent from the TSR — submission may not have been accepted."
+                    ),
+                    source_file: r.source_file.clone(),
+                });
+            }
+        }
+    }
+
+    // EMIR.AUD.OUTSTANDING_IN_TSR_NOT_IN_TAR
+    for uti in tsr_outstanding_utis.iter() {
+        if !tar_utis.contains(uti) {
+            issues.push(DqIssue {
+                check_id: "EMIR.AUD.OUTSTANDING_IN_TSR_NOT_IN_TAR".into(),
+                regime: Regime::Emir,
+                severity: Severity::Warning,
+                dimension: DqDimension::Consistency,
+                record_id: None,
+                uti: Some((*uti).to_owned()),
+                field: Some("uti".into()),
+                value: Some((*uti).to_owned()),
+                message: format!(
+                    "UTI {uti} is outstanding in the TSR but no record appears in the TAR for this period."
+                ),
+                source_file: Some(tsr_path.to_string_lossy().into_owned()),
+            });
+        }
+    }
+
+    // EMIR.AUD.REJECTED_BUT_OUTSTANDING_IN_TSR
+    for uti in rejected_utis.iter() {
+        if tsr_outstanding_utis.contains(uti) {
+            issues.push(DqIssue {
+                check_id: "EMIR.AUD.REJECTED_BUT_OUTSTANDING_IN_TSR".into(),
+                regime: Regime::Emir,
+                severity: Severity::Critical,
+                dimension: DqDimension::Consistency,
+                record_id: None,
+                uti: Some((*uti).to_owned()),
+                field: Some("uti".into()),
+                value: Some((*uti).to_owned()),
+                message: format!(
+                    "UTI {uti} is reported rejected in the feedback file yet appears outstanding in the TSR — TR-side inconsistency."
+                ),
+                source_file: Some(feedback_path.to_string_lossy().into_owned()),
+            });
+        }
+    }
+
+    sort_issues(&mut issues);
+
+    // 5. Write outputs.
+    let all_inputs = vec![
+        tar_path.to_path_buf(),
+        tsr_path.to_path_buf(),
+        feedback_path.to_path_buf(),
+    ];
+    let sources: Vec<String> = all_inputs
+        .iter()
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect();
+    let summary = build_summary(&tar_records, &issues, &all_inputs, started_at, Utc::now());
+
+    std::fs::create_dir_all(out)
+        .with_context(|| format!("creating output directory {}", out.display()))?;
+    write_summary_json(&out.join("summary.json"), &summary)?;
+    write_issues_csv(&out.join("tr_audit_issues.csv"), &issues)?;
+    write_report_html(
+        &out.join("tr_audit_report.html"),
+        &summary,
+        &issues,
+        &sources,
+    )?;
+
+    let critical = summary
+        .issues_by_severity
+        .get(&Severity::Critical)
+        .copied()
+        .unwrap_or(0);
+    let high = summary
+        .issues_by_severity
+        .get(&Severity::High)
+        .copied()
+        .unwrap_or(0);
+    println!(
+        "TR audit: TAR={} TSR={} feedback={}. {} issues ({} critical, {} high). Score: {:.1}/100.",
+        tar_records.len(),
+        tsr_outcome.records.len(),
+        feedback_outcome.records.len(),
+        summary.issues_total,
+        critical,
+        high,
+        summary.quality_score
+    );
+    println!("Report: {}", out.join("tr_audit_report.html").display());
     Ok(())
 }
 
