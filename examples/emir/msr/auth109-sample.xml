@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.109.001.01">
+  <MrgnStateRpt>
+    <Hdr><StateAsOf>2026-05-13T08:00:00Z</StateAsOf></Hdr>
+    <!-- Row 1: clean record. -->
+    <MrgnStat>
+      <UnqTxIdr>UTI-MSR-001</UnqTxIdr>
+      <CtrPty1><LEI>LEI111111111111111111</LEI></CtrPty1>
+      <CtrPty2><LEI>LEI222222222222222222</LEI></CtrPty2>
+      <PrtflCd>P-001</PrtflCd>
+      <IMPstdCurr Ccy="EUR">1000000</IMPstdCurr>
+      <IMCollCurr Ccy="EUR">1050000</IMCollCurr>
+      <VMPstdCurr Ccy="EUR">50000</VMPstdCurr>
+      <CollMktVal Ccy="EUR">1100000</CollMktVal>
+      <Hrcut>0.05</Hrcut>
+      <CollstnCtgy>FCOL</CollstnCtgy>
+    </MrgnStat>
+    <!-- Row 2: negative IM (INITIAL_MARGIN_NEGATIVE). -->
+    <MrgnStat>
+      <UnqTxIdr>UTI-MSR-002</UnqTxIdr>
+      <PrtflCd>P-002</PrtflCd>
+      <IMPstdCurr Ccy="EUR">-1000</IMPstdCurr>
+      <CollstnCtgy>FCOL</CollstnCtgy>
+    </MrgnStat>
+    <!-- Row 3: negative VM (VARIATION_MARGIN_NEGATIVE). -->
+    <MrgnStat>
+      <UnqTxIdr>UTI-MSR-003</UnqTxIdr>
+      <PrtflCd>P-003</PrtflCd>
+      <IMPstdCurr Ccy="EUR">100000</IMPstdCurr>
+      <VMCollCurr Ccy="EUR">-500</VMCollCurr>
+      <CollstnCtgy>FCOL</CollstnCtgy>
+    </MrgnStat>
+    <!-- Row 4: negative collateral market value
+                 (COLLATERAL_MARKET_VALUE_NEGATIVE). -->
+    <MrgnStat>
+      <UnqTxIdr>UTI-MSR-004</UnqTxIdr>
+      <PrtflCd>P-004</PrtflCd>
+      <IMPstdCurr Ccy="EUR">100000</IMPstdCurr>
+      <CollMktVal Ccy="EUR">-1</CollMktVal>
+      <CollstnCtgy>FCOL</CollstnCtgy>
+    </MrgnStat>
+    <!-- Row 5: outstanding with no margin (MARGIN_MISSING_FOR_OUTSTANDING). -->
+    <MrgnStat>
+      <UnqTxIdr>UTI-MSR-005</UnqTxIdr>
+      <PrtflCd>P-005</PrtflCd>
+      <CollstnCtgy>FCOL</CollstnCtgy>
+    </MrgnStat>
+    <!-- Row 6: haircut > 1 (HAIRCUT_OUT_OF_RANGE). -->
+    <MrgnStat>
+      <UnqTxIdr>UTI-MSR-006</UnqTxIdr>
+      <PrtflCd>P-006</PrtflCd>
+      <IMPstdCurr Ccy="EUR">100000</IMPstdCurr>
+      <Hrcut>1.5</Hrcut>
+      <CollstnCtgy>FCOL</CollstnCtgy>
+    </MrgnStat>
+    <!-- Row 7: invalid collateralisation category
+                 (COLLATERALIZATION_CATEGORY_ENUM). -->
+    <MrgnStat>
+      <UnqTxIdr>UTI-MSR-007</UnqTxIdr>
+      <PrtflCd>P-007</PrtflCd>
+      <IMPstdCurr Ccy="EUR">100000</IMPstdCurr>
+      <CollstnCtgy>XCOL</CollstnCtgy>
+    </MrgnStat>
+    <!-- Row 8: IM posted/collected imbalance > 10%
+                 (IM_POSTED_VS_COLLECTED_IMBALANCE). -->
+    <MrgnStat>
+      <UnqTxIdr>UTI-MSR-008</UnqTxIdr>
+      <PrtflCd>P-008</PrtflCd>
+      <IMPstdCurr Ccy="EUR">100000</IMPstdCurr>
+      <IMCollCurr Ccy="EUR">200000</IMCollCurr>
+      <CollstnCtgy>FCOL</CollstnCtgy>
+    </MrgnStat>
+  </MrgnStateRpt>
+</Document>

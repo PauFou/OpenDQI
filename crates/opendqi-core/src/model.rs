@@ -584,6 +584,148 @@ impl Default for SftrTrStateRecord {
     }
 }
 
+/// One line from an EMIR Margin Activity Report (MAR) — the
+/// history of margin calls / postings / collections for a portfolio
+/// (ISO 20022 `auth.108`). Activity-oriented, mirrors `EmirRecord`
+/// in spirit but scoped to margin events.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MarginActivityRecord {
+    /// Source file path (or other origin label).
+    pub source_file: Option<String>,
+    /// Stable identifier of the line within the source.
+    pub record_id: Option<String>,
+    /// Regulatory regime — always `Regime::Emir` for v1.
+    pub regime: Regime,
+    /// UTI of the underlying trade (when known).
+    pub uti: Option<String>,
+    /// LEI of counterparty 1.
+    pub counterparty_1: Option<String>,
+    /// LEI of counterparty 2.
+    pub counterparty_2: Option<String>,
+    /// Action type — `MARU` (update) / `MARV` (variation) /
+    /// `MARC` (correction) / `MARN` (new) typically.
+    pub action_type: Option<String>,
+    /// Event type — free-text supplementary code.
+    pub event_type: Option<String>,
+    /// Collateral portfolio code grouping the margin call.
+    pub collateral_portfolio_code: Option<String>,
+    /// Initial margin posted by counterparty 1.
+    pub initial_margin_posted: Option<Decimal>,
+    /// Initial margin collected from counterparty 2.
+    pub initial_margin_collected: Option<Decimal>,
+    /// Variation margin posted by counterparty 1.
+    pub variation_margin_posted: Option<Decimal>,
+    /// Variation margin collected from counterparty 2.
+    pub variation_margin_collected: Option<Decimal>,
+    /// ISO 4217 currency for every margin amount on this row.
+    pub margin_currency: Option<String>,
+    /// Excess collateral above the minimum required.
+    pub excess_collateral: Option<Decimal>,
+    /// Collateral haircut applied (0.0 – 1.0).
+    pub collateral_haircut: Option<Decimal>,
+    /// Timestamp of the underlying margin event.
+    pub event_timestamp: Option<DateTime<Utc>>,
+    /// Timestamp at which the row was reported to the TR.
+    pub reporting_timestamp: Option<DateTime<Utc>>,
+    /// Catch-all of XML leaves not promoted to typed fields.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub raw_fields: BTreeMap<String, String>,
+}
+
+impl Default for MarginActivityRecord {
+    fn default() -> Self {
+        Self {
+            source_file: None,
+            record_id: None,
+            regime: Regime::Emir,
+            uti: None,
+            counterparty_1: None,
+            counterparty_2: None,
+            action_type: None,
+            event_type: None,
+            collateral_portfolio_code: None,
+            initial_margin_posted: None,
+            initial_margin_collected: None,
+            variation_margin_posted: None,
+            variation_margin_collected: None,
+            margin_currency: None,
+            excess_collateral: None,
+            collateral_haircut: None,
+            event_timestamp: None,
+            reporting_timestamp: None,
+            raw_fields: BTreeMap::new(),
+        }
+    }
+}
+
+/// One line from an EMIR Margin State Report (MSR) — the TR's
+/// current view of margin postings for an outstanding portfolio
+/// (ISO 20022 `auth.109`). State-oriented snapshot, mirrors
+/// `TrStateRecord` in spirit but scoped to margin fields.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MarginStateRecord {
+    /// Source file path.
+    pub source_file: Option<String>,
+    /// Stable identifier of the line.
+    pub record_id: Option<String>,
+    /// Regulatory regime — always `Regime::Emir` for v1.
+    pub regime: Regime,
+    /// UTI of the underlying outstanding trade.
+    pub uti: Option<String>,
+    /// LEI of counterparty 1.
+    pub counterparty_1: Option<String>,
+    /// LEI of counterparty 2.
+    pub counterparty_2: Option<String>,
+    /// Collateral portfolio code.
+    pub collateral_portfolio_code: Option<String>,
+    /// Current initial margin posted by counterparty 1.
+    pub initial_margin_posted_current: Option<Decimal>,
+    /// Current initial margin collected from counterparty 2.
+    pub initial_margin_collected_current: Option<Decimal>,
+    /// Current variation margin posted by counterparty 1.
+    pub variation_margin_posted_current: Option<Decimal>,
+    /// Current variation margin collected from counterparty 2.
+    pub variation_margin_collected_current: Option<Decimal>,
+    /// ISO 4217 currency for every margin amount.
+    pub margin_currency: Option<String>,
+    /// Current market value of the collateral pool.
+    pub collateral_market_value: Option<Decimal>,
+    /// Effective haircut on the collateral pool (0.0 – 1.0).
+    pub haircut_applied: Option<Decimal>,
+    /// `FCOL` (fully) / `PCOL` (partially) / `UCOL` (uncollateralised) /
+    /// `OCOL` (one-way).
+    pub collateralization_category: Option<String>,
+    /// Snapshot timestamp from the report header.
+    pub state_as_of: Option<DateTime<Utc>>,
+    /// Catch-all.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub raw_fields: BTreeMap<String, String>,
+}
+
+impl Default for MarginStateRecord {
+    fn default() -> Self {
+        Self {
+            source_file: None,
+            record_id: None,
+            regime: Regime::Emir,
+            uti: None,
+            counterparty_1: None,
+            counterparty_2: None,
+            collateral_portfolio_code: None,
+            initial_margin_posted_current: None,
+            initial_margin_collected_current: None,
+            variation_margin_posted_current: None,
+            variation_margin_collected_current: None,
+            margin_currency: None,
+            collateral_market_value: None,
+            haircut_applied: None,
+            collateralization_category: None,
+            state_as_of: None,
+            raw_fields: BTreeMap::new(),
+        }
+    }
+}
+
 /// One line item from a Trade Repository reconciliation report
 /// (ISO 20022 `auth.106` for EMIR, `auth.083` for SFTR). Each
 /// record describes a UTI's pairing / reconciliation status between

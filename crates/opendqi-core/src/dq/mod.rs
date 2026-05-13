@@ -4,8 +4,8 @@ use chrono::{DateTime, NaiveDate, Utc};
 
 use crate::config::Thresholds;
 use crate::model::{
-    DqDimension, DqIssue, EmirRecord, FeedbackRecord, ReconciliationRecord, Severity, SftrRecord,
-    SftrTrStateRecord, TrStateRecord,
+    DqDimension, DqIssue, EmirRecord, FeedbackRecord, MarginActivityRecord, MarginStateRecord,
+    ReconciliationRecord, Severity, SftrRecord, SftrTrStateRecord, TrStateRecord,
 };
 
 mod abnormal_maturity;
@@ -826,6 +826,85 @@ pub fn run_all_tr_activity(
     let mut issues: Vec<DqIssue> = checks
         .iter()
         .flat_map(|c| c.run(records, prior, tsr, ctx))
+        .collect();
+    sort_issues(&mut issues);
+    issues
+}
+
+// ---- EMIR Margin Activity Report (auth.108) checks --------------
+
+mod margin_activity;
+
+pub use margin_activity::{
+    EmirMarCollectedNegative, EmirMarDuplicateMarginCall, EmirMarLargeMarginDelta,
+    EmirMarMarginNeedsCurrency, EmirMarMarginTypeEnum, EmirMarPortfolioCodeMissing,
+    EmirMarPostedNegative, EmirMarTimeliness, MarginActivityCheck,
+};
+
+/// Default EMIR MAR check registry (8 checks).
+pub fn default_margin_activity_checks() -> Vec<Box<dyn MarginActivityCheck>> {
+    vec![
+        Box::new(EmirMarMarginTypeEnum),
+        Box::new(EmirMarPostedNegative),
+        Box::new(EmirMarCollectedNegative),
+        Box::new(EmirMarLargeMarginDelta),
+        Box::new(EmirMarMarginNeedsCurrency),
+        Box::new(EmirMarPortfolioCodeMissing),
+        Box::new(EmirMarTimeliness),
+        Box::new(EmirMarDuplicateMarginCall),
+    ]
+}
+
+/// Run every EMIR MAR check.
+pub fn run_all_margin_activity(
+    checks: &[Box<dyn MarginActivityCheck>],
+    records: &[MarginActivityRecord],
+    prior: &[MarginActivityRecord],
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    let mut issues: Vec<DqIssue> = checks
+        .iter()
+        .flat_map(|c| c.run(records, prior, ctx))
+        .collect();
+    sort_issues(&mut issues);
+    issues
+}
+
+// ---- EMIR Margin State Report (auth.109) checks -----------------
+
+mod margin_state;
+
+pub use margin_state::{
+    EmirMsrCollateralMarketValueNegative, EmirMsrCollateralizationCategoryEnum,
+    EmirMsrHaircutOutOfRange, EmirMsrImImbalance, EmirMsrInitialMarginNegative,
+    EmirMsrMarginMissingForOutstanding, EmirMsrMarginStale, EmirMsrVariationMarginNegative,
+    MarginStateCheck,
+};
+
+/// Default EMIR MSR check registry (8 checks).
+pub fn default_margin_state_checks() -> Vec<Box<dyn MarginStateCheck>> {
+    vec![
+        Box::new(EmirMsrInitialMarginNegative),
+        Box::new(EmirMsrVariationMarginNegative),
+        Box::new(EmirMsrCollateralMarketValueNegative),
+        Box::new(EmirMsrMarginStale),
+        Box::new(EmirMsrMarginMissingForOutstanding),
+        Box::new(EmirMsrHaircutOutOfRange),
+        Box::new(EmirMsrCollateralizationCategoryEnum),
+        Box::new(EmirMsrImImbalance),
+    ]
+}
+
+/// Run every EMIR MSR check.
+pub fn run_all_margin_state(
+    checks: &[Box<dyn MarginStateCheck>],
+    records: &[MarginStateRecord],
+    prior: &[EmirRecord],
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    let mut issues: Vec<DqIssue> = checks
+        .iter()
+        .flat_map(|c| c.run(records, prior, ctx))
         .collect();
     sort_issues(&mut issues);
     issues

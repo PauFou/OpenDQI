@@ -12,6 +12,8 @@
 #![warn(missing_docs)]
 
 pub mod emir;
+pub mod emir_mar;
+pub mod emir_msr;
 pub mod feedback;
 pub mod reconciliation;
 pub mod sftr;
@@ -21,6 +23,8 @@ pub mod wellformed;
 pub mod xsd;
 
 pub use emir::{read_emir_xml, XmlReadOutcome};
+pub use emir_mar::{read_emir_mar_xml, MarXmlReadOutcome};
+pub use emir_msr::{read_emir_msr_xml, MsrXmlReadOutcome};
 pub use feedback::{read_emir_feedback_xml, read_sftr_feedback_xml, FeedbackXmlReadOutcome};
 pub use reconciliation::{
     read_emir_reconciliation_xml, read_sftr_reconciliation_xml, ReconciliationXmlReadOutcome,

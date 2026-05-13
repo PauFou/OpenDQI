@@ -9,18 +9,21 @@ use chrono::Utc;
 use clap::Subcommand;
 use opendqi_core::dq::{
     default_checks, default_feedback_checks, default_lifecycle_checks,
-    default_reconciliation_checks, default_tr_activity_checks, default_tr_state_checks, run_all,
-    run_all_feedback, run_all_lifecycle, run_all_reconciliation, run_all_tr_activity,
-    run_all_tr_state, CheckContext,
+    default_margin_activity_checks, default_margin_state_checks, default_reconciliation_checks,
+    default_tr_activity_checks, default_tr_state_checks, run_all, run_all_feedback,
+    run_all_lifecycle, run_all_margin_activity, run_all_margin_state, run_all_reconciliation,
+    run_all_tr_activity, run_all_tr_state, CheckContext,
 };
 use opendqi_core::{
-    DqDimension, DqIssue, EmirRecord, Regime, ScanSummary, Severity, Thresholds, TrActivitySummary,
+    DqDimension, DqIssue, EmirRecord, MarginActivityRecord, Regime, ScanSummary, Severity,
+    Thresholds, TrActivitySummary,
 };
 use opendqi_io::{discover_emir_inputs, has_extension, read_emir_csv, CsvMapping};
 use opendqi_report::{write_issues_csv, write_report_html, write_summary_json};
 use opendqi_xml::{
-    check_wellformedness, read_emir_feedback_xml, read_emir_reconciliation_xml,
-    read_emir_tr_state_xml, read_emir_xml, ExternalXmllintValidator, XsdValidator, XsdViolation,
+    check_wellformedness, read_emir_feedback_xml, read_emir_mar_xml, read_emir_msr_xml,
+    read_emir_reconciliation_xml, read_emir_tr_state_xml, read_emir_xml, ExternalXmllintValidator,
+    XsdValidator, XsdViolation,
 };
 use tracing::{info, warn};
 
@@ -183,6 +186,38 @@ pub enum EmirAction {
         #[arg(long)]
         out: PathBuf,
     },
+    /// Ingest an EMIR Margin Activity Report (ISO 20022 `auth.108`)
+    /// and produce `EMIR.MAR.*` issues: action-type enum, negative
+    /// posted/collected margin, large margin delta, missing
+    /// margin_currency, missing portfolio code, reporting timeliness,
+    /// duplicate margin calls. Outputs `summary.json`,
+    /// `mar_issues.csv`, `mar_report.html`.
+    MarScan {
+        /// Path to the `auth.108` XML file.
+        input: PathBuf,
+        /// Optional path to the SQLite history store.
+        #[arg(long)]
+        store: Option<PathBuf>,
+        /// Directory where reports are written.
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// Ingest an EMIR Margin State Report (ISO 20022 `auth.109`)
+    /// and produce `EMIR.MSR.*` issues over the TR's margin snapshot:
+    /// negative IM/VM/collateral, stale snapshot, missing margin on
+    /// outstanding UTI, haircut out of range, collateralisation
+    /// category enum, IM posted/collected imbalance. Outputs
+    /// `summary.json`, `msr_issues.csv`, `msr_report.html`.
+    MsrScan {
+        /// Path to the `auth.109` XML file.
+        input: PathBuf,
+        /// Optional path to the SQLite history store.
+        #[arg(long)]
+        store: Option<PathBuf>,
+        /// Directory where reports are written.
+        #[arg(long)]
+        out: PathBuf,
+    },
     /// Normalize input into a canonical Parquet file — planned for 0.2.
     Normalize {
         /// Path to the input file.
@@ -252,6 +287,14 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
             out,
         } => {
             run_book_reconcile(&book, &tsr, &mapping, &out)?;
+            Ok(ExitCode::SUCCESS)
+        }
+        EmirAction::MarScan { input, store, out } => {
+            run_mar_scan(&input, store.as_deref(), &out)?;
+            Ok(ExitCode::SUCCESS)
+        }
+        EmirAction::MsrScan { input, store, out } => {
+            run_msr_scan(&input, store.as_deref(), &out)?;
             Ok(ExitCode::SUCCESS)
         }
         EmirAction::Normalize { .. } => {
@@ -756,6 +799,152 @@ fn run_tr_state_scan(input: &Path, store_path: Option<&Path>, out: &Path) -> Res
         summary.records_processed, summary.issues_total, critical, high, summary.quality_score
     );
     println!("Report: {}", out.join("tr_state_report.html").display());
+    Ok(())
+}
+
+fn run_mar_scan(input: &Path, _store_path: Option<&Path>, out: &Path) -> Result<()> {
+    let started_at = Utc::now();
+    let outcome = read_emir_mar_xml(input)
+        .with_context(|| format!("reading MAR file {}", input.display()))?;
+    info!(
+        file = %input.display(),
+        records = outcome.records.len(),
+        format_issues = outcome.issues.len(),
+        "loaded EMIR MAR XML",
+    );
+
+    let mut issues: Vec<DqIssue> = outcome.issues;
+
+    let prior: Vec<MarginActivityRecord> = Vec::new();
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+    let mar_issues = run_all_margin_activity(
+        &default_margin_activity_checks(),
+        &outcome.records,
+        &prior,
+        &ctx,
+    );
+    info!(mar_issues = mar_issues.len(), "MAR checks run");
+    issues.extend(mar_issues);
+    sort_issues(&mut issues);
+
+    let inputs = vec![input.to_path_buf()];
+    let sources = vec![input.to_string_lossy().into_owned()];
+    let summary = build_feedback_summary(
+        outcome.records.len(),
+        &issues,
+        &inputs,
+        started_at,
+        Utc::now(),
+    );
+
+    std::fs::create_dir_all(out)
+        .with_context(|| format!("creating output directory {}", out.display()))?;
+    write_summary_json(&out.join("summary.json"), &summary)?;
+    write_issues_csv(&out.join("mar_issues.csv"), &issues)?;
+    write_report_html(&out.join("mar_report.html"), &summary, &issues, &sources)?;
+
+    let critical = summary
+        .issues_by_severity
+        .get(&Severity::Critical)
+        .copied()
+        .unwrap_or(0);
+    let high = summary
+        .issues_by_severity
+        .get(&Severity::High)
+        .copied()
+        .unwrap_or(0);
+    println!(
+        "Scanned {} MAR record(s). {} issues ({} critical, {} high). Score: {:.1}/100.",
+        summary.records_processed, summary.issues_total, critical, high, summary.quality_score
+    );
+    println!("Report: {}", out.join("mar_report.html").display());
+    Ok(())
+}
+
+fn run_msr_scan(input: &Path, store_path: Option<&Path>, out: &Path) -> Result<()> {
+    let started_at = Utc::now();
+    let outcome = read_emir_msr_xml(input)
+        .with_context(|| format!("reading MSR file {}", input.display()))?;
+    info!(
+        file = %input.display(),
+        records = outcome.records.len(),
+        format_issues = outcome.issues.len(),
+        "loaded EMIR MSR XML",
+    );
+
+    let mut issues: Vec<DqIssue> = outcome.issues;
+
+    let prior: Vec<EmirRecord> = if let Some(store_path) = store_path {
+        let store = opendqi_store::open_store(store_path)
+            .with_context(|| format!("opening history store at {}", store_path.display()))?;
+        let utis: Vec<&str> = outcome
+            .records
+            .iter()
+            .filter_map(|r| r.uti.as_deref())
+            .map(str::trim)
+            .filter(|u| !u.is_empty())
+            .collect();
+        let prior = store
+            .load_prior_emir(&utis, i64::MAX)
+            .context("loading prior EMIR records from history store")?;
+        info!(prior_records = prior.len(), "loaded prior records");
+        prior
+    } else {
+        Vec::new()
+    };
+
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+    let msr_issues = run_all_margin_state(
+        &default_margin_state_checks(),
+        &outcome.records,
+        &prior,
+        &ctx,
+    );
+    info!(msr_issues = msr_issues.len(), "MSR checks run");
+    issues.extend(msr_issues);
+    sort_issues(&mut issues);
+
+    let inputs = vec![input.to_path_buf()];
+    let sources = vec![input.to_string_lossy().into_owned()];
+    let summary = build_feedback_summary(
+        outcome.records.len(),
+        &issues,
+        &inputs,
+        started_at,
+        Utc::now(),
+    );
+
+    std::fs::create_dir_all(out)
+        .with_context(|| format!("creating output directory {}", out.display()))?;
+    write_summary_json(&out.join("summary.json"), &summary)?;
+    write_issues_csv(&out.join("msr_issues.csv"), &issues)?;
+    write_report_html(&out.join("msr_report.html"), &summary, &issues, &sources)?;
+
+    let critical = summary
+        .issues_by_severity
+        .get(&Severity::Critical)
+        .copied()
+        .unwrap_or(0);
+    let high = summary
+        .issues_by_severity
+        .get(&Severity::High)
+        .copied()
+        .unwrap_or(0);
+    println!(
+        "Scanned {} MSR record(s). {} issues ({} critical, {} high). Score: {:.1}/100.",
+        summary.records_processed, summary.issues_total, critical, high, summary.quality_score
+    );
+    println!("Report: {}", out.join("msr_report.html").display());
     Ok(())
 }
 

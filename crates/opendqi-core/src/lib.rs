@@ -20,7 +20,8 @@ pub mod scoring;
 pub use config::Thresholds;
 pub use dq::{default_checks, default_sftr_checks, Check, SftrCheck};
 pub use model::{
-    DqDimension, DqIssue, EmirRecord, FeedbackRecord, FeedbackType, ReconciliationRecord, Regime,
-    ScanSummary, Severity, SftrRecord, SftrTrStateRecord, TrActivitySummary, TrStateRecord,
+    DqDimension, DqIssue, EmirRecord, FeedbackRecord, FeedbackType, MarginActivityRecord,
+    MarginStateRecord, ReconciliationRecord, Regime, ScanSummary, Severity, SftrRecord,
+    SftrTrStateRecord, TrActivitySummary, TrStateRecord,
 };
 pub use scoring::quality_score;
