@@ -15,6 +15,10 @@ The browser opens to a minimal upload form:
 - **Operation** — pick which scan to run:
   - *Standard scan* (default) — submission XML/Parquet.
   - *TR Trade State Report* — auth.107 (EMIR) / auth.079 (SFTR).
+  - *TR Trade Activity Report* — auth.030 (EMIR) / auth.052 (SFTR) replay.
+  - *TR Feedback* — auth.092 (EMIR) / auth.080 (SFTR). v1 runs the
+    format / namespace checks only; the store-cross-referenced
+    `EMIR.FBK.*` / `SFTR.FBK.*` checks remain CLI-only.
   - *Reconciliation Statistics* — auth.091 (EMIR only).
 - **Regime** — EMIR or SFTR.
 - **File** — drop or pick an `.xml` or `.parquet` file.

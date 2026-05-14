@@ -8,6 +8,8 @@
     <select id="operation" name="operation" required>
       <option value="scan">Standard scan (submission XML/Parquet)</option>
       <option value="tr-state-scan">TR Trade State Report (auth.107 EMIR / auth.079 SFTR)</option>
+      <option value="tr-activity-scan">TR Trade Activity Report (auth.030 EMIR / auth.052 SFTR replay)</option>
+      <option value="feedback">TR Feedback (auth.092 EMIR / auth.080 SFTR) — format checks only</option>
       <option value="recon-stats">Reconciliation Statistics (auth.091 — EMIR only)</option>
     </select>
 

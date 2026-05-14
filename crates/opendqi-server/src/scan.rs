@@ -9,9 +9,12 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 use opendqi_core::dq::{
-    default_checks, default_recon_stats_checks, default_sftr_checks, default_sftr_tr_state_checks,
-    default_tr_state_checks, finalize_issues, run_all, run_all_recon_stats, run_all_sftr,
-    run_all_sftr_tr_state, run_all_tr_state, CheckContext,
+    default_checks, default_feedback_checks, default_recon_stats_checks, default_sftr_checks,
+    default_sftr_feedback_checks, default_sftr_tr_activity_checks, default_sftr_tr_state_checks,
+    default_tr_activity_checks, default_tr_state_checks, finalize_issues, run_all,
+    run_all_feedback, run_all_recon_stats, run_all_sftr, run_all_sftr_feedback,
+    run_all_sftr_tr_activity, run_all_sftr_tr_state, run_all_tr_activity, run_all_tr_state,
+    CheckContext,
 };
 use opendqi_core::{
     DqDimension, DqIssue, EmirRecord, Regime, ScanSummary, Severity, SftrRecord, Thresholds,
@@ -19,8 +22,8 @@ use opendqi_core::{
 use opendqi_io::{has_extension, read_emir_parquet, read_sftr_parquet};
 use opendqi_report::{write_issues_csv, write_report_html, write_summary_json};
 use opendqi_xml::{
-    read_emir_recon_stats_xml, read_emir_tr_state_xml, read_emir_xml, read_sftr_tr_state_xml,
-    read_sftr_xml,
+    read_emir_feedback_xml, read_emir_recon_stats_xml, read_emir_tr_state_xml, read_emir_xml,
+    read_sftr_feedback_xml, read_sftr_tr_state_xml, read_sftr_xml,
 };
 
 /// What the user picked in the form.
@@ -56,6 +59,13 @@ pub enum UiOperation {
     Scan,
     /// Trade State Report scan (auth.107 EMIR / auth.079 SFTR).
     TrStateScan,
+    /// Trade Activity Report scan (auth.030 EMIR / auth.052 SFTR
+    /// replay).
+    TrActivityScan,
+    /// Feedback file scan (auth.092 EMIR / auth.080 SFTR). v1
+    /// runs the well-formedness / namespace / parse checks only —
+    /// store-cross-referenced FBK checks remain CLI-only.
+    Feedback,
     /// EMIR Reconciliation Statistics scan (auth.091). EMIR-only.
     ReconStats,
 }
@@ -65,6 +75,8 @@ impl UiOperation {
         match s.trim().to_ascii_lowercase().as_str() {
             "" | "scan" => Some(Self::Scan),
             "tr-state-scan" | "tr_state_scan" => Some(Self::TrStateScan),
+            "tr-activity-scan" | "tr_activity_scan" => Some(Self::TrActivityScan),
+            "feedback" => Some(Self::Feedback),
             "recon-stats" | "recon_stats" => Some(Self::ReconStats),
             _ => None,
         }
@@ -74,6 +86,8 @@ impl UiOperation {
         match self {
             Self::Scan => "scan",
             Self::TrStateScan => "tr-state-scan",
+            Self::TrActivityScan => "tr-activity-scan",
+            Self::Feedback => "feedback",
             Self::ReconStats => "recon-stats",
         }
     }
@@ -105,6 +119,14 @@ pub fn run_server_operation(
         UiOperation::TrStateScan => match regime {
             UiRegime::Emir => run_emir_tr_state_server(input, out_dir),
             UiRegime::Sftr => run_sftr_tr_state_server(input, out_dir),
+        },
+        UiOperation::TrActivityScan => match regime {
+            UiRegime::Emir => run_emir_tr_activity_server(input, out_dir),
+            UiRegime::Sftr => run_sftr_tr_activity_server(input, out_dir),
+        },
+        UiOperation::Feedback => match regime {
+            UiRegime::Emir => run_emir_feedback_server(input, out_dir),
+            UiRegime::Sftr => run_sftr_feedback_server(input, out_dir),
         },
         UiOperation::ReconStats => match regime {
             UiRegime::Emir => run_emir_recon_stats_server(input, out_dir),
@@ -254,6 +276,158 @@ fn run_sftr_tr_state_server(input: &Path, out_dir: &Path) -> Result<ScanArtifact
     let mut issues = outcome.issues;
     issues.extend(run_all_sftr_tr_state(
         &default_sftr_tr_state_checks(),
+        &outcome.records,
+        &[],
+        &ctx,
+    ));
+    finalize_issues(&mut issues, &ctx);
+    finalize_artifacts(
+        out_dir,
+        Regime::Sftr,
+        UiRegime::Sftr,
+        outcome.records.len() as u32,
+        &issues,
+        &[input.to_string_lossy().into_owned()],
+        started_at,
+        Utc::now(),
+    )
+}
+
+/// EMIR Trade Activity Report (auth.030 TR replay) scan — server-side.
+fn run_emir_tr_activity_server(input: &Path, out_dir: &Path) -> Result<ScanArtifacts> {
+    if !has_extension(input, "xml") {
+        return Err(anyhow!(
+            "tr-activity-scan expects an XML input (auth.030). Got {}",
+            input.display()
+        ));
+    }
+    let started_at = Utc::now();
+    let outcome = read_emir_xml(input)
+        .with_context(|| format!("reading EMIR TAR file {}", input.display()))?;
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+    let mut issues = outcome.issues;
+    issues.extend(run_all_tr_activity(
+        &default_tr_activity_checks(),
+        &outcome.records,
+        &[],
+        None,
+        &ctx,
+    ));
+    finalize_issues(&mut issues, &ctx);
+    finalize_artifacts(
+        out_dir,
+        Regime::Emir,
+        UiRegime::Emir,
+        outcome.records.len() as u32,
+        &issues,
+        &[input.to_string_lossy().into_owned()],
+        started_at,
+        Utc::now(),
+    )
+}
+
+/// SFTR Trade Activity Report (auth.052 TR replay) scan — server-side.
+fn run_sftr_tr_activity_server(input: &Path, out_dir: &Path) -> Result<ScanArtifacts> {
+    if !has_extension(input, "xml") {
+        return Err(anyhow!(
+            "tr-activity-scan expects an XML input (auth.052). Got {}",
+            input.display()
+        ));
+    }
+    let started_at = Utc::now();
+    let outcome = read_sftr_xml(input)
+        .with_context(|| format!("reading SFTR TAR file {}", input.display()))?;
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+    let mut issues = outcome.issues;
+    issues.extend(run_all_sftr_tr_activity(
+        &default_sftr_tr_activity_checks(),
+        &outcome.records,
+        &[],
+        None,
+        &ctx,
+    ));
+    finalize_issues(&mut issues, &ctx);
+    finalize_artifacts(
+        out_dir,
+        Regime::Sftr,
+        UiRegime::Sftr,
+        outcome.records.len() as u32,
+        &issues,
+        &[input.to_string_lossy().into_owned()],
+        started_at,
+        Utc::now(),
+    )
+}
+
+/// EMIR feedback file scan (auth.092) — server-side. Without a store,
+/// only the format / namespace issues fire; the store-cross-referenced
+/// `EMIR.FBK.*` family remains CLI-only.
+fn run_emir_feedback_server(input: &Path, out_dir: &Path) -> Result<ScanArtifacts> {
+    if !has_extension(input, "xml") {
+        return Err(anyhow!(
+            "feedback expects an XML input (auth.092). Got {}",
+            input.display()
+        ));
+    }
+    let started_at = Utc::now();
+    let outcome = read_emir_feedback_xml(input)
+        .with_context(|| format!("reading EMIR feedback file {}", input.display()))?;
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+    let mut issues = outcome.issues;
+    issues.extend(run_all_feedback(
+        &default_feedback_checks(),
+        &outcome.records,
+        &[],
+        &ctx,
+    ));
+    finalize_issues(&mut issues, &ctx);
+    finalize_artifacts(
+        out_dir,
+        Regime::Emir,
+        UiRegime::Emir,
+        outcome.records.len() as u32,
+        &issues,
+        &[input.to_string_lossy().into_owned()],
+        started_at,
+        Utc::now(),
+    )
+}
+
+/// SFTR feedback file scan (auth.080) — server-side.
+fn run_sftr_feedback_server(input: &Path, out_dir: &Path) -> Result<ScanArtifacts> {
+    if !has_extension(input, "xml") {
+        return Err(anyhow!(
+            "feedback expects an XML input (auth.080). Got {}",
+            input.display()
+        ));
+    }
+    let started_at = Utc::now();
+    let outcome = read_sftr_feedback_xml(input)
+        .with_context(|| format!("reading SFTR feedback file {}", input.display()))?;
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+    let mut issues = outcome.issues;
+    issues.extend(run_all_sftr_feedback(
+        &default_sftr_feedback_checks(),
         &outcome.records,
         &[],
         &ctx,
