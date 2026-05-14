@@ -10,9 +10,10 @@ use clap::Subcommand;
 use opendqi_core::dq::{
     default_sftr_checks, default_sftr_feedback_checks, default_sftr_lifecycle_checks,
     default_sftr_reconciliation_checks, default_sftr_tr_activity_checks,
-    default_sftr_tr_state_checks, default_sftr_tr_state_lifecycle_checks, run_all_sftr,
-    run_all_sftr_feedback, run_all_sftr_lifecycle, run_all_sftr_reconciliation,
-    run_all_sftr_tr_activity, run_all_sftr_tr_state, run_all_sftr_tr_state_lifecycle, CheckContext,
+    default_sftr_tr_state_checks, default_sftr_tr_state_lifecycle_checks, finalize_issues,
+    run_all_sftr, run_all_sftr_feedback, run_all_sftr_lifecycle, run_all_sftr_reconciliation,
+    run_all_sftr_tr_activity, run_all_sftr_tr_state, run_all_sftr_tr_state_lifecycle, sort_issues,
+    CheckContext,
 };
 use opendqi_core::{
     DqDimension, DqIssue, Regime, ScanSummary, Severity, SftrRecord, SftrTrStateRecord, Thresholds,
@@ -408,7 +409,7 @@ fn run_scan(
         issues.extend(lifecycle_issues);
     }
 
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, &ctx);
 
     let summary = build_summary(&records, &issues, &inputs, started_at, Utc::now());
 
@@ -611,7 +612,7 @@ fn run_feedback(input: &Path, store_path: &Path, out: &Path) -> Result<()> {
     );
     info!(feedback_issues = fbk_issues.len(), "feedback checks run");
     issues.extend(fbk_issues);
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, &ctx);
 
     let inputs = vec![input.to_path_buf()];
     let sources = vec![input.to_string_lossy().into_owned()];
@@ -723,7 +724,7 @@ fn run_reconcile(input: &Path, store_path: &Path, out: &Path) -> Result<()> {
         "reconciliation checks run"
     );
     issues.extend(rec_issues);
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, &ctx);
 
     let inputs = vec![input.to_path_buf()];
     let sources = vec![input.to_string_lossy().into_owned()];
@@ -833,7 +834,7 @@ fn run_tr_state_scan(input: &Path, store_path: Option<&Path>, out: &Path) -> Res
         );
         issues.extend(lfc_issues);
     }
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, &ctx);
 
     let inputs = vec![input.to_path_buf()];
     let sources = vec![input.to_string_lossy().into_owned()];
@@ -969,7 +970,7 @@ fn run_tr_activity_scan(
 
     let mut issues: Vec<DqIssue> = format_issues;
     issues.extend(activity_issues);
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, &ctx);
 
     let summary = build_summary(&records, &issues, &inputs, started_at, Utc::now());
 
@@ -1223,7 +1224,7 @@ fn run_tr_audit(
         }
     }
 
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, &ctx);
 
     let all_inputs = vec![
         tar_path.to_path_buf(),
@@ -1664,15 +1665,6 @@ mod sftr_book_reconcile_tests {
             .iter()
             .any(|i| i.check_id == "SFTR.BREC.STATUS_MISMATCH"));
     }
-}
-
-fn sort_issues(issues: &mut [DqIssue]) {
-    issues.sort_by(|a, b| {
-        a.check_id
-            .cmp(&b.check_id)
-            .then_with(|| a.source_file.cmp(&b.source_file))
-            .then_with(|| a.record_id.cmp(&b.record_id))
-    });
 }
 
 fn build_summary(

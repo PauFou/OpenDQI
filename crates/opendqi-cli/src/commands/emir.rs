@@ -12,10 +12,10 @@ use opendqi_core::dq::{
     default_margin_activity_checks, default_margin_activity_lifecycle_checks,
     default_margin_state_checks, default_margin_state_lifecycle_checks,
     default_reconciliation_checks, default_tr_activity_checks, default_tr_state_checks,
-    default_tr_state_lifecycle_checks, run_all, run_all_feedback, run_all_lifecycle,
-    run_all_margin_activity, run_all_margin_state, run_all_margin_state_lifecycle,
-    run_all_reconciliation, run_all_tr_activity, run_all_tr_state, run_all_tr_state_lifecycle,
-    CheckContext,
+    default_tr_state_lifecycle_checks, finalize_issues, run_all, run_all_feedback,
+    run_all_lifecycle, run_all_margin_activity, run_all_margin_state,
+    run_all_margin_state_lifecycle, run_all_reconciliation, run_all_tr_activity, run_all_tr_state,
+    run_all_tr_state_lifecycle, sort_issues, CheckContext,
 };
 use opendqi_core::{
     DqDimension, DqIssue, EmirRecord, MarginActivityRecord, MarginStateRecord, Regime, ScanSummary,
@@ -451,7 +451,7 @@ fn run_scan(
         issues.extend(lifecycle_issues);
     }
 
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, &ctx);
 
     let summary = build_summary(&records, &issues, &inputs, started_at, Utc::now());
 
@@ -651,7 +651,7 @@ fn run_feedback(input: &Path, store_path: &Path, out: &Path) -> Result<()> {
     let fbk_issues = run_all_feedback(&default_feedback_checks(), &outcome.records, &prior, &ctx);
     info!(feedback_issues = fbk_issues.len(), "feedback checks run");
     issues.extend(fbk_issues);
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, &ctx);
 
     // Build a minimal summary. records_processed = number of feedback
     // lines parsed (acts as the "throughput" indicator).
@@ -765,7 +765,7 @@ fn run_reconcile(input: &Path, store_path: &Path, out: &Path) -> Result<()> {
         "reconciliation checks run"
     );
     issues.extend(rec_issues);
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, &ctx);
 
     let inputs = vec![input.to_path_buf()];
     let sources = vec![input.to_string_lossy().into_owned()];
@@ -866,7 +866,7 @@ fn run_tr_state_scan(input: &Path, store_path: Option<&Path>, out: &Path) -> Res
         info!(lfc_issues = lfc_issues.len(), "TSR lifecycle checks run");
         issues.extend(lfc_issues);
     }
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, &ctx);
 
     let inputs = vec![input.to_path_buf()];
     let sources = vec![input.to_string_lossy().into_owned()];
@@ -960,7 +960,7 @@ fn run_mar_scan(input: &Path, store_path: Option<&Path>, out: &Path) -> Result<(
         info!(lfc_issues = lfc_issues.len(), "MAR lifecycle checks run");
         issues.extend(lfc_issues);
     }
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, &ctx);
 
     let inputs = vec![input.to_path_buf()];
     let sources = vec![input.to_string_lossy().into_owned()];
@@ -1063,7 +1063,7 @@ fn run_msr_scan(input: &Path, store_path: Option<&Path>, out: &Path) -> Result<(
         info!(lfc_issues = lfc_issues.len(), "MSR lifecycle checks run");
         issues.extend(lfc_issues);
     }
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, &ctx);
 
     let inputs = vec![input.to_path_buf()];
     let sources = vec![input.to_string_lossy().into_owned()];
@@ -1194,7 +1194,7 @@ fn run_tr_activity_scan(
 
     let mut issues: Vec<DqIssue> = format_issues;
     issues.extend(activity_issues);
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, &ctx);
 
     let summary = build_summary(&records, &issues, &inputs, started_at, Utc::now());
 
@@ -1453,7 +1453,7 @@ fn run_tr_audit(
         }
     }
 
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, &ctx);
 
     // 5. Write outputs.
     let all_inputs = vec![
@@ -1924,15 +1924,6 @@ mod book_reconcile_tests {
             .iter()
             .any(|i| i.check_id == "EMIR.BREC.STATUS_MISMATCH"));
     }
-}
-
-fn sort_issues(issues: &mut [DqIssue]) {
-    issues.sort_by(|a, b| {
-        a.check_id
-            .cmp(&b.check_id)
-            .then_with(|| a.source_file.cmp(&b.source_file))
-            .then_with(|| a.record_id.cmp(&b.record_id))
-    });
 }
 
 fn build_summary(

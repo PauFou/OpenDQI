@@ -392,17 +392,43 @@ pub fn run_all(
         .par_iter()
         .flat_map_iter(|c| c.run(records, ctx))
         .collect();
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, ctx);
     issues
 }
 
-fn sort_issues(issues: &mut [DqIssue]) {
+/// Sort issues deterministically: by `check_id`, then `source_file`,
+/// then `record_id`. Public so CLI / server runners can post-process
+/// issue lists they assemble themselves.
+pub fn sort_issues(issues: &mut [DqIssue]) {
     issues.sort_by(|a, b| {
         a.check_id
             .cmp(&b.check_id)
             .then_with(|| a.source_file.cmp(&b.source_file))
             .then_with(|| a.record_id.cmp(&b.record_id))
     });
+}
+
+/// Apply `thresholds.severity_overrides` in-place: any issue whose
+/// `check_id` matches a key in the override map has its severity
+/// replaced. CLAUDE.md spec — a single chokepoint so a YAML
+/// configuration can downgrade a noisy check from `high` to `warning`
+/// (or escalate the other way) without touching the check code.
+pub fn apply_severity_overrides(issues: &mut [DqIssue], thresholds: &Thresholds) {
+    if thresholds.severity_overrides.is_empty() {
+        return;
+    }
+    for issue in issues.iter_mut() {
+        if let Some(sev) = thresholds.severity_overrides.get(&issue.check_id) {
+            issue.severity = *sev;
+        }
+    }
+}
+
+/// Post-processing pipeline applied at the end of every `run_all_*`:
+/// apply severity overrides, then sort issues deterministically.
+pub fn finalize_issues(issues: &mut [DqIssue], ctx: &CheckContext) {
+    apply_severity_overrides(issues, &ctx.thresholds);
+    sort_issues(issues);
 }
 
 // ---- SFTR ----------------------------------------------------------
@@ -420,8 +446,8 @@ pub use sftr::{
     SftrLoanNeedsCurrency, SftrLoanPrecision, SftrMasterAgreementVersionFormat,
     SftrMaturityBeforeEffective, SftrMissingUti, SftrNegativeCollateral, SftrNegativeLoan,
     SftrNewtForbidsPriorUti, SftrNewtForbidsTerminationDate, SftrRatePrecision,
-    SftrRebateRequiresRepoOrBsb, SftrReuuRequiresReuseIndicator, SftrSelfDealing,
-    SftrSettlementBeforeExecution, SftrSftTypeEnum, SftrSftTypeMissing,
+    SftrRebateRequiresRepoOrBsb, SftrReuuRequiresReuseIndicator, SftrSecurityIdentifierMissing,
+    SftrSelfDealing, SftrSettlementBeforeExecution, SftrSftTypeEnum, SftrSftTypeMissing,
 };
 
 /// Default SFTR check registry. 40 checks total covering all six DQ
@@ -479,11 +505,12 @@ pub fn default_sftr_checks() -> Vec<Box<dyn SftrCheck>> {
         Box::new(SftrEtrmRequiresTerminationDate),
         Box::new(SftrColuRequiresPortfolio),
         Box::new(SftrReuuRequiresReuseIndicator),
-        // ---- Field-coverage gap-fillers (4) ----
+        // ---- Field-coverage gap-fillers (5) ----
         Box::new(SftrReuseIndicatorRequiresPortfolio),
         Box::new(SftrEventTypeEnum),
         Box::new(SftrMasterAgreementTypeEnum),
         Box::new(SftrLendingFeeNegative),
+        Box::new(SftrSecurityIdentifierMissing),
         // ---- Margin lending — activity layer (5) ----
         Box::new(sftr::margin_activity::SftrMarMgldNeedsLoanValue),
         Box::new(sftr::margin_activity::SftrMarMgldNeedsCollateral),
@@ -514,7 +541,7 @@ pub fn run_all_sftr(
         .par_iter()
         .flat_map_iter(|c| c.run(records, ctx))
         .collect();
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, ctx);
     issues
 }
 
@@ -568,7 +595,7 @@ pub fn run_all_lifecycle(
         .par_iter()
         .flat_map_iter(|c| c.run(current, prior, ctx))
         .collect();
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, ctx);
     issues
 }
 
@@ -597,7 +624,7 @@ pub fn run_all_sftr_lifecycle(
         .par_iter()
         .flat_map_iter(|c| c.run(current, prior, ctx))
         .collect();
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, ctx);
     issues
 }
 
@@ -654,7 +681,7 @@ pub fn run_all_feedback(
         .par_iter()
         .flat_map_iter(|c| c.run(feedback, prior, ctx))
         .collect();
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, ctx);
     issues
 }
 
@@ -685,7 +712,7 @@ pub fn run_all_sftr_feedback(
         .par_iter()
         .flat_map_iter(|c| c.run(feedback, prior, ctx))
         .collect();
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, ctx);
     issues
 }
 
@@ -740,7 +767,7 @@ pub fn run_all_reconciliation(
         .par_iter()
         .flat_map_iter(|c| c.run(records, prior, ctx))
         .collect();
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, ctx);
     issues
 }
 
@@ -769,7 +796,7 @@ pub fn run_all_sftr_reconciliation(
         .par_iter()
         .flat_map_iter(|c| c.run(records, prior, ctx))
         .collect();
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, ctx);
     issues
 }
 
@@ -830,7 +857,7 @@ pub fn run_all_tr_state(
         .par_iter()
         .flat_map_iter(|c| c.run(records, prior, ctx))
         .collect();
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, ctx);
     issues
 }
 
@@ -891,7 +918,7 @@ pub fn run_all_tr_activity(
         .par_iter()
         .flat_map_iter(|c| c.run(records, prior, tsr, ctx))
         .collect();
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, ctx);
     issues
 }
 
@@ -930,7 +957,7 @@ pub fn run_all_margin_activity(
         .par_iter()
         .flat_map_iter(|c| c.run(records, prior, ctx))
         .collect();
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, ctx);
     issues
 }
 
@@ -970,7 +997,7 @@ pub fn run_all_margin_state(
         .par_iter()
         .flat_map_iter(|c| c.run(records, prior, ctx))
         .collect();
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, ctx);
     issues
 }
 
@@ -1012,7 +1039,7 @@ pub fn run_all_sftr_tr_state(
         .par_iter()
         .flat_map_iter(|c| c.run(records, prior, ctx))
         .collect();
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, ctx);
     issues
 }
 
@@ -1046,7 +1073,7 @@ pub fn run_all_sftr_tr_activity(
         .par_iter()
         .flat_map_iter(|c| c.run(records, prior, tsr, ctx))
         .collect();
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, ctx);
     issues
 }
 
@@ -1089,7 +1116,7 @@ pub fn run_all_tr_state_lifecycle(
         .par_iter()
         .flat_map_iter(|c| c.run(current, prior, ctx))
         .collect();
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, ctx);
     issues
 }
 
@@ -1113,7 +1140,7 @@ pub fn run_all_sftr_tr_state_lifecycle(
         .par_iter()
         .flat_map_iter(|c| c.run(current, prior, ctx))
         .collect();
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, ctx);
     issues
 }
 
@@ -1148,6 +1175,49 @@ pub fn run_all_margin_state_lifecycle(
         .par_iter()
         .flat_map_iter(|c| c.run(current, prior, ctx))
         .collect();
-    sort_issues(&mut issues);
+    finalize_issues(&mut issues, ctx);
     issues
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{Regime, Severity};
+
+    fn issue(check_id: &str, sev: Severity) -> DqIssue {
+        DqIssue {
+            check_id: check_id.into(),
+            regime: Regime::Emir,
+            severity: sev,
+            dimension: DqDimension::Completeness,
+            record_id: None,
+            uti: None,
+            field: None,
+            value: None,
+            message: String::new(),
+            source_file: None,
+        }
+    }
+
+    #[test]
+    fn apply_severity_overrides_replaces_matching_check_ids() {
+        let mut t = Thresholds::default();
+        t.severity_overrides
+            .insert("EMIR.COMP.UTI_MISSING".into(), Severity::Warning);
+        let mut issues = vec![
+            issue("EMIR.COMP.UTI_MISSING", Severity::High),
+            issue("EMIR.UNI.DUPLICATE_UTI", Severity::High),
+        ];
+        apply_severity_overrides(&mut issues, &t);
+        assert_eq!(issues[0].severity, Severity::Warning);
+        assert_eq!(issues[1].severity, Severity::High);
+    }
+
+    #[test]
+    fn apply_severity_overrides_is_a_noop_when_map_empty() {
+        let t = Thresholds::default();
+        let mut issues = vec![issue("ANY", Severity::High)];
+        apply_severity_overrides(&mut issues, &t);
+        assert_eq!(issues[0].severity, Severity::High);
+    }
 }

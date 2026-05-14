@@ -366,6 +366,22 @@ fn commit_leaf(rec: &mut SftrRecord, rel_path: &str, text: &str, attrs: &[(Strin
             set_str(&mut rec.collateral_isin, trimmed)
         }
 
+        // Principal SFT security leg — the security being lent / borrowed
+        // (SLEB, BSB) or the underlying of the repo (REPO). Distinct from
+        // CollData which carries the collateral leg.
+        "LnData/SctyLndg/Sctys/Id"
+        | "LnData/SctyLndg/Sctys/ISIN"
+        | "LnData/SctyLndg/SctyId"
+        | "LnData/SctyLndg/ISIN"
+        | "LnData/BsbSctyTrad/Sctys/Id"
+        | "LnData/BsbSctyTrad/Sctys/ISIN"
+        | "LnData/BsbSctyTrad/SctyId"
+        | "LnData/BsbSctyTrad/ISIN"
+        | "LnData/Repo/Sctys/Id"
+        | "LnData/Repo/Sctys/ISIN"
+        | "LnData/Repo/SctyId"
+        | "LnData/Repo/ISIN" => set_str(&mut rec.security_identifier, trimmed),
+
         _ => {
             if trimmed.is_empty() && attrs.is_empty() {
                 return;

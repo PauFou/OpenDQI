@@ -115,6 +115,7 @@ pub fn read_emir_csv(path: &Path, mapping: &CsvMapping) -> Result<Vec<EmirRecord
             delta: pick("delta").and_then(|v| parse_decimal(&v, "delta", &record_id_label)),
             gamma: pick("gamma").and_then(|v| parse_decimal(&v, "gamma", &record_id_label)),
             vega: pick("vega").and_then(|v| parse_decimal(&v, "vega", &record_id_label)),
+            source_system: pick("source_system"),
             ..Default::default()
         };
         out.push(record);
@@ -201,6 +202,7 @@ pub fn read_sftr_csv(path: &Path, mapping: &CsvMapping) -> Result<Vec<SftrRecord
                 .and_then(|v| parse_date(&v, date_fmt, "settlement_date", &record_id_label)),
             collateral_portfolio_code: pick("collateral_portfolio_code"),
             collateral_isin: pick("collateral_isin"),
+            security_identifier: pick("security_identifier"),
             ..Default::default()
         };
         out.push(record);

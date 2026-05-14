@@ -225,6 +225,12 @@ pub struct EmirRecord {
     pub gamma: Option<Decimal>,
     /// Option greek: vega.
     pub vega: Option<Decimal>,
+    /// Source system identifier from the report envelope (e.g. submitter
+    /// LEI/BIC, or an internal upstream system tag). CLAUDE.md spec
+    /// field; populated on best-effort basis from the XML envelope or
+    /// CSV mapping when present.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_system: Option<String>,
     /// Catch-all map of any source-format leaf that did not match a
     /// typed field. Key is the source-format-relative path
     /// (e.g. `CmonTradData/CtrctData/UndrlygInstrm/.../X`), value is
@@ -321,6 +327,11 @@ pub struct SftrRecord {
     pub collateral_portfolio_code: Option<String>,
     /// ISIN of the security used as collateral.
     pub collateral_isin: Option<String>,
+    /// ISIN (or other identifier) of the security being lent / borrowed —
+    /// the principal SFT leg, distinct from the collateral leg. CLAUDE.md
+    /// spec field; populated for `SLEB`, `SBSC`, `BSB` typed SFTs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub security_identifier: Option<String>,
 
     /// Catch-all of XML leaves that were not promoted to typed fields.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]

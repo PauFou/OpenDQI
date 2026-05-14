@@ -159,6 +159,7 @@ fn decode_emir_batch(
     let delta = col_idx(schema, "delta");
     let gamma = col_idx(schema, "gamma");
     let vega = col_idx(schema, "vega");
+    let source_system = col_idx(schema, "source_system");
     let raw_fields = col_idx(schema, "raw_fields");
 
     out.reserve(batch.num_rows());
@@ -216,6 +217,7 @@ fn decode_emir_batch(
             delta: read_opt_decimal(batch, delta, row)?,
             gamma: read_opt_decimal(batch, gamma, row)?,
             vega: read_opt_decimal(batch, vega, row)?,
+            source_system: read_opt_str(batch, source_system, row)?,
             raw_fields: read_raw_fields(batch, raw_fields, row)?,
         });
     }
@@ -260,6 +262,7 @@ fn decode_sftr_batch(
     let settlement_date = col_idx(schema, "settlement_date");
     let portfolio_code = col_idx(schema, "collateral_portfolio_code");
     let collateral_isin = col_idx(schema, "collateral_isin");
+    let security_identifier = col_idx(schema, "security_identifier");
     let raw_fields = col_idx(schema, "raw_fields");
 
     out.reserve(batch.num_rows());
@@ -294,6 +297,7 @@ fn decode_sftr_batch(
             settlement_date: read_opt_date(batch, settlement_date, row)?,
             collateral_portfolio_code: read_opt_str(batch, portfolio_code, row)?,
             collateral_isin: read_opt_str(batch, collateral_isin, row)?,
+            security_identifier: read_opt_str(batch, security_identifier, row)?,
             raw_fields: read_raw_fields(batch, raw_fields, row)?,
         });
     }

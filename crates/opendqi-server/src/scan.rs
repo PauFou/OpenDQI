@@ -8,7 +8,9 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
-use opendqi_core::dq::{default_checks, default_sftr_checks, run_all, run_all_sftr, CheckContext};
+use opendqi_core::dq::{
+    default_checks, default_sftr_checks, finalize_issues, run_all, run_all_sftr, CheckContext,
+};
 use opendqi_core::{
     DqDimension, DqIssue, EmirRecord, Regime, ScanSummary, Severity, SftrRecord, Thresholds,
 };
@@ -68,7 +70,7 @@ pub fn run_server_scan(input: &Path, regime: UiRegime, out_dir: &Path) -> Result
                 now,
             };
             let mut issues = run_all(&default_checks(), &records, &ctx);
-            sort_issues(&mut issues);
+            finalize_issues(&mut issues, &ctx);
             let summary = build_summary(
                 Regime::Emir,
                 records.len() as u32,
@@ -88,7 +90,7 @@ pub fn run_server_scan(input: &Path, regime: UiRegime, out_dir: &Path) -> Result
                 now,
             };
             let mut issues = run_all_sftr(&default_sftr_checks(), &records, &ctx);
-            sort_issues(&mut issues);
+            finalize_issues(&mut issues, &ctx);
             let summary = build_summary(
                 Regime::Sftr,
                 records.len() as u32,
@@ -164,15 +166,6 @@ fn load_sftr(input: &Path) -> Result<Vec<SftrRecord>> {
             input.display()
         ))
     }
-}
-
-fn sort_issues(issues: &mut [DqIssue]) {
-    issues.sort_by(|a, b| {
-        a.check_id
-            .cmp(&b.check_id)
-            .then_with(|| a.source_file.cmp(&b.source_file))
-            .then_with(|| a.record_id.cmp(&b.record_id))
-    });
 }
 
 fn build_summary(

@@ -9,6 +9,8 @@ use std::collections::BTreeMap;
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
+use crate::model::Severity;
+
 /// Top-level threshold configuration.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -19,6 +21,10 @@ pub struct Thresholds {
     pub maturity: MaturityThresholds,
     /// EMIR Article 11 risk-mitigation thresholds (per asset class).
     pub emir_rmt: EmirRmtThresholds,
+    /// Per-check-id severity overrides. Keys are full check IDs
+    /// (e.g. `EMIR.COMP.UTI_MISSING`); values replace the check's
+    /// default severity at issue-emission time. Empty by default.
+    pub severity_overrides: BTreeMap<String, Severity>,
 }
 
 /// Timeliness configuration.
@@ -159,6 +165,22 @@ mod tests {
         // omitted scalar field falls back to its ESMA default
         assert_eq!(t.emir_rmt.aana_im_threshold_eur, 8_000_000_000);
         // unrelated section untouched
+        assert_eq!(t.timeliness.max_reporting_delay_hours, 24);
+    }
+
+    #[test]
+    fn severity_overrides_round_trip_via_yaml() {
+        let yaml = "severity_overrides:\n  EMIR.COMP.UTI_MISSING: warning\n  EMIR.UNI.DUPLICATE_UTI: critical\n";
+        let t: Thresholds = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(
+            t.severity_overrides.get("EMIR.COMP.UTI_MISSING"),
+            Some(&crate::model::Severity::Warning)
+        );
+        assert_eq!(
+            t.severity_overrides.get("EMIR.UNI.DUPLICATE_UTI"),
+            Some(&crate::model::Severity::Critical)
+        );
+        // Unaffected sections still default.
         assert_eq!(t.timeliness.max_reporting_delay_hours, 24);
     }
 

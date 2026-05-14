@@ -139,6 +139,7 @@ fn emir_fields() -> Vec<Field> {
         d("delta"),
         d("gamma"),
         d("vega"),
+        s("source_system"),
         s("raw_fields"),
     ]
 }
@@ -198,6 +199,7 @@ fn build_emir_batch(schema: &SchemaRef, records: &[EmirRecord]) -> Result<Record
     let mut delta = decimal_builder();
     let mut gamma = decimal_builder();
     let mut vega = decimal_builder();
+    let mut source_system = StringBuilder::new();
     let mut raw_fields = StringBuilder::new();
 
     for r in records {
@@ -287,6 +289,7 @@ fn build_emir_batch(schema: &SchemaRef, records: &[EmirRecord]) -> Result<Record
         push_opt_decimal(&mut delta, r.delta)?;
         push_opt_decimal(&mut gamma, r.gamma)?;
         push_opt_decimal(&mut vega, r.vega)?;
+        push_opt_str(&mut source_system, r.source_system.as_deref());
         push_raw_fields(&mut raw_fields, &r.raw_fields);
     }
 
@@ -344,6 +347,7 @@ fn build_emir_batch(schema: &SchemaRef, records: &[EmirRecord]) -> Result<Record
         Arc::new(finish_decimal(delta)?),
         Arc::new(finish_decimal(gamma)?),
         Arc::new(finish_decimal(vega)?),
+        Arc::new(source_system.finish()),
         Arc::new(raw_fields.finish()),
     ];
     RecordBatch::try_new(schema.clone(), arrays).context("constructing EMIR RecordBatch")
@@ -394,6 +398,7 @@ fn sftr_fields() -> Vec<Field> {
         dt("settlement_date"),
         s("collateral_portfolio_code"),
         s("collateral_isin"),
+        s("security_identifier"),
         s("raw_fields"),
     ]
 }
@@ -430,6 +435,7 @@ fn build_sftr_batch(schema: &SchemaRef, records: &[SftrRecord]) -> Result<Record
     let mut settlement_date = Date32Builder::with_capacity(n);
     let mut collateral_portfolio_code = StringBuilder::new();
     let mut collateral_isin = StringBuilder::new();
+    let mut security_identifier = StringBuilder::new();
     let mut raw_fields = StringBuilder::new();
 
     for r in records {
@@ -475,6 +481,7 @@ fn build_sftr_batch(schema: &SchemaRef, records: &[SftrRecord]) -> Result<Record
             r.collateral_portfolio_code.as_deref(),
         );
         push_opt_str(&mut collateral_isin, r.collateral_isin.as_deref());
+        push_opt_str(&mut security_identifier, r.security_identifier.as_deref());
         push_raw_fields(&mut raw_fields, &r.raw_fields);
     }
 
@@ -509,6 +516,7 @@ fn build_sftr_batch(schema: &SchemaRef, records: &[SftrRecord]) -> Result<Record
         Arc::new(settlement_date.finish()),
         Arc::new(collateral_portfolio_code.finish()),
         Arc::new(collateral_isin.finish()),
+        Arc::new(security_identifier.finish()),
         Arc::new(raw_fields.finish()),
     ];
     RecordBatch::try_new(schema.clone(), arrays).context("constructing SFTR RecordBatch")
