@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (rejection-profile pre-submission loop) — Phase 14
+
+- **CLAUDE.md priority #4 closed.** The post-TR rejection analytics
+  (`rejection_profile.yml`) now flows back into the pre-submission scan
+  via a new `--rejection-profile <yml>` flag on `opendqi emir scan`.
+- New `RejectionProfile` / `RejectionCause` / `RepeatedRejection` /
+  `RejectionProfileFile` types in `opendqi-core::model`. Serde
+  round-trip-compatible with the YAML emitted by
+  `opendqi feedback analytics`.
+- New `PreSubmissionCheck` trait + `default_pre_submission_checks()`
+  + `run_all_pre_submission()` in `opendqi-core::dq`.
+- **2 new `EMIR.PSC.*` checks**:
+  - `EMIR.PSC.REPEATED_REJECTION` (high, consistency) — record's UTI
+    appears in `profile.repeated_rejected_utis`; evidence carries the
+    prior rejection count.
+  - `EMIR.PSC.LIKELY_REJECTION_PATTERN` (warning, validity) — record
+    matches a built-in predicate associated with a top-cause's
+    `suggested_check`. Message cites the cause's rank and historical
+    share. Initial predicate mapping covers UTI / notional currency /
+    valuation / counterparty completeness + zero / negative notional.
+- `opendqi feedback analytics` now writes canonical OpenDQI check IDs
+  in the `suggested_check` field (e.g. `EMIR.COMP.UTI_MISSING`)
+  instead of free-form text — extend the table in
+  `crates/opendqi-cli/src/commands/feedback.rs:suggested_check_for_reason`.
+- Synthetic fixture `examples/emir/rejection_profile/sample.yml` +
+  integration test `crates/opendqi-core/tests/pre_submission_integration.rs`.
+- New doc `docs/pre-submission-checks.md` describing the workflow,
+  YAML format, and check catalog.
+- Catalog: **195 → 197 checks** (135 EMIR + 62 SFTR).
+
 ### Added (CLAUDE.md model completeness + auth.091) — Phase 10/11/12/13
 
 - **`EmirRecord.source_system`** (Option<String>) — CSV mapping key, Parquet column, full round-trip. Populated for downstream provenance tracking.

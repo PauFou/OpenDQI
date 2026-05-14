@@ -10,12 +10,13 @@ use clap::Subcommand;
 use opendqi_core::dq::{
     default_checks, default_feedback_checks, default_lifecycle_checks,
     default_margin_activity_checks, default_margin_activity_lifecycle_checks,
-    default_margin_state_checks, default_margin_state_lifecycle_checks, default_recon_stats_checks,
-    default_reconciliation_checks, default_tr_activity_checks, default_tr_state_checks,
-    default_tr_state_lifecycle_checks, finalize_issues, run_all, run_all_feedback,
-    run_all_lifecycle, run_all_margin_activity, run_all_margin_state,
-    run_all_margin_state_lifecycle, run_all_recon_stats, run_all_reconciliation,
-    run_all_tr_activity, run_all_tr_state, run_all_tr_state_lifecycle, sort_issues, CheckContext,
+    default_margin_state_checks, default_margin_state_lifecycle_checks,
+    default_pre_submission_checks, default_recon_stats_checks, default_reconciliation_checks,
+    default_tr_activity_checks, default_tr_state_checks, default_tr_state_lifecycle_checks,
+    finalize_issues, run_all, run_all_feedback, run_all_lifecycle, run_all_margin_activity,
+    run_all_margin_state, run_all_margin_state_lifecycle, run_all_pre_submission,
+    run_all_recon_stats, run_all_reconciliation, run_all_tr_activity, run_all_tr_state,
+    run_all_tr_state_lifecycle, sort_issues, CheckContext,
 };
 use opendqi_core::{
     DqDimension, DqIssue, EmirRecord, MarginActivityRecord, MarginStateRecord, Regime, ScanSummary,
@@ -64,6 +65,13 @@ pub enum EmirAction {
         /// history.
         #[arg(long, value_name = "PATH")]
         store: Option<PathBuf>,
+        /// Optional path to a `rejection_profile.yml` exported by
+        /// `opendqi feedback analytics`. When set, the scan runs the
+        /// pre-submission `EMIR.PSC.*` family that flags records
+        /// likely to be rejected by the TR based on historical
+        /// patterns. See `docs/pre-submission-checks.md`.
+        #[arg(long, value_name = "PATH")]
+        rejection_profile: Option<PathBuf>,
     },
     /// Validate XML files: well-formedness check + XSD validation.
     /// Exits non-zero when at least one issue is found.
@@ -270,6 +278,7 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
             config,
             xsd,
             store,
+            rejection_profile,
         } => {
             run_scan(
                 &input,
@@ -278,6 +287,7 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
                 config.as_deref(),
                 xsd.as_deref(),
                 store.as_deref(),
+                rejection_profile.as_deref(),
             )?;
             Ok(ExitCode::SUCCESS)
         }
@@ -357,6 +367,7 @@ fn run_scan(
     config_path: Option<&Path>,
     xsd_path: Option<&Path>,
     store_path: Option<&Path>,
+    rejection_profile_path: Option<&Path>,
 ) -> Result<()> {
     let started_at = Utc::now();
 
@@ -479,6 +490,23 @@ fn run_scan(
             "lifecycle checks run"
         );
         issues.extend(lifecycle_issues);
+    }
+
+    if let Some(profile_path) = rejection_profile_path {
+        let text = std::fs::read_to_string(profile_path)
+            .with_context(|| format!("reading rejection profile {}", profile_path.display()))?;
+        let file: opendqi_core::RejectionProfileFile = serde_yaml::from_str(&text)
+            .with_context(|| format!("parsing rejection profile {}", profile_path.display()))?;
+        let profile = file.profile;
+        info!(
+            top_causes = profile.top_causes.len(),
+            repeated_rejected_utis = profile.repeated_rejected_utis.len(),
+            "loaded rejection profile"
+        );
+        let psc_issues =
+            run_all_pre_submission(&default_pre_submission_checks(), &records, &profile, &ctx);
+        info!(psc_issues = psc_issues.len(), "pre-submission checks run");
+        issues.extend(psc_issues);
     }
 
     finalize_issues(&mut issues, &ctx);

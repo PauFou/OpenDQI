@@ -1,0 +1,20 @@
+# OpenDQI rejection profile — synthetic sample.
+# Mirrors the shape emitted by `opendqi feedback analytics`.
+profile:
+  generated_at: "2026-05-14T12:00:00+00:00"
+  total_feedbacks: 250
+  top_causes:
+    - reason_code: "VAL01"
+      count: 85
+      suggested_check: "EMIR.COMP.NOTIONAL_CURRENCY_MISSING"
+    - reason_code: "VAL12"
+      count: 60
+      suggested_check: "EMIR.COMP.UTI_MISSING"
+    - reason_code: "VAL10"
+      count: 30
+      suggested_check: "EMIR.COMP.COUNTERPARTY_1_MISSING"
+  repeated_rejected_utis:
+    - uti: "UTI-CHRONIC-001"
+      count: 7
+    - uti: "UTI-CHRONIC-002"
+      count: 4

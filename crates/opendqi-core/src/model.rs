@@ -860,6 +860,60 @@ impl Default for ReconStatsRecord {
     }
 }
 
+/// Post-TR rejection profile loaded from `rejection_profile.yml`
+/// (the YAML emitted by `opendqi feedback analytics`). Used to drive
+/// the `EMIR.PSC.*` pre-submission check family so that historical
+/// rejection patterns observed in TR feedback can flag risky records
+/// before the firm re-submits them.
+///
+/// The YAML file wraps the payload under a `profile:` key — use
+/// [`RejectionProfileFile`] when reading from disk.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RejectionProfile {
+    /// Timestamp the profile was generated, ISO 8601.
+    #[serde(default)]
+    pub generated_at: Option<DateTime<Utc>>,
+    /// Total feedback rows the analytics ran over.
+    #[serde(default)]
+    pub total_feedbacks: u64,
+    /// Top rejection causes (sorted by descending count).
+    #[serde(default)]
+    pub top_causes: Vec<RejectionCause>,
+    /// UTIs whose rejection count met the analytics threshold.
+    #[serde(default)]
+    pub repeated_rejected_utis: Vec<RepeatedRejection>,
+}
+
+/// One row in [`RejectionProfile::top_causes`].
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RejectionCause {
+    /// TR-side reason code (e.g. `VAL01`).
+    pub reason_code: String,
+    /// Number of feedback rows carrying this reason.
+    pub count: u64,
+    /// Canonical OpenDQI check ID this reason maps to when known,
+    /// e.g. `EMIR.COMP.UTI_MISSING`. Free-form when no mapping exists.
+    #[serde(default)]
+    pub suggested_check: Option<String>,
+}
+
+/// One row in [`RejectionProfile::repeated_rejected_utis`].
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RepeatedRejection {
+    /// UTI rejected ≥ threshold times in the analytics window.
+    pub uti: String,
+    /// Number of distinct rejection events.
+    pub count: u64,
+}
+
+/// On-disk wrapper for [`RejectionProfile`] — the YAML emitted by
+/// `opendqi feedback analytics` nests the payload under `profile:`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RejectionProfileFile {
+    /// The wrapped profile.
+    pub profile: RejectionProfile,
+}
+
 /// Aggregate statistics for a scan run.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanSummary {

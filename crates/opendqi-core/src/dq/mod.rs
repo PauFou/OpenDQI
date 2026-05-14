@@ -6,7 +6,8 @@ use rayon::prelude::*;
 use crate::config::Thresholds;
 use crate::model::{
     DqDimension, DqIssue, EmirRecord, FeedbackRecord, MarginActivityRecord, MarginStateRecord,
-    ReconStatsRecord, ReconciliationRecord, Severity, SftrRecord, SftrTrStateRecord, TrStateRecord,
+    ReconStatsRecord, ReconciliationRecord, RejectionProfile, Severity, SftrRecord,
+    SftrTrStateRecord, TrStateRecord,
 };
 
 mod abnormal_maturity;
@@ -1174,6 +1175,34 @@ pub fn run_all_margin_state_lifecycle(
     let mut issues: Vec<DqIssue> = checks
         .par_iter()
         .flat_map_iter(|c| c.run(current, prior, ctx))
+        .collect();
+    finalize_issues(&mut issues, ctx);
+    issues
+}
+
+// ---- EMIR pre-submission checks (rejection-profile driven) -----
+//
+// Closes the loop: post-TR analytics → rejection_profile.yml →
+// pre-submission scan. Opt-in via `opendqi emir scan --rejection-
+// profile <path>`.
+
+mod pre_submission;
+
+pub use pre_submission::{
+    default_pre_submission_checks, EmirPscLikelyRejectionPattern, EmirPscRepeatedRejection,
+    PreSubmissionCheck,
+};
+
+/// Run every EMIR pre-submission check against the records + profile.
+pub fn run_all_pre_submission(
+    checks: &[Box<dyn PreSubmissionCheck>],
+    records: &[EmirRecord],
+    profile: &RejectionProfile,
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    let mut issues: Vec<DqIssue> = checks
+        .par_iter()
+        .flat_map_iter(|c| c.run(records, profile, ctx))
         .collect();
     finalize_issues(&mut issues, ctx);
     issues

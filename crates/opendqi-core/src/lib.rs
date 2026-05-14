@@ -22,6 +22,7 @@ pub use dq::{default_checks, default_sftr_checks, Check, SftrCheck};
 pub use model::{
     DqDimension, DqIssue, EmirRecord, EvidenceItem, FeedbackRecord, FeedbackType,
     MarginActivityRecord, MarginStateRecord, ReconStatsRecord, ReconciliationRecord, Regime,
-    ScanSummary, Severity, SftrRecord, SftrTrStateRecord, TrActivitySummary, TrStateRecord,
+    RejectionCause, RejectionProfile, RejectionProfileFile, RepeatedRejection, ScanSummary,
+    Severity, SftrRecord, SftrTrStateRecord, TrActivitySummary, TrStateRecord,
 };
 pub use scoring::quality_score;

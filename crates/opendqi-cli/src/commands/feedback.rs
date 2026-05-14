@@ -329,8 +329,9 @@ fn run_analytics(
     yml.push_str(&format!("  total_feedbacks: {}\n", all.len()));
     yml.push_str("  top_causes:\n");
     for (code, n) in top_causes.iter().take(10) {
+        let suggested = suggested_check_for_reason(code);
         yml.push_str(&format!(
-            "    - reason_code: \"{code}\"\n      count: {n}\n      suggested_check: \"pre-submission rule on {code}\"\n"
+            "    - reason_code: \"{code}\"\n      count: {n}\n      suggested_check: \"{suggested}\"\n"
         ));
     }
     if !repeated.is_empty() {
@@ -385,4 +386,26 @@ fn run_analytics(
     );
     println!("Report: {}", out.join("rejection_report.html").display());
     Ok(())
+}
+
+/// Best-effort mapping from TR-side `reason_code` to a canonical
+/// OpenDQI check ID. Used by `rejection_profile.yml` so the
+/// `EMIR.PSC.LIKELY_REJECTION_PATTERN` pre-submission check can flag
+/// matching records on the next scan.
+///
+/// Unknown codes fall back to a free-form sentinel so the profile
+/// stays self-describing — only the canonical IDs are dispatched.
+fn suggested_check_for_reason(code: &str) -> String {
+    let upper = code.trim().to_ascii_uppercase();
+    match upper.as_str() {
+        // Completeness-style ESMA codes (heuristic mapping).
+        "VAL01" | "MISSING_NOTIONAL_CCY" => "EMIR.COMP.NOTIONAL_CURRENCY_MISSING".into(),
+        "VAL02" | "MISSING_NOTIONAL" | "ZERO_NOTIONAL" => "EMIR.ACC.ZERO_NOTIONAL".into(),
+        "VAL03" | "NEGATIVE_NOTIONAL" => "EMIR.ACC.NEGATIVE_NOTIONAL".into(),
+        "VAL05" | "MISSING_VALUATION" => "EMIR.COMP.VALUATION_MISSING".into(),
+        "VAL10" | "MISSING_CP1_LEI" => "EMIR.COMP.COUNTERPARTY_1_MISSING".into(),
+        "VAL11" | "MISSING_CP2_LEI" => "EMIR.COMP.COUNTERPARTY_2_MISSING".into(),
+        "VAL12" | "MISSING_UTI" => "EMIR.COMP.UTI_MISSING".into(),
+        _ => format!("(no canonical check for {code})"),
+    }
 }

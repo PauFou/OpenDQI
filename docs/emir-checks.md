@@ -26,9 +26,11 @@ The catalog is layered:
 Beyond single-batch checks, OpenDQI also ships dedicated TR-layer
 families: **7 TSR** state-health, **5 TAR** activity, **8 MAR**
 margin-activity, **8 MSR** margin-state, **5 lifecycle** (cross-batch),
-**4 feedback**, **3 reconciliation**, and **4 RST** recon-statistics
-(auth.091) checks — see the dedicated docs. **Total live EMIR
-catalog: 133 checks**, plus 62 SFTR counterparts (`docs/sftr-checks.md`).
+**4 feedback**, **3 reconciliation**, **4 RST** recon-statistics
+(auth.091), and **2 PSC** pre-submission (rejection-profile driven,
+auth.092 → next scan) checks — see the dedicated docs. **Total live
+EMIR catalog: 135 checks**, plus 62 SFTR counterparts
+(`docs/sftr-checks.md`).
 
 Severity scale: `info` < `warning` < `high` < `critical`.
 
