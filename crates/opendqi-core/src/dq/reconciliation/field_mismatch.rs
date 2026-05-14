@@ -2,7 +2,9 @@
 //! as mismatched between the two counterparties' submissions.
 
 use crate::dq::{CheckContext, ReconciliationCheck};
-use crate::model::{DqDimension, DqIssue, EmirRecord, ReconciliationRecord, Regime, Severity};
+use crate::model::{
+    DqDimension, DqIssue, EmirRecord, EvidenceItem, ReconciliationRecord, Regime, Severity,
+};
 
 /// Check implementation.
 pub struct EmirFieldMismatch;
@@ -46,7 +48,12 @@ impl ReconciliationCheck for EmirFieldMismatch {
                         uti_disp = uti.unwrap_or("(unknown UTI)"),
                     ),
                     source_file: r.source_file.clone(),
-                    evidence: Vec::new(),
+                    evidence: vec![EvidenceItem {
+                        field: field.clone(),
+                        before: None,
+                        after: None,
+                        source_line: None,
+                    }],
                 });
             }
         }

@@ -1800,7 +1800,7 @@ fn compute_book_reconcile_issues(
                 // Notional amount mismatch.
                 if let (Some(bn), Some(tn)) = (b.notional_amount, t.notional_amount) {
                     if bn != tn {
-                        out.push(brec_issue(
+                        let mut iss = brec_issue(
                             "EMIR.BREC.NOTIONAL_MISMATCH",
                             Severity::High,
                             DqDimension::Accuracy,
@@ -1810,7 +1810,13 @@ fn compute_book_reconcile_issues(
                             Some("notional_amount".into()),
                             Some(format!("book={bn} tsr={tn}")),
                             format!("Notional mismatch on UTI {uti}: book {bn} vs TSR {tn}."),
+                        );
+                        iss.evidence.push(brec_evidence(
+                            "notional_amount",
+                            &bn.to_string(),
+                            &tn.to_string(),
                         ));
+                        out.push(iss);
                     }
                 }
                 // Notional currency mismatch.
@@ -1819,7 +1825,7 @@ fn compute_book_reconcile_issues(
                     t.notional_currency.as_deref(),
                 ) {
                     if !bc.eq_ignore_ascii_case(tc) {
-                        out.push(brec_issue(
+                        let mut iss = brec_issue(
                             "EMIR.BREC.NOTIONAL_CURRENCY_MISMATCH",
                             Severity::Warning,
                             DqDimension::Validity,
@@ -1831,13 +1837,16 @@ fn compute_book_reconcile_issues(
                             format!(
                                 "Notional currency mismatch on UTI {uti}: book {bc} vs TSR {tc}."
                             ),
-                        ));
+                        );
+                        iss.evidence
+                            .push(brec_evidence("notional_currency", bc, tc));
+                        out.push(iss);
                     }
                 }
                 // Valuation mismatch (relative threshold).
                 if let (Some(bv), Some(tv)) = (b.valuation_amount, t.valuation_amount) {
                     if !valuation_within_tolerance(bv, tv) {
-                        out.push(brec_issue(
+                        let mut iss = brec_issue(
                             "EMIR.BREC.VALUATION_MISMATCH",
                             Severity::Warning,
                             DqDimension::Accuracy,
@@ -1849,13 +1858,19 @@ fn compute_book_reconcile_issues(
                             format!(
                                 "Valuation mismatch on UTI {uti}: book {bv} vs TSR {tv} (tolerance {BOOK_VALUATION_TOLERANCE_PCT}%)."
                             ),
+                        );
+                        iss.evidence.push(brec_evidence(
+                            "valuation_amount",
+                            &bv.to_string(),
+                            &tv.to_string(),
                         ));
+                        out.push(iss);
                     }
                 }
                 // Maturity mismatch.
                 if let (Some(bm), Some(tm)) = (b.maturity_date, t.maturity_date) {
                     if bm != tm {
-                        out.push(brec_issue(
+                        let mut iss = brec_issue(
                             "EMIR.BREC.MATURITY_MISMATCH",
                             Severity::High,
                             DqDimension::Accuracy,
@@ -1865,7 +1880,13 @@ fn compute_book_reconcile_issues(
                             Some("maturity_date".into()),
                             Some(format!("book={bm} tsr={tm}")),
                             format!("Maturity mismatch on UTI {uti}: book {bm} vs TSR {tm}."),
+                        );
+                        iss.evidence.push(brec_evidence(
+                            "maturity_date",
+                            &bm.to_string(),
+                            &tm.to_string(),
                         ));
+                        out.push(iss);
                     }
                 }
                 // Status mismatch: book sees the trade as active (no
@@ -1953,6 +1974,18 @@ fn brec_issue(
         message,
         source_file,
         evidence: Vec::new(),
+    }
+}
+
+/// Convenience builder for the `EvidenceItem` carried by every
+/// `EMIR.BREC.*` field-mismatch issue: shows the book-side value
+/// (`before`) versus the TSR-side value (`after`).
+fn brec_evidence(field: &str, book_value: &str, tsr_value: &str) -> opendqi_core::EvidenceItem {
+    opendqi_core::EvidenceItem {
+        field: field.into(),
+        before: Some(book_value.to_owned()),
+        after: Some(tsr_value.to_owned()),
+        source_line: None,
     }
 }
 

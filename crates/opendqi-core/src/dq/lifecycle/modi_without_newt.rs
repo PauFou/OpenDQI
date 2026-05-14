@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use crate::dq::{CheckContext, LifecycleCheck};
-use crate::model::{DqDimension, DqIssue, EmirRecord, Regime, Severity};
+use crate::model::{DqDimension, DqIssue, EmirRecord, EvidenceItem, Regime, Severity};
 
 /// Check implementation.
 pub struct ModiWithoutNewt;
@@ -59,7 +59,12 @@ impl LifecycleCheck for ModiWithoutNewt {
                         "{action} for UTI {uti} but no prior NEWT exists in the history store."
                     ),
                     source_file: r.source_file.clone(),
-                    evidence: Vec::new(),
+                    evidence: vec![EvidenceItem {
+                        field: "action_type".into(),
+                        before: None,
+                        after: Some(action.to_owned()),
+                        source_line: None,
+                    }],
                 });
             }
         }
@@ -95,6 +100,10 @@ mod tests {
         let prior = vec![];
         let issues = ModiWithoutNewt.run(&current, &prior, &CheckContext::now_with_defaults());
         assert_eq!(issues.len(), 1);
+        // Evidence pins down the action that violated the lifecycle.
+        assert_eq!(issues[0].evidence.len(), 1);
+        assert_eq!(issues[0].evidence[0].field, "action_type");
+        assert_eq!(issues[0].evidence[0].after.as_deref(), Some("MODI"));
     }
     #[test]
     fn accepts_modi_when_prior_newt_exists() {

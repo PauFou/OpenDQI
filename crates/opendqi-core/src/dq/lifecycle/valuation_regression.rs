@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 
 use crate::dq::{CheckContext, LifecycleCheck};
-use crate::model::{DqDimension, DqIssue, EmirRecord, Regime, Severity};
+use crate::model::{DqDimension, DqIssue, EmirRecord, EvidenceItem, Regime, Severity};
 
 /// Check implementation.
 pub struct ValuationRegression;
@@ -88,7 +88,12 @@ impl LifecycleCheck for ValuationRegression {
                             prev = prev_ts.to_rfc3339(),
                         ),
                         source_file: r.source_file.clone(),
-                        evidence: Vec::new(),
+                        evidence: vec![EvidenceItem {
+                            field: "valuation_timestamp".into(),
+                            before: Some(prev_ts.to_rfc3339()),
+                            after: Some(cur_ts.to_rfc3339()),
+                            source_line: None,
+                        }],
                     });
                 }
             }
@@ -117,6 +122,11 @@ mod tests {
         }];
         let issues = ValuationRegression.run(&current, &prior, &CheckContext::now_with_defaults());
         assert_eq!(issues.len(), 1);
+        // Evidence carries before/after timestamps.
+        assert_eq!(issues[0].evidence.len(), 1);
+        assert_eq!(issues[0].evidence[0].field, "valuation_timestamp");
+        assert!(issues[0].evidence[0].before.is_some());
+        assert!(issues[0].evidence[0].after.is_some());
     }
     #[test]
     fn accepts_progression() {

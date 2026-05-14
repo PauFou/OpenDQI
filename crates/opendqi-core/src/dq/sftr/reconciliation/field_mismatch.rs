@@ -3,7 +3,9 @@
 
 use super::SftrReconciliationCheck;
 use crate::dq::CheckContext;
-use crate::model::{DqDimension, DqIssue, ReconciliationRecord, Regime, Severity, SftrRecord};
+use crate::model::{
+    DqDimension, DqIssue, EvidenceItem, ReconciliationRecord, Regime, Severity, SftrRecord,
+};
 
 /// Check implementation.
 pub struct SftrFieldMismatch;
@@ -47,7 +49,12 @@ impl SftrReconciliationCheck for SftrFieldMismatch {
                         uti_disp = uti.unwrap_or("(unknown UTI)"),
                     ),
                     source_file: r.source_file.clone(),
-                    evidence: Vec::new(),
+                    evidence: vec![EvidenceItem {
+                        field: field.clone(),
+                        before: None,
+                        after: None,
+                        source_line: None,
+                    }],
                 });
             }
         }

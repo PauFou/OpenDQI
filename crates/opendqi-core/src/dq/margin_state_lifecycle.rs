@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use crate::dq::CheckContext;
-use crate::model::{DqDimension, DqIssue, MarginStateRecord, Regime, Severity};
+use crate::model::{DqDimension, DqIssue, EvidenceItem, MarginStateRecord, Regime, Severity};
 
 /// A cross-batch EMIR MSR lifecycle check.
 pub trait MarginStateLifecycleCheck: Send + Sync {
@@ -98,7 +98,7 @@ impl MarginStateLifecycleCheck for EmirMsrLfcCollateralMarketValueRegression {
             if cf < pf {
                 let drop = (pf - cf).abs() / pf.abs();
                 if drop > CMV_REGRESSION_PCT {
-                    out.push(issue(
+                    let mut iss = issue(
                         self.id(),
                         self.severity(),
                         self.dimension(),
@@ -111,7 +111,14 @@ impl MarginStateLifecycleCheck for EmirMsrLfcCollateralMarketValueRegression {
                             drop * 100.0
                         ),
                         c.source_file.clone(),
-                    ));
+                    );
+                    iss.evidence.push(EvidenceItem {
+                        field: "collateral_market_value".into(),
+                        before: Some(prev.to_string()),
+                        after: Some(curr.to_string()),
+                        source_line: None,
+                    });
+                    out.push(iss);
                 }
             }
         }
