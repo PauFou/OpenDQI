@@ -198,4 +198,3 @@ impl IntoResponse for AppError {
         (self.status, format!("{}: {}\n", self.status, self.message)).into_response()
     }
 }
-
