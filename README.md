@@ -41,7 +41,7 @@ The auth.* message catalog and our parser coverage are tracked in [`docs/auth-me
 - **EMIR and SFTR submission scanning** (`opendqi {emir,sftr} scan`) over CSV (with YAML mapping) or ISO 20022 XML (`auth.030.001.03` for EMIR, `auth.052.001.02` for SFTR), with optional `--xsd` validation via `xmllint`.
 - **TR feedback ingestion** (`opendqi {emir,sftr} feedback`) over `auth.092` / `auth.080` files, cross-referenced against the local history store, with a top-level Open/Resolved/Stale workflow (`opendqi feedback list/resolve/stale`).
 - **Local SQLite history store** (opt-in via `--store`) that persists submissions, feedback rows, and reconciliation rows, and enables cross-batch lifecycle checks (MODI/ETRM without a prior NEWT, duplicate NEWT, valuation regression / after-termination across scans).
-- **151 reproducible data-quality checks** today, layered as 129 single-batch (89 EMIR + 40 SFTR) + 8 lifecycle + 8 feedback + 6 reconciliation. Catalogues: [`docs/emir-checks.md`](docs/emir-checks.md), [`docs/sftr-checks.md`](docs/sftr-checks.md), [`docs/lifecycle-checks.md`](docs/lifecycle-checks.md), [`docs/feedback-checks.md`](docs/feedback-checks.md), [`docs/reconciliation-checks.md`](docs/reconciliation-checks.md).
+- **195 reproducible data-quality checks** today across EMIR (133) and SFTR (62). Layered as single-batch validity / completeness / consistency / accuracy / uniqueness / timeliness, cross-batch lifecycle, MAR/MSR margin reports, TSR / TAR / feedback / reconciliation / book-vs-TSR, plus the new `EMIR.RST.*` reconciliation statistics family (auth.091). Catalogues: [`docs/emir-checks.md`](docs/emir-checks.md), [`docs/sftr-checks.md`](docs/sftr-checks.md), [`docs/lifecycle-checks.md`](docs/lifecycle-checks.md), [`docs/feedback-checks.md`](docs/feedback-checks.md), [`docs/reconciliation-checks.md`](docs/reconciliation-checks.md), [`docs/emir-recon-stats.md`](docs/emir-recon-stats.md).
 - **Deterministic outputs**: `summary.json`, `issues.csv`, `report.html`, and dedicated artefacts per layer (e.g. `tr_state_issues.csv` planned for TSR scans).
 - **Runs locally by default**; no network calls, no cloud dependency, no SWIFT-licensed XSD redistribution.
 
@@ -114,12 +114,13 @@ Public summary; see [`docs/positioning.md`](docs/positioning.md) for context.
 - **Phase 3** — Rejection analytics (`feedback analytics`). ✅
 - **Phase 4** — Combined `tr-audit` command. ✅
 - **Phase 5** — Book vs TSR reconciliation (`book-reconcile`). ✅
-- **Phase 6** — SFTR equivalent modules.
+- **Phase 6** — SFTR equivalent modules. ✅ (`opendqi sftr scan/feedback/reconcile/tr-state-scan/tr-activity-scan/tr-audit/book-reconcile/normalize` — 62 SFTR checks across submission, TSR, TAR, feedback, reconciliation, and book-vs-TSR layers, including margin-lending state/activity.)
 - **Phase 7** — Local web UI. ✅ (`opendqi desktop` opens http://127.0.0.1:7878 — see [`docs/desktop-web-ui.md`](docs/desktop-web-ui.md).)
+- **Phase 8** — EMIR `auth.091` reconciliation statistics (`recon-stats`) ✅, CLAUDE.md model completeness (`source_system`, `security_identifier`, `evidence`, `severity_overrides`) ✅.
 
 ## Status
 
-OpenDQI is in early development. The first supported regime is EMIR (CLI). SFTR is implemented for submission scanning and feedback; full TSR/TAR coverage is on the SFTR roadmap.
+OpenDQI is in active development. EMIR coverage spans submissions, TSR (`auth.107`), TAR (`auth.030`), feedback (`auth.092`), reconciliation (`auth.106`), MAR (`auth.108`), MSR (`auth.109`), and reconciliation statistics (`auth.091`). SFTR coverage spans submissions (`auth.052`), TSR (`auth.079`), TAR replay, feedback (`auth.080`), reconciliation (`auth.083`), and book-vs-TSR. Margin lending (MGLD) integrated into TAR/TSR layers.
 
 - **CI** — `cargo fmt --check`, `cargo clippy -D warnings`, `cargo build`, `cargo test --workspace` on Ubuntu + macOS for every push and PR to `main`.
 - **Security audit** — `cargo-deny` runs `check advisories bans licenses sources` daily and on every push/PR.

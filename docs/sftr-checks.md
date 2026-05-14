@@ -1,6 +1,9 @@
 # SFTR data-quality checks
 
-OpenDQI ships **40 single-batch SFTR checks** (this document), plus
+OpenDQI ships **44 single-batch SFTR checks** (this document — including
+the new `SFTR.COMP.SECURITY_ID_MISSING` from the CLAUDE.md model
+completeness pass), plus **18 post-TR checks** (6 TSR + 5 TAR + 4
+feedback + 3 reconciliation) for a live total of **62 SFTR checks**, plus
 SFTR post-TR intelligence layers — `auth.080` feedback,
 `auth.083` reconciliation, `auth.079` TSR, `auth.052` TAR,
 `auth.052 + auth.079 + auth.080` audit, and CSV-vs-TSR

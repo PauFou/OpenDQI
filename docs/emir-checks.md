@@ -23,10 +23,12 @@ The catalog is layered:
   families), magnitude sanity (notional > 10^15), and MODI/CORR
   UTI-preservation consistency.
 
-Beyond single-batch checks, OpenDQI also ships **8 lifecycle**,
-**8 feedback**, and **6 reconciliation** checks — see the dedicated
-docs. Total catalog: **89 + 8 + 8 + 6 = 111 EMIR checks**, plus the
-SFTR counterparts.
+Beyond single-batch checks, OpenDQI also ships dedicated TR-layer
+families: **7 TSR** state-health, **5 TAR** activity, **8 MAR**
+margin-activity, **8 MSR** margin-state, **5 lifecycle** (cross-batch),
+**4 feedback**, **3 reconciliation**, and **4 RST** recon-statistics
+(auth.091) checks — see the dedicated docs. **Total live EMIR
+catalog: 133 checks**, plus 62 SFTR counterparts (`docs/sftr-checks.md`).
 
 Severity scale: `info` < `warning` < `high` < `critical`.
 

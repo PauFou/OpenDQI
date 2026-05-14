@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (CLAUDE.md model completeness + auth.091) — Phase 10/11/12/13
+
+- **`EmirRecord.source_system`** (Option<String>) — CSV mapping key, Parquet column, full round-trip. Populated for downstream provenance tracking.
+- **`SftrRecord.security_identifier`** (Option<String>) — distinct from the existing `collateral_isin`; captures the principal SFT leg (security being lent / borrowed). Wired through the SFTR ISO 20022 parser (`LnData/{SctyLndg,BsbSctyTrad,Repo}/{Sctys/Id,SctyId,ISIN}`) plus a new check **`SFTR.COMP.SECURITY_ID_MISSING`** (High) firing for `SLEB` / `BSB` records lacking the field.
+- **`Thresholds.severity_overrides: BTreeMap<String, Severity>`** — YAML-driven per-check-id severity overrides applied at a single chokepoint via the new `finalize_issues(&mut [DqIssue], ctx)` helper called from every `run_all_*`. Eliminates 3 duplicate local `sort_issues` definitions previously living in `cli/emir.rs`, `cli/sftr.rs`, and `server/scan.rs`.
+- **`DqIssue.evidence: Vec<EvidenceItem>`** + new `EvidenceItem { field, before?, after?, source_line? }` struct (CLAUDE.md spec). 213 construction sites mechanically updated; 2 high-value checks populate real evidence (`EMIR.UNI.DUPLICATE_UTI` — duplicate `record_id` list; `EMIR.CON.MODI_PRESERVES_UTI` — before/after UTI pair). New `evidence_json` column in `issues.csv` (JSON-encoded).
+- **`opendqi emir recon-stats <auth091.xml>` command + 4 new `EMIR.RST.*` checks** (auth.091 Reconciliation Statistics — the final EMIR priority message from CLAUDE.md):
+  - `EMIR.RST.PAIRING_RATE_LOW` (high, default floor 0.85)
+  - `EMIR.RST.RECON_RATE_LOW` (high, default floor 0.70)
+  - `EMIR.RST.OUTSTANDING_UNPAIRED_HIGH` (warning, default ceiling 1000)
+  - `EMIR.RST.PAIRING_RATE_TREND_DOWN` (warning, ≥ 5pp drop vs `--prior` batch)
+  New `ReconStatsRecord` model, dedicated XML parser (`crates/opendqi-xml/src/emir_recon_stats.rs`), new `ReconStatsThresholds` config, synthetic fixture `examples/emir/recon_stats/auth091-sample.xml`, and `docs/emir-recon-stats.md`.
+- **CI hardening (Phases 9.5 / 9.6)** — `cargo-deny` workflow (advisories / bans / licenses / sources, daily + on push/PR), CI + security-audit badges in README, `scripts/preflight.sh` strict on `cargo-deny`, opt-in pre-push git hook via `scripts/install-hooks.sh`.
+- Catalog: **173 → 195 checks** (+22, mainly via reorganised SFTR check families and 4 new `EMIR.RST.*`). EMIR: 133. SFTR: 62.
+
 ### Added (Book vs TSR reconciliation) — Phase 5
 
 - New CLI subcommand `opendqi emir book-reconcile --book <CSV> --tsr <auth.107.xml> --mapping <YAML> --out <DIR>`. Reuses the existing EMIR CSV ingestion + `CsvMapping` + TSR adapter as-is — no new crate, no new trait.
