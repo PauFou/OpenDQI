@@ -7,6 +7,7 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 description = "OpenDQI local-first history store (SQLite) for cross-batch lifecycle checks."
+publish = false
 
 [dependencies]
 opendqi-core = { path = "../opendqi-core" }

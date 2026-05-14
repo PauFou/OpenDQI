@@ -12,7 +12,12 @@
 version = 2
 # RustSec advisories: any reported vulnerability fails the run.
 # Unmaintained / unsound crates are warned-on (default in v2).
-ignore = []
+ignore = [
+    # paste is unmaintained but has no safe drop-in replacement; it is
+    # pulled transitively by parquet v53 (via arrow / arrow-array).
+    # We accept the risk until parquet drops the dependency.
+    { id = "RUSTSEC-2024-0436", reason = "transitive via parquet v53; no upstream replacement available" },
+]
 
 [licenses]
 version = 2
@@ -30,6 +35,10 @@ allow = [
     "Zlib",
     "CDLA-Permissive-2.0",
     "MPL-2.0",
+    # CC0-1.0 is a public-domain dedication; functionally compatible
+    # with our Apache-2.0 license posture. Pulled in by e.g. `notify`
+    # / `tiny-keccak`-style transitive deps.
+    "CC0-1.0",
 ]
 confidence-threshold = 0.93
 exceptions = []
@@ -41,6 +50,11 @@ exceptions = []
 multiple-versions = "warn"
 # No wildcard versions allowed in our Cargo.toml — discipline.
 wildcards = "deny"
+# Workspace-internal path deps (e.g. `opendqi-core = { path = ".." }`)
+# are technically version="*" but resolve through the workspace and
+# are never published as wildcards. Allow them; still deny wildcards
+# on external crates.
+allow-wildcard-paths = true
 # Show full dependency tree on hits.
 highlight = "all"
 

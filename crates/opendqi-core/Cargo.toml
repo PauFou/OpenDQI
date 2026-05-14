@@ -7,6 +7,7 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 description = "OpenDQI core: domain model, DQ checks, scoring, and shared types."
+publish = false
 
 [dependencies]
 serde.workspace = true

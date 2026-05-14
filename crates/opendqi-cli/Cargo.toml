@@ -7,6 +7,7 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 description = "OpenDQI command-line interface."
+publish = false
 
 [[bin]]
 name = "opendqi"
