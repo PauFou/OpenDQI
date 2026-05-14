@@ -486,6 +486,16 @@ pub fn default_sftr_checks() -> Vec<Box<dyn SftrCheck>> {
         Box::new(sftr::margin_activity::SftrMarMaruRequiresValueOrHaircut),
         Box::new(sftr::margin_activity::SftrMarMaruRequiresPortfolio),
         Box::new(sftr::margin_activity::SftrMarMgldHaircutOutOfRange),
+        // ---- Parity push vers EMIR (9) ----
+        Box::new(sftr::parity::SftrAbnormalMaturity),
+        Box::new(sftr::parity::SftrLoanAbnormalMagnitude),
+        Box::new(sftr::parity::SftrEventBeforeExecution),
+        Box::new(sftr::parity::SftrReportingBeforeExecution),
+        Box::new(sftr::parity::SftrMaturityInPast),
+        Box::new(sftr::parity::SftrTerminationAfterMaturity),
+        Box::new(sftr::parity::SftrModiPreservesUti),
+        Box::new(sftr::parity::SftrActionEventCompatibility),
+        Box::new(sftr::parity::SftrLateReportingSettlement),
     ]
 }
 

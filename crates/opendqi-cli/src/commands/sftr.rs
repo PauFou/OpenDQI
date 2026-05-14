@@ -31,13 +31,18 @@ const CHECK_XSD_TOOL_ERROR: &str = "SFTR.FMT.XSD_TOOL_ERROR";
 
 #[derive(Subcommand)]
 pub enum SftrAction {
-    /// Run the full DQ scan over an SFTR XML input (file or directory).
+    /// Run the full DQ scan over an SFTR XML or CSV input (file or
+    /// directory).
     Scan {
-        /// Path to an XML file or a directory containing XML files.
+        /// Path to an XML/CSV file or a directory containing such files.
         input: PathBuf,
         /// Directory where reports are written. Created if absent.
         #[arg(long)]
         out: PathBuf,
+        /// Path to the YAML mapping describing CSV columns. Required
+        /// when the input set contains at least one CSV file.
+        #[arg(long)]
+        mapping: Option<PathBuf>,
         /// Optional YAML thresholds configuration.
         #[arg(long)]
         config: Option<PathBuf>,
@@ -188,6 +193,7 @@ pub fn run(action: SftrAction) -> Result<ExitCode> {
         SftrAction::Scan {
             input,
             out,
+            mapping,
             config,
             xsd,
             store,
@@ -195,6 +201,7 @@ pub fn run(action: SftrAction) -> Result<ExitCode> {
             run_scan(
                 &input,
                 &out,
+                mapping.as_deref(),
                 config.as_deref(),
                 xsd.as_deref(),
                 store.as_deref(),
@@ -254,6 +261,7 @@ pub fn run(action: SftrAction) -> Result<ExitCode> {
 fn run_scan(
     input: &Path,
     out: &Path,
+    mapping_path: Option<&Path>,
     config_path: Option<&Path>,
     xsd_path: Option<&Path>,
     store_path: Option<&Path>,
@@ -272,9 +280,23 @@ fn run_scan(
 
     let inputs = discover_emir_inputs(input)?;
     if inputs.is_empty() {
-        return Err(anyhow!("no XML inputs found at {}", input.display()));
+        return Err(anyhow!("no inputs found at {}", input.display()));
     }
     info!(count = inputs.len(), "discovered inputs");
+
+    let has_csv = inputs.iter().any(|p| has_extension(p, "csv"));
+    let csv_mapping = match (has_csv, mapping_path) {
+        (true, Some(mp)) => Some(
+            CsvMapping::from_path(mp)
+                .with_context(|| format!("loading CSV mapping {}", mp.display()))?,
+        ),
+        (true, None) => {
+            return Err(anyhow!(
+                "input set contains CSV files but --mapping was not provided"
+            ));
+        }
+        (false, _) => None,
+    };
 
     let validator = xsd_path.map(|p| ExternalXmllintValidator::new(p.to_path_buf()));
 
@@ -315,8 +337,19 @@ fn run_scan(
                     }
                 }
             }
+        } else if has_extension(path, "csv") {
+            let mapping = csv_mapping
+                .as_ref()
+                .expect("csv_mapping is Some when at least one CSV is in the input set");
+            let mut csv_records = read_sftr_csv(path, mapping)?;
+            info!(
+                file = %path.display(),
+                records = csv_records.len(),
+                "loaded SFTR CSV",
+            );
+            records.append(&mut csv_records);
         } else {
-            warn!(path = %path.display(), "unsupported file extension; only XML is supported by opendqi sftr scan");
+            warn!(path = %path.display(), "unsupported file extension; only XML and CSV are supported by opendqi sftr scan");
         }
     }
 

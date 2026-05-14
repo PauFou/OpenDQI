@@ -1,0 +1,35 @@
+# Mapping for the synthetic SFTR tier-2 / parity fixture that
+# exercises the 9 SFTR.* parity-push checks plus a handful of
+# pre-existing single-batch checks for breadth.
+
+fields:
+  uti: trade_uti
+  prior_uti: prior_uti
+  action_type: action
+  event_type: event
+  entity_responsible_for_reporting: err_lei
+  counterparty_1: cpty1_lei
+  counterparty_2: cpty2_lei
+  sft_type: sft_type
+  master_agreement_type: ma_type
+  master_agreement_version: ma_version
+  loan_value: loan_amount
+  loan_currency: loan_ccy
+  collateral_value: coll_amount
+  collateral_currency: coll_ccy
+  haircut: haircut
+  reuse_indicator: reuse
+  rebate_rate: rebate
+  lending_fee: lending_fee
+  execution_timestamp: exec_ts
+  event_timestamp: event_ts
+  reporting_timestamp: report_ts
+  effective_date: effective
+  maturity_date: maturity
+  termination_date: terminated_on
+  settlement_date: settlement
+  collateral_portfolio_code: portfolio_code
+  collateral_isin: coll_isin
+
+date_format: "%Y-%m-%d"
+datetime_format: "%Y-%m-%dT%H:%M:%S%.fZ"

@@ -98,13 +98,21 @@ audit pass should:
 | `event_timestamp` | — (used contextually by TAR) |
 | `reporting_timestamp` | `SFTR.TIM.LATE_REPORTING` |
 | `effective_date` | `SFTR.CON.MATURITY_BEFORE_EFFECTIVE` |
-| `maturity_date` | `SFTR.CON.MATURITY_BEFORE_EFFECTIVE`, TSR `ACTIVE_PAST_MATURITY` |
-| `termination_date` | `SFTR.CON.NEWT_FORBIDS_TERMINATION_DATE`, `SFTR.CON.ETRM_REQUIRES_TERMINATION_DATE` |
-| `settlement_date` | `SFTR.CON.SETTLEMENT_BEFORE_EXECUTION` |
-| `collateral_portfolio_code` | `SFTR.CON.COLU_REQUIRES_PORTFOLIO`, `SFTR.CON.REUSE_INDICATOR_REQUIRES_PORTFOLIO` ¹ |
-| `collateral_isin` | `SFTR.VLD.ISIN_COLLATERAL` |
+| `maturity_date` | `SFTR.CON.MATURITY_BEFORE_EFFECTIVE`, `SFTR.ACC.ABNORMAL_MATURITY` ², `SFTR.CON.MATURITY_IN_PAST` ², `SFTR.CON.TERMINATION_AFTER_MATURITY` ², TSR `ACTIVE_PAST_MATURITY` |
+| `termination_date` | `SFTR.CON.NEWT_FORBIDS_TERMINATION_DATE`, `SFTR.CON.ETRM_REQUIRES_TERMINATION_DATE`, `SFTR.CON.TERMINATION_AFTER_MATURITY` ², filter for `SFTR.CON.MATURITY_IN_PAST` ² |
+| `settlement_date` | `SFTR.CON.SETTLEMENT_BEFORE_EXECUTION`, `SFTR.TIM.LATE_REPORTING_SETTLEMENT` ² |
+| `collateral_portfolio_code` | `SFTR.CON.COLU_REQUIRES_PORTFOLIO`, `SFTR.CON.REUSE_INDICATOR_REQUIRES_PORTFOLIO` ¹, `SFTR.MAR.MARU_REQUIRES_PORTFOLIO` ² |
+| `collateral_isin` | `SFTR.VLD.ISIN_COLLATERAL`, `SFTR.MSR.MGLD_MISSING_ISIN` ² |
+| `loan_value` (revisited) | also `SFTR.ACC.LOAN_ABNORMAL_MAGNITUDE` ², `SFTR.MAR.MGLD_NEEDS_LOAN_VALUE` ², `SFTR.MAR.MARU_REQUIRES_VALUE_OR_HAIRCUT` ² |
+| `prior_uti` (revisited) | also `SFTR.CON.MODI_PRESERVES_UTI` ² |
+| `action_type` (revisited) | also `SFTR.CON.ACTION_EVENT_COMPATIBILITY` ², `SFTR.MAR.MARU_REQUIRES_VALUE_OR_HAIRCUT` ², `SFTR.MAR.MARU_REQUIRES_PORTFOLIO` ² |
+| `event_type` (revisited) | also `SFTR.CON.ACTION_EVENT_COMPATIBILITY` ² |
+| `execution_timestamp` (revisited) | also `SFTR.CON.EVENT_BEFORE_EXECUTION` ², `SFTR.CON.REPORTING_BEFORE_EXECUTION` ² |
+| `event_timestamp` (revisited) | also `SFTR.CON.EVENT_BEFORE_EXECUTION` ² |
+| `reporting_timestamp` (revisited) | also `SFTR.CON.REPORTING_BEFORE_EXECUTION` ², `SFTR.TIM.LATE_REPORTING_SETTLEMENT` ² |
 
 ¹ Added during the Phase 6 coverage audit.
+² Added by the Phase 7 SFTR margin layer (`SFTR.MAR.*` / `SFTR.MSR.*`) or by the Phase 7.6 parity push (`SFTR.ACC.*` / `SFTR.CON.*` / `SFTR.TIM.LATE_REPORTING_SETTLEMENT`). See [`emir-vs-sftr-parity.md`](emir-vs-sftr-parity.md) and [`sftr-margin-lending.md`](sftr-margin-lending.md).
 
 ## TrStateRecord (EMIR TSR, `auth.107`)
 
@@ -156,12 +164,45 @@ audit pass should:
 | `initial_margin_posted_current`, `initial_margin_collected_current` | `EMIR.MSR.INITIAL_MARGIN_NEGATIVE`, `EMIR.MSR.IM_POSTED_VS_COLLECTED_IMBALANCE`, `EMIR.MSR.MARGIN_MISSING_FOR_OUTSTANDING` |
 | `variation_margin_posted_current`, `variation_margin_collected_current` | `EMIR.MSR.VARIATION_MARGIN_NEGATIVE`, `EMIR.MSR.MARGIN_MISSING_FOR_OUTSTANDING` |
 | `margin_currency` | — (presence-only) |
-| `collateral_market_value` | `EMIR.MSR.COLLATERAL_MARKET_VALUE_NEGATIVE` |
-| `haircut_applied` | `EMIR.MSR.HAIRCUT_OUT_OF_RANGE` |
-| `collateralization_category` | `EMIR.MSR.COLLATERALIZATION_CATEGORY_ENUM` |
+| `collateral_market_value` | `EMIR.MSR.COLLATERAL_MARKET_VALUE_NEGATIVE`, `EMIR.MSR.LFC.COLLATERAL_MARKET_VALUE_REGRESSION` (cross-batch) |
+| `haircut_applied` | `EMIR.MSR.HAIRCUT_OUT_OF_RANGE`, `EMIR.MSR.LFC.HAIRCUT_DRIFT` (cross-batch) |
+| `collateralization_category` | `EMIR.MSR.COLLATERALIZATION_CATEGORY_ENUM`, `EMIR.MSR.LFC.CATEGORY_CHANGED` (cross-batch) |
+
+## Cross-batch lifecycle layer (Phase 7)
+
+The Phase 7 lifecycle layer adds drift detection across consecutive
+snapshots — see [`lifecycle-cross-batch.md`](lifecycle-cross-batch.md).
+Field coverage delta:
+
+- `TrStateRecord.uti` (drop detection) → `EMIR.TST.LFC.UTI_DROPPED_WITHOUT_TERMINATION`.
+- `TrStateRecord.valuation_amount` → `EMIR.TST.LFC.VALUATION_REGRESSION`.
+- `TrStateRecord.maturity_date` → `EMIR.TST.LFC.MATURITY_CHANGED`.
+- `TrStateRecord.collateral_portfolio_code` → `EMIR.TST.LFC.COLLATERAL_PORTFOLIO_CHANGED`.
+- `SftrTrStateRecord.uti` → `SFTR.TST.LFC.UTI_DROPPED_WITHOUT_TERMINATION`.
+- `SftrTrStateRecord.collateral_value` → `SFTR.TST.LFC.COLLATERAL_VALUE_REGRESSION`.
+- `SftrTrStateRecord.haircut` → `SFTR.TST.LFC.HAIRCUT_CHANGED`.
+- `MarginActivityRecord.collateral_portfolio_code` → `EMIR.MAR.LFC.PORTFOLIO_GAP`.
+- `MarginActivityRecord.reporting_timestamp` → `EMIR.MAR.LFC.RECURRING_LATE_MARGIN`.
+- `MarginActivityRecord.initial_margin_posted` → `EMIR.MAR.LFC.NEGATIVE_TREND`.
 
 ## Roadmap
 
 Fields marked "—" should grow checks as data shows up. The current
 gaps are intentional: every check we ship is backed by either a real
 ESMA validation rule or a clear data-quality intuition.
+
+## EMIR-only derivative-specific fields (no SFTR analog)
+
+These fields exist on `EmirRecord` but have **no `SftrRecord`
+equivalent by construction** — SFTs are not derivatives. They are
+covered by EMIR checks and the asymmetry is documented in
+[`emir-vs-sftr-parity.md`](emir-vs-sftr-parity.md):
+
+`delta`, `gamma`, `vega`, `leg2_notional_amount`,
+`leg2_notional_currency`, `leg1_payment_frequency`,
+`leg2_payment_frequency`, `mtm_value_change`, `clearing_ccp_lei`,
+`clearing_status`, `collateralisation_category`,
+`commercial_or_treasury_financing`, `reporting_obligation_indicator`,
+`corporate_sector`, `valuation_type`, `trading_capacity`,
+`intragroup_indicator` (in the EMIR sense), `hedging_indicator`,
+`nature` (NFC/FC), `product_id`, `underlying_id`, `asset_class`.
