@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic auth.091 (EMIR Reconciliation Statistics) sample.
+  Schema follows the conventions documented in
+  docs/emir-recon-stats.md until the official ESMA XSD is integrated.
+  Four counterparties illustrate every EMIR.RST.* check:
+    - LEI-COUNTERPARTY-001: healthy (pairing 0.95 / recon 0.85).
+    - LEI-COUNTERPARTY-002: pairing rate below threshold (0.70).
+    - LEI-COUNTERPARTY-003: reconciliation rate below threshold (0.55).
+    - LEI-COUNTERPARTY-004: outstanding unpaired count breach (1500).
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.091.001.01">
+  <RcncltnSttstcsRpt>
+    <Hdr>
+      <RptgDt>2026-05-13</RptgDt>
+    </Hdr>
+    <ReconStat>
+      <RptgDt>2026-05-13</RptgDt>
+      <CtrPty><LEI>LEI-COUNTERPARTY-001</LEI></CtrPty>
+      <PairgRate>0.9500</PairgRate>
+      <RcncltnRate>0.8500</RcncltnRate>
+      <OutsdngPaired>10000</OutsdngPaired>
+      <OutsdngUnpaired>500</OutsdngUnpaired>
+    </ReconStat>
+    <ReconStat>
+      <RptgDt>2026-05-13</RptgDt>
+      <CtrPty><LEI>LEI-COUNTERPARTY-002</LEI></CtrPty>
+      <PairgRate>0.7000</PairgRate>
+      <RcncltnRate>0.8000</RcncltnRate>
+      <OutsdngPaired>7000</OutsdngPaired>
+      <OutsdngUnpaired>200</OutsdngUnpaired>
+    </ReconStat>
+    <ReconStat>
+      <RptgDt>2026-05-13</RptgDt>
+      <CtrPty><LEI>LEI-COUNTERPARTY-003</LEI></CtrPty>
+      <PairgRate>0.8800</PairgRate>
+      <RcncltnRate>0.5500</RcncltnRate>
+      <OutsdngPaired>8800</OutsdngPaired>
+      <OutsdngUnpaired>120</OutsdngUnpaired>
+    </ReconStat>
+    <ReconStat>
+      <RptgDt>2026-05-13</RptgDt>
+      <CtrPty><LEI>LEI-COUNTERPARTY-004</LEI></CtrPty>
+      <PairgRate>0.9100</PairgRate>
+      <RcncltnRate>0.8200</RcncltnRate>
+      <OutsdngPaired>15000</OutsdngPaired>
+      <OutsdngUnpaired>1500</OutsdngUnpaired>
+    </ReconStat>
+  </RcncltnSttstcsRpt>
+</Document>

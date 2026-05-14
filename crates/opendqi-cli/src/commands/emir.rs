@@ -10,12 +10,12 @@ use clap::Subcommand;
 use opendqi_core::dq::{
     default_checks, default_feedback_checks, default_lifecycle_checks,
     default_margin_activity_checks, default_margin_activity_lifecycle_checks,
-    default_margin_state_checks, default_margin_state_lifecycle_checks,
+    default_margin_state_checks, default_margin_state_lifecycle_checks, default_recon_stats_checks,
     default_reconciliation_checks, default_tr_activity_checks, default_tr_state_checks,
     default_tr_state_lifecycle_checks, finalize_issues, run_all, run_all_feedback,
     run_all_lifecycle, run_all_margin_activity, run_all_margin_state,
-    run_all_margin_state_lifecycle, run_all_reconciliation, run_all_tr_activity, run_all_tr_state,
-    run_all_tr_state_lifecycle, sort_issues, CheckContext,
+    run_all_margin_state_lifecycle, run_all_recon_stats, run_all_reconciliation,
+    run_all_tr_activity, run_all_tr_state, run_all_tr_state_lifecycle, sort_issues, CheckContext,
 };
 use opendqi_core::{
     DqDimension, DqIssue, EmirRecord, MarginActivityRecord, MarginStateRecord, Regime, ScanSummary,
@@ -28,8 +28,8 @@ use opendqi_io::{
 use opendqi_report::{write_issues_csv, write_report_html, write_summary_json};
 use opendqi_xml::{
     check_wellformedness, read_emir_feedback_xml, read_emir_mar_xml, read_emir_msr_xml,
-    read_emir_reconciliation_xml, read_emir_tr_state_xml, read_emir_xml, ExternalXmllintValidator,
-    XsdValidator, XsdViolation,
+    read_emir_recon_stats_xml, read_emir_reconciliation_xml, read_emir_tr_state_xml, read_emir_xml,
+    ExternalXmllintValidator, XsdValidator, XsdViolation,
 };
 use tracing::{info, warn};
 
@@ -224,6 +224,27 @@ pub enum EmirAction {
         #[arg(long)]
         out: PathBuf,
     },
+    /// Ingest an EMIR Reconciliation Statistics report (ISO 20022
+    /// `auth.091`) and produce `EMIR.RST.*` issues: low pairing /
+    /// reconciliation rate, outstanding unpaired ceiling breach, and
+    /// (optional) batch-over-batch pairing rate trend. Outputs
+    /// `summary.json`, `recon_stats_issues.csv`,
+    /// `recon_stats_report.html`. See `docs/emir-recon-stats.md`.
+    ReconStats {
+        /// Path to the `auth.091` XML file.
+        input: PathBuf,
+        /// Optional path to a previous `auth.091` XML — when set, the
+        /// trend check fires when the pairing rate drops by ≥ 5pp
+        /// versus the prior batch (per counterparty).
+        #[arg(long)]
+        prior: Option<PathBuf>,
+        /// Optional config YAML overriding default thresholds.
+        #[arg(long)]
+        config: Option<PathBuf>,
+        /// Directory where reports are written.
+        #[arg(long)]
+        out: PathBuf,
+    },
     /// Normalize EMIR XML/CSV input into a canonical Parquet file
     /// (Snappy-compressed). Schema is stable and analytics-friendly
     /// (DuckDB / Polars / PyArrow). See `docs/parquet-normalize.md`.
@@ -307,6 +328,15 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
         }
         EmirAction::MsrScan { input, store, out } => {
             run_msr_scan(&input, store.as_deref(), &out)?;
+            Ok(ExitCode::SUCCESS)
+        }
+        EmirAction::ReconStats {
+            input,
+            prior,
+            config,
+            out,
+        } => {
+            run_recon_stats(&input, prior.as_deref(), config.as_deref(), &out)?;
             Ok(ExitCode::SUCCESS)
         }
         EmirAction::Normalize {
@@ -713,6 +743,102 @@ fn build_feedback_summary(
         started_at,
         finished_at,
     }
+}
+
+fn run_recon_stats(
+    input: &Path,
+    prior_path: Option<&Path>,
+    config_path: Option<&Path>,
+    out: &Path,
+) -> Result<()> {
+    let started_at = Utc::now();
+
+    let thresholds = match config_path {
+        Some(p) => {
+            let s = std::fs::read_to_string(p)
+                .with_context(|| format!("reading config {}", p.display()))?;
+            serde_yaml::from_str(&s).with_context(|| format!("parsing config {}", p.display()))?
+        }
+        None => Thresholds::default(),
+    };
+
+    let outcome = read_emir_recon_stats_xml(input)
+        .with_context(|| format!("reading auth.091 file {}", input.display()))?;
+    info!(
+        file = %input.display(),
+        records = outcome.records.len(),
+        format_issues = outcome.issues.len(),
+        "loaded EMIR auth.091 XML",
+    );
+
+    let prior: Vec<opendqi_core::ReconStatsRecord> = if let Some(p) = prior_path {
+        let prior_outcome = read_emir_recon_stats_xml(p)
+            .with_context(|| format!("reading prior auth.091 file {}", p.display()))?;
+        info!(
+            records = prior_outcome.records.len(),
+            "loaded prior auth.091"
+        );
+        prior_outcome.records
+    } else {
+        Vec::new()
+    };
+
+    let mut issues: Vec<DqIssue> = outcome.issues;
+
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds,
+        today: now.date_naive(),
+        now,
+    };
+
+    let rst_issues = run_all_recon_stats(
+        &default_recon_stats_checks(),
+        &outcome.records,
+        &prior,
+        &ctx,
+    );
+    info!(rst_issues = rst_issues.len(), "recon-stats checks run");
+    issues.extend(rst_issues);
+    finalize_issues(&mut issues, &ctx);
+
+    let inputs = vec![input.to_path_buf()];
+    let sources = vec![input.to_string_lossy().into_owned()];
+    let summary = build_feedback_summary(
+        outcome.records.len(),
+        &issues,
+        &inputs,
+        started_at,
+        Utc::now(),
+    );
+
+    std::fs::create_dir_all(out)
+        .with_context(|| format!("creating output directory {}", out.display()))?;
+    write_summary_json(&out.join("summary.json"), &summary)?;
+    write_issues_csv(&out.join("recon_stats_issues.csv"), &issues)?;
+    write_report_html(
+        &out.join("recon_stats_report.html"),
+        &summary,
+        &issues,
+        &sources,
+    )?;
+
+    let critical = summary
+        .issues_by_severity
+        .get(&Severity::Critical)
+        .copied()
+        .unwrap_or(0);
+    let high = summary
+        .issues_by_severity
+        .get(&Severity::High)
+        .copied()
+        .unwrap_or(0);
+    println!(
+        "Scanned {} recon-stats record(s). {} issues ({} critical, {} high). Score: {:.1}/100.",
+        summary.records_processed, summary.issues_total, critical, high, summary.quality_score
+    );
+    println!("Report: {}", out.join("recon_stats_report.html").display());
+    Ok(())
 }
 
 fn run_reconcile(input: &Path, store_path: &Path, out: &Path) -> Result<()> {

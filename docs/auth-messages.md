@@ -32,7 +32,7 @@ parsers' leaf tables are designed to be edited in one place.
 | `auth.107.001.NN` | Trade State Report (TSR) | TR → firm | **verified (synthetic schema)** | `opendqi emir tr-state-scan` via `crates/opendqi-xml/src/tr_state.rs`. Leaf table documented in [`tr-state-checks.md`](tr-state-checks.md); designed to be edited when the real XSD is available. |
 | `auth.108.001.NN` | Margin Activity Report (MAR) | TR → firm | **verified (synthetic schema)** | `opendqi emir mar-scan` via `crates/opendqi-xml/src/emir_mar.rs`; 8 `EMIR.MAR.*` checks. See [`emir-mar-msr.md`](emir-mar-msr.md). |
 | `auth.109.001.NN` | Margin State Report (MSR) | TR → firm | **verified (synthetic schema)** | `opendqi emir msr-scan` via `crates/opendqi-xml/src/emir_msr.rs`; 8 `EMIR.MSR.*` checks. See [`emir-mar-msr.md`](emir-mar-msr.md). |
-| `auth.091.001.NN` | Reconciliation Statistics | TR → firm | not yet | Roadmap. |
+| `auth.091.001.NN` | Reconciliation Statistics | TR → firm | **verified (synthetic schema)** | `opendqi emir recon-stats` via `crates/opendqi-xml/src/emir_recon_stats.rs`; 4 `EMIR.RST.*` checks. See [`emir-recon-stats.md`](emir-recon-stats.md). |
 | `auth.106.001.NN` | Data-quality Warnings (official) | TR → firm | **placeholder (matching-style)** | See "Naming caveat" below. |
 
 ## SFTR

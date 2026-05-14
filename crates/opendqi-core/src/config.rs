@@ -21,10 +21,37 @@ pub struct Thresholds {
     pub maturity: MaturityThresholds,
     /// EMIR Article 11 risk-mitigation thresholds (per asset class).
     pub emir_rmt: EmirRmtThresholds,
+    /// EMIR auth.091 reconciliation-statistics thresholds.
+    pub recon_stats: ReconStatsThresholds,
     /// Per-check-id severity overrides. Keys are full check IDs
     /// (e.g. `EMIR.COMP.UTI_MISSING`); values replace the check's
     /// default severity at issue-emission time. Empty by default.
     pub severity_overrides: BTreeMap<String, Severity>,
+}
+
+/// EMIR auth.091 reconciliation-statistics thresholds.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ReconStatsThresholds {
+    /// Pairing rate below which `EMIR.RST.PAIRING_RATE_LOW` fires.
+    /// Default: 0.85 (85 %).
+    pub pairing_rate_min: f64,
+    /// Reconciliation rate below which `EMIR.RST.RECON_RATE_LOW` fires.
+    /// Default: 0.70 (70 %).
+    pub recon_rate_min: f64,
+    /// Outstanding-unpaired count above which
+    /// `EMIR.RST.OUTSTANDING_UNPAIRED_HIGH` fires. Default: 1000.
+    pub outstanding_unpaired_max: i64,
+}
+
+impl Default for ReconStatsThresholds {
+    fn default() -> Self {
+        Self {
+            pairing_rate_min: 0.85,
+            recon_rate_min: 0.70,
+            outstanding_unpaired_max: 1000,
+        }
+    }
 }
 
 /// Timeliness configuration.

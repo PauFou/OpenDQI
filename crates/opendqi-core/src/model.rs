@@ -783,6 +783,56 @@ impl Default for ReconciliationRecord {
     }
 }
 
+/// One line from an EMIR Reconciliation Statistics Report
+/// (ISO 20022 `auth.091`). Each record summarises pairing and
+/// reconciliation rates for one reporting period and counterparty
+/// — TR-produced statistical feedback distinct from the per-trade
+/// `auth.106` reconciliation report.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReconStatsRecord {
+    /// Source file path (or other origin label).
+    pub source_file: Option<String>,
+    /// Stable identifier of the line within the source.
+    pub record_id: Option<String>,
+    /// Regulatory regime — always `Regime::Emir` for v1.
+    pub regime: Regime,
+    /// Reporting period end-date the statistics cover.
+    pub reporting_date: Option<NaiveDate>,
+    /// LEI of the counterparty the statistics relate to.
+    pub counterparty_lei: Option<String>,
+    /// Pairing rate (0.0 — 1.0): share of submissions paired with the
+    /// counterparty's submission.
+    pub pairing_rate: Option<Decimal>,
+    /// Reconciliation rate (0.0 — 1.0): share of paired submissions
+    /// whose fields reconcile.
+    pub recon_rate: Option<Decimal>,
+    /// Count of outstanding trades paired with the counterparty.
+    pub outstanding_paired: Option<i64>,
+    /// Count of outstanding trades unpaired (no matching counterparty
+    /// submission).
+    pub outstanding_unpaired: Option<i64>,
+    /// Catch-all of XML leaves that were not promoted to typed fields.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub raw_fields: BTreeMap<String, String>,
+}
+
+impl Default for ReconStatsRecord {
+    fn default() -> Self {
+        Self {
+            source_file: None,
+            record_id: None,
+            regime: Regime::Emir,
+            reporting_date: None,
+            counterparty_lei: None,
+            pairing_rate: None,
+            recon_rate: None,
+            outstanding_paired: None,
+            outstanding_unpaired: None,
+            raw_fields: BTreeMap::new(),
+        }
+    }
+}
+
 /// Aggregate statistics for a scan run.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanSummary {

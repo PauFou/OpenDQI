@@ -6,7 +6,7 @@ use rayon::prelude::*;
 use crate::config::Thresholds;
 use crate::model::{
     DqDimension, DqIssue, EmirRecord, FeedbackRecord, MarginActivityRecord, MarginStateRecord,
-    ReconciliationRecord, Severity, SftrRecord, SftrTrStateRecord, TrStateRecord,
+    ReconStatsRecord, ReconciliationRecord, Severity, SftrRecord, SftrTrStateRecord, TrStateRecord,
 };
 
 mod abnormal_maturity;
@@ -1174,6 +1174,30 @@ pub fn run_all_margin_state_lifecycle(
     let mut issues: Vec<DqIssue> = checks
         .par_iter()
         .flat_map_iter(|c| c.run(current, prior, ctx))
+        .collect();
+    finalize_issues(&mut issues, ctx);
+    issues
+}
+
+// ---- EMIR Reconciliation Statistics (auth.091) checks ----------
+
+mod emir_recon_stats;
+
+pub use emir_recon_stats::{
+    default_recon_stats_checks, EmirRstOutstandingUnpairedHigh, EmirRstPairingRateLow,
+    EmirRstPairingRateTrendDown, EmirRstReconRateLow, ReconStatsCheck,
+};
+
+/// Run every EMIR auth.091 check.
+pub fn run_all_recon_stats(
+    checks: &[Box<dyn ReconStatsCheck>],
+    records: &[ReconStatsRecord],
+    prior: &[ReconStatsRecord],
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    let mut issues: Vec<DqIssue> = checks
+        .par_iter()
+        .flat_map_iter(|c| c.run(records, prior, ctx))
         .collect();
     finalize_issues(&mut issues, ctx);
     issues
