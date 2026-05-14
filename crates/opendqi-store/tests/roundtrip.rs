@@ -2,7 +2,10 @@
 //! UTI, assert key fields survive.
 
 use chrono::{NaiveDate, TimeZone, Utc};
-use opendqi_core::{EmirRecord, FeedbackRecord, FeedbackType, Regime, SftrRecord};
+use opendqi_core::{
+    EmirRecord, FeedbackRecord, FeedbackType, MarginActivityRecord, MarginStateRecord, Regime,
+    SftrRecord, SftrTrStateRecord, TrStateRecord,
+};
 use opendqi_store::open_store;
 use rust_decimal::Decimal;
 
@@ -171,5 +174,194 @@ fn feedback_persist_list_resolve_workflow() {
     let updated = store.update_feedback_status("UTI-A", "resolved").unwrap();
     assert_eq!(updated, 0);
 
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn tr_state_roundtrip_preserves_fields() {
+    let path = tmp("tsr.db");
+    let mut store = open_store(&path).unwrap();
+    let recs = vec![TrStateRecord {
+        record_id: Some("t1".into()),
+        regime: Regime::Emir,
+        state_as_of: Some(Utc.with_ymd_and_hms(2026, 5, 13, 8, 0, 0).unwrap()),
+        uti: Some("UTI-T1".into()),
+        status: Some("OUTSTANDING".into()),
+        notional_amount: Some(Decimal::from(1_000_000)),
+        notional_currency: Some("EUR".into()),
+        valuation_amount: Some(Decimal::new(15050, 2)),
+        valuation_timestamp: Some(Utc.with_ymd_and_hms(2026, 5, 13, 7, 0, 0).unwrap()),
+        maturity_date: NaiveDate::from_ymd_opt(2030, 6, 30),
+        collateral_portfolio_code: Some("PORT-1".into()),
+        ..Default::default()
+    }];
+    let scan_id = store.persist_tr_state_batch(1, &recs).unwrap();
+    assert!(scan_id > 0);
+    let prior = store
+        .load_prior_tr_state(&["UTI-T1", "UTI-T9"], i64::MAX)
+        .unwrap();
+    assert_eq!(prior.len(), 1);
+    let p = &prior[0];
+    assert_eq!(p.uti.as_deref(), Some("UTI-T1"));
+    assert_eq!(p.status.as_deref(), Some("OUTSTANDING"));
+    assert_eq!(p.notional_amount.unwrap().to_string(), "1000000");
+    assert_eq!(p.valuation_amount.unwrap().to_string(), "150.50");
+    assert_eq!(p.collateral_portfolio_code.as_deref(), Some("PORT-1"));
+    assert_eq!(p.maturity_date, NaiveDate::from_ymd_opt(2030, 6, 30));
+
+    // exclude filter
+    let none = store.load_prior_tr_state(&["UTI-T1"], scan_id).unwrap();
+    assert!(none.is_empty());
+
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn sftr_tr_state_roundtrip_preserves_fields() {
+    let path = tmp("sftr-tsr.db");
+    let mut store = open_store(&path).unwrap();
+    let recs = vec![SftrTrStateRecord {
+        record_id: Some("s1".into()),
+        regime: Regime::Sftr,
+        state_as_of: Some(Utc.with_ymd_and_hms(2026, 5, 13, 8, 0, 0).unwrap()),
+        uti: Some("SFT-1".into()),
+        status: Some("OUTSTANDING".into()),
+        sft_type: Some("REPO".into()),
+        loan_value: Some(Decimal::from(1_000_000)),
+        loan_currency: Some("EUR".into()),
+        collateral_value: Some(Decimal::from(1_100_000)),
+        collateral_currency: Some("EUR".into()),
+        haircut: Some(Decimal::new(5, 2)),
+        reuse_indicator: Some(true),
+        maturity_date: NaiveDate::from_ymd_opt(2030, 6, 30),
+        collateral_isin: Some("FR0000000001".into()),
+        ..Default::default()
+    }];
+    store.persist_sftr_tr_state_batch(1, &recs).unwrap();
+    let prior = store
+        .load_prior_sftr_tr_state(&["SFT-1"], i64::MAX)
+        .unwrap();
+    assert_eq!(prior.len(), 1);
+    let p = &prior[0];
+    assert_eq!(p.uti.as_deref(), Some("SFT-1"));
+    assert_eq!(p.sft_type.as_deref(), Some("REPO"));
+    assert_eq!(p.reuse_indicator, Some(true));
+    assert_eq!(p.haircut.unwrap().to_string(), "0.05");
+    assert_eq!(p.collateral_isin.as_deref(), Some("FR0000000001"));
+
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn margin_activity_roundtrip_by_portfolio() {
+    let path = tmp("mar.db");
+    let mut store = open_store(&path).unwrap();
+    let recs = vec![
+        MarginActivityRecord {
+            record_id: Some("m1".into()),
+            uti: Some("UTI-M1".into()),
+            action_type: Some("MARU".into()),
+            collateral_portfolio_code: Some("PORT-A".into()),
+            initial_margin_posted: Some(Decimal::from(1_000_000)),
+            margin_currency: Some("EUR".into()),
+            event_timestamp: Some(Utc.with_ymd_and_hms(2026, 5, 12, 16, 0, 0).unwrap()),
+            reporting_timestamp: Some(Utc.with_ymd_and_hms(2026, 5, 13, 8, 0, 0).unwrap()),
+            ..Default::default()
+        },
+        MarginActivityRecord {
+            record_id: Some("m2".into()),
+            collateral_portfolio_code: Some("PORT-B".into()),
+            variation_margin_posted: Some(Decimal::from(500)),
+            ..Default::default()
+        },
+    ];
+    let scan_id = store.persist_margin_activity_batch(1, &recs).unwrap();
+    let prior = store
+        .load_prior_margin_activity(&["PORT-A"], i64::MAX)
+        .unwrap();
+    assert_eq!(prior.len(), 1, "filter by portfolio code");
+    let p = &prior[0];
+    assert_eq!(p.action_type.as_deref(), Some("MARU"));
+    assert_eq!(p.initial_margin_posted.unwrap().to_string(), "1000000");
+    assert_eq!(p.margin_currency.as_deref(), Some("EUR"));
+
+    // exclude_scan_id
+    let none = store
+        .load_prior_margin_activity(&["PORT-A"], scan_id)
+        .unwrap();
+    assert!(none.is_empty());
+
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn margin_state_roundtrip_preserves_fields() {
+    let path = tmp("msr.db");
+    let mut store = open_store(&path).unwrap();
+    let recs = vec![MarginStateRecord {
+        record_id: Some("ms1".into()),
+        uti: Some("UTI-MS1".into()),
+        collateral_portfolio_code: Some("PORT-S".into()),
+        initial_margin_posted_current: Some(Decimal::from(1_000_000)),
+        initial_margin_collected_current: Some(Decimal::from(1_050_000)),
+        collateral_market_value: Some(Decimal::from(1_100_000)),
+        haircut_applied: Some(Decimal::new(5, 2)),
+        collateralization_category: Some("FCOL".into()),
+        state_as_of: Some(Utc.with_ymd_and_hms(2026, 5, 13, 8, 0, 0).unwrap()),
+        margin_currency: Some("EUR".into()),
+        ..Default::default()
+    }];
+    store.persist_margin_state_batch(1, &recs).unwrap();
+    let prior = store
+        .load_prior_margin_state(&["UTI-MS1"], i64::MAX)
+        .unwrap();
+    assert_eq!(prior.len(), 1);
+    let p = &prior[0];
+    assert_eq!(p.collateralization_category.as_deref(), Some("FCOL"));
+    assert_eq!(p.collateral_market_value.unwrap().to_string(), "1100000");
+    assert_eq!(p.haircut_applied.unwrap().to_string(), "0.05");
+    assert!(p.state_as_of.is_some());
+
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn empty_input_short_circuits_loaders() {
+    let path = tmp("empty.db");
+    let store = open_store(&path).unwrap();
+    assert!(store.load_prior_tr_state(&[], 0).unwrap().is_empty());
+    assert!(store.load_prior_sftr_tr_state(&[], 0).unwrap().is_empty());
+    assert!(store.load_prior_margin_activity(&[], 0).unwrap().is_empty());
+    assert!(store.load_prior_margin_state(&[], 0).unwrap().is_empty());
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn empty_records_persist_creates_scan_row() {
+    let path = tmp("empty-scan.db");
+    let mut store = open_store(&path).unwrap();
+    let scan_id = store.persist_tr_state_batch(1, &[]).unwrap();
+    assert!(scan_id > 0);
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn margin_activity_by_portfolio_returns_empty_when_no_match() {
+    let path = tmp("mar-nomatch.db");
+    let mut store = open_store(&path).unwrap();
+    store
+        .persist_margin_activity_batch(
+            1,
+            &[MarginActivityRecord {
+                collateral_portfolio_code: Some("PORT-A".into()),
+                initial_margin_posted: Some(Decimal::from(1)),
+                ..Default::default()
+            }],
+        )
+        .unwrap();
+    let none = store
+        .load_prior_margin_activity(&["PORT-OTHER"], i64::MAX)
+        .unwrap();
+    assert!(none.is_empty());
     let _ = std::fs::remove_file(&path);
 }

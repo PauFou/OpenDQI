@@ -95,4 +95,99 @@ CREATE TABLE IF NOT EXISTS reconciliations (
     ingested_at               INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS reconciliations_uti ON reconciliations(uti);
+
+CREATE TABLE IF NOT EXISTS tr_state_records (
+    scan_id                    INTEGER NOT NULL REFERENCES scans(scan_id),
+    record_id                  TEXT,
+    source_file                TEXT,
+    state_as_of                INTEGER,
+    uti                        TEXT,
+    reporting_counterparty     TEXT,
+    other_counterparty         TEXT,
+    status                     TEXT,
+    notional_amount            TEXT,
+    notional_currency          TEXT,
+    valuation_amount           TEXT,
+    valuation_currency         TEXT,
+    valuation_timestamp        INTEGER,
+    effective_date             TEXT,
+    maturity_date              TEXT,
+    termination_date           TEXT,
+    collateral_portfolio_code  TEXT,
+    ingested_at                INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS tr_state_records_uti ON tr_state_records(uti);
+
+CREATE TABLE IF NOT EXISTS sftr_tr_state_records (
+    scan_id                    INTEGER NOT NULL REFERENCES scans(scan_id),
+    record_id                  TEXT,
+    source_file                TEXT,
+    state_as_of                INTEGER,
+    uti                        TEXT,
+    reporting_counterparty     TEXT,
+    other_counterparty         TEXT,
+    status                     TEXT,
+    sft_type                   TEXT,
+    loan_value                 TEXT,
+    loan_currency              TEXT,
+    collateral_value           TEXT,
+    collateral_currency        TEXT,
+    haircut                    TEXT,
+    reuse_indicator            INTEGER,
+    effective_date             TEXT,
+    maturity_date              TEXT,
+    termination_date           TEXT,
+    settlement_date            TEXT,
+    collateral_portfolio_code  TEXT,
+    collateral_isin            TEXT,
+    ingested_at                INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS sftr_tr_state_records_uti ON sftr_tr_state_records(uti);
+
+CREATE TABLE IF NOT EXISTS margin_activity_records (
+    scan_id                       INTEGER NOT NULL REFERENCES scans(scan_id),
+    record_id                     TEXT,
+    source_file                   TEXT,
+    uti                           TEXT,
+    counterparty_1                TEXT,
+    counterparty_2                TEXT,
+    action_type                   TEXT,
+    event_type                    TEXT,
+    collateral_portfolio_code     TEXT,
+    initial_margin_posted         TEXT,
+    initial_margin_collected      TEXT,
+    variation_margin_posted       TEXT,
+    variation_margin_collected    TEXT,
+    margin_currency               TEXT,
+    excess_collateral             TEXT,
+    collateral_haircut            TEXT,
+    event_timestamp               INTEGER,
+    reporting_timestamp           INTEGER,
+    ingested_at                   INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS margin_activity_records_portfolio
+    ON margin_activity_records(collateral_portfolio_code);
+
+CREATE TABLE IF NOT EXISTS margin_state_records (
+    scan_id                              INTEGER NOT NULL REFERENCES scans(scan_id),
+    record_id                            TEXT,
+    source_file                          TEXT,
+    uti                                  TEXT,
+    counterparty_1                       TEXT,
+    counterparty_2                       TEXT,
+    collateral_portfolio_code            TEXT,
+    initial_margin_posted_current        TEXT,
+    initial_margin_collected_current     TEXT,
+    variation_margin_posted_current      TEXT,
+    variation_margin_collected_current   TEXT,
+    margin_currency                      TEXT,
+    collateral_market_value              TEXT,
+    haircut_applied                      TEXT,
+    collateralization_category           TEXT,
+    state_as_of                          INTEGER,
+    ingested_at                          INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS margin_state_records_uti ON margin_state_records(uti);
+CREATE INDEX IF NOT EXISTS margin_state_records_portfolio
+    ON margin_state_records(collateral_portfolio_code);
 "#;

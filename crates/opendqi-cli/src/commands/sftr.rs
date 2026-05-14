@@ -664,8 +664,11 @@ fn run_tr_state_scan(input: &Path, store_path: Option<&Path>, out: &Path) -> Res
     let mut issues: Vec<DqIssue> = outcome.issues;
 
     let prior: Vec<SftrRecord> = if let Some(store_path) = store_path {
-        let store = opendqi_store::open_store(store_path)
+        let mut store = opendqi_store::open_store(store_path)
             .with_context(|| format!("opening history store at {}", store_path.display()))?;
+        store
+            .persist_sftr_tr_state_batch(1, &outcome.records)
+            .context("persisting SFTR TSR batch to history store")?;
         let utis: Vec<&str> = outcome
             .records
             .iter()
