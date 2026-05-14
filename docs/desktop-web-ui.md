@@ -20,6 +20,10 @@ The browser opens to a minimal upload form:
     format / namespace checks only; the store-cross-referenced
     `EMIR.FBK.*` / `SFTR.FBK.*` checks remain CLI-only.
   - *Reconciliation Statistics* — auth.091 (EMIR only).
+  - *Margin Activity Report* — auth.108 (EMIR only).
+  - *Margin State Report* — auth.109 (EMIR only).
+  - *Validate* — XML well-formedness only. XSD schema validation
+    remains CLI-only (`opendqi {emir,sftr} validate --xsd <path>`).
 - **Regime** — EMIR or SFTR.
 - **File** — drop or pick an `.xml` or `.parquet` file.
 - **Run** — submits to `POST /api/scan` carrying the chosen operation

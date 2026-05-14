@@ -9,12 +9,13 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 use opendqi_core::dq::{
-    default_checks, default_feedback_checks, default_recon_stats_checks, default_sftr_checks,
+    default_checks, default_feedback_checks, default_margin_activity_checks,
+    default_margin_state_checks, default_recon_stats_checks, default_sftr_checks,
     default_sftr_feedback_checks, default_sftr_tr_activity_checks, default_sftr_tr_state_checks,
     default_tr_activity_checks, default_tr_state_checks, finalize_issues, run_all,
-    run_all_feedback, run_all_recon_stats, run_all_sftr, run_all_sftr_feedback,
-    run_all_sftr_tr_activity, run_all_sftr_tr_state, run_all_tr_activity, run_all_tr_state,
-    CheckContext,
+    run_all_feedback, run_all_margin_activity, run_all_margin_state, run_all_recon_stats,
+    run_all_sftr, run_all_sftr_feedback, run_all_sftr_tr_activity, run_all_sftr_tr_state,
+    run_all_tr_activity, run_all_tr_state, CheckContext,
 };
 use opendqi_core::{
     DqDimension, DqIssue, EmirRecord, Regime, ScanSummary, Severity, SftrRecord, Thresholds,
@@ -22,8 +23,9 @@ use opendqi_core::{
 use opendqi_io::{has_extension, read_emir_parquet, read_sftr_parquet};
 use opendqi_report::{write_issues_csv, write_report_html, write_summary_json};
 use opendqi_xml::{
-    read_emir_feedback_xml, read_emir_recon_stats_xml, read_emir_tr_state_xml, read_emir_xml,
-    read_sftr_feedback_xml, read_sftr_tr_state_xml, read_sftr_xml,
+    check_wellformedness, read_emir_feedback_xml, read_emir_mar_xml, read_emir_msr_xml,
+    read_emir_recon_stats_xml, read_emir_tr_state_xml, read_emir_xml, read_sftr_feedback_xml,
+    read_sftr_tr_state_xml, read_sftr_xml,
 };
 
 /// What the user picked in the form.
@@ -68,6 +70,13 @@ pub enum UiOperation {
     Feedback,
     /// EMIR Reconciliation Statistics scan (auth.091). EMIR-only.
     ReconStats,
+    /// EMIR Margin Activity Report scan (auth.108). EMIR-only.
+    MarScan,
+    /// EMIR Margin State Report scan (auth.109). EMIR-only.
+    MsrScan,
+    /// XML well-formedness validation (regime-agnostic). v1 doesn't
+    /// expose an XSD picker; the schema validation remains CLI-only.
+    Validate,
 }
 
 impl UiOperation {
@@ -78,6 +87,9 @@ impl UiOperation {
             "tr-activity-scan" | "tr_activity_scan" => Some(Self::TrActivityScan),
             "feedback" => Some(Self::Feedback),
             "recon-stats" | "recon_stats" => Some(Self::ReconStats),
+            "mar-scan" | "mar_scan" => Some(Self::MarScan),
+            "msr-scan" | "msr_scan" => Some(Self::MsrScan),
+            "validate" => Some(Self::Validate),
             _ => None,
         }
     }
@@ -89,6 +101,9 @@ impl UiOperation {
             Self::TrActivityScan => "tr-activity-scan",
             Self::Feedback => "feedback",
             Self::ReconStats => "recon-stats",
+            Self::MarScan => "mar-scan",
+            Self::MsrScan => "msr-scan",
+            Self::Validate => "validate",
         }
     }
 }
@@ -134,6 +149,19 @@ pub fn run_server_operation(
                 "recon-stats is EMIR-only (auth.091); pick a different operation for SFTR."
             )),
         },
+        UiOperation::MarScan => match regime {
+            UiRegime::Emir => run_emir_mar_server(input, out_dir),
+            UiRegime::Sftr => Err(anyhow!(
+                "mar-scan is EMIR-only (auth.108); pick a different operation for SFTR."
+            )),
+        },
+        UiOperation::MsrScan => match regime {
+            UiRegime::Emir => run_emir_msr_server(input, out_dir),
+            UiRegime::Sftr => Err(anyhow!(
+                "msr-scan is EMIR-only (auth.109); pick a different operation for SFTR."
+            )),
+        },
+        UiOperation::Validate => run_validate_server(input, regime, out_dir),
     }
 }
 
@@ -440,6 +468,138 @@ fn run_sftr_feedback_server(input: &Path, out_dir: &Path) -> Result<ScanArtifact
         outcome.records.len() as u32,
         &issues,
         &[input.to_string_lossy().into_owned()],
+        started_at,
+        Utc::now(),
+    )
+}
+
+/// EMIR Margin Activity Report (auth.108) scan — server-side.
+fn run_emir_mar_server(input: &Path, out_dir: &Path) -> Result<ScanArtifacts> {
+    if !has_extension(input, "xml") {
+        return Err(anyhow!(
+            "mar-scan expects an XML input (auth.108). Got {}",
+            input.display()
+        ));
+    }
+    let started_at = Utc::now();
+    let outcome = read_emir_mar_xml(input)
+        .with_context(|| format!("reading MAR file {}", input.display()))?;
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+    let mut issues = outcome.issues;
+    issues.extend(run_all_margin_activity(
+        &default_margin_activity_checks(),
+        &outcome.records,
+        &[],
+        &ctx,
+    ));
+    finalize_issues(&mut issues, &ctx);
+    finalize_artifacts(
+        out_dir,
+        Regime::Emir,
+        UiRegime::Emir,
+        outcome.records.len() as u32,
+        &issues,
+        &[input.to_string_lossy().into_owned()],
+        started_at,
+        Utc::now(),
+    )
+}
+
+/// EMIR Margin State Report (auth.109) scan — server-side.
+fn run_emir_msr_server(input: &Path, out_dir: &Path) -> Result<ScanArtifacts> {
+    if !has_extension(input, "xml") {
+        return Err(anyhow!(
+            "msr-scan expects an XML input (auth.109). Got {}",
+            input.display()
+        ));
+    }
+    let started_at = Utc::now();
+    let outcome = read_emir_msr_xml(input)
+        .with_context(|| format!("reading MSR file {}", input.display()))?;
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+    let mut issues = outcome.issues;
+    issues.extend(run_all_margin_state(
+        &default_margin_state_checks(),
+        &outcome.records,
+        &[],
+        &ctx,
+    ));
+    finalize_issues(&mut issues, &ctx);
+    finalize_artifacts(
+        out_dir,
+        Regime::Emir,
+        UiRegime::Emir,
+        outcome.records.len() as u32,
+        &issues,
+        &[input.to_string_lossy().into_owned()],
+        started_at,
+        Utc::now(),
+    )
+}
+
+/// XML well-formedness validation (regime-agnostic). v1 doesn't
+/// expose an XSD picker; the schema validation remains CLI-only.
+/// Emits a single Info issue on success or a Critical
+/// `EMIR.FMT.XML_NOT_WELLFORMED` (or SFTR equivalent) on failure.
+fn run_validate_server(input: &Path, regime: UiRegime, out_dir: &Path) -> Result<ScanArtifacts> {
+    if !has_extension(input, "xml") {
+        return Err(anyhow!(
+            "validate expects an XML input. Got {}",
+            input.display()
+        ));
+    }
+    let started_at = Utc::now();
+    let (core_regime, prefix) = match regime {
+        UiRegime::Emir => (Regime::Emir, "EMIR"),
+        UiRegime::Sftr => (Regime::Sftr, "SFTR"),
+    };
+    let source_label = input.to_string_lossy().into_owned();
+    let issue = match check_wellformedness(input) {
+        Ok(()) => DqIssue {
+            check_id: format!("{prefix}.FMT.XML_WELLFORMED"),
+            regime: core_regime,
+            severity: Severity::Info,
+            dimension: DqDimension::Validity,
+            record_id: None,
+            uti: None,
+            field: None,
+            value: None,
+            message: "XML is well-formed.".into(),
+            source_file: Some(source_label.clone()),
+            evidence: Vec::new(),
+        },
+        Err(err) => DqIssue {
+            check_id: format!("{prefix}.FMT.XML_NOT_WELLFORMED"),
+            regime: core_regime,
+            severity: Severity::Critical,
+            dimension: DqDimension::Validity,
+            record_id: None,
+            uti: None,
+            field: None,
+            value: None,
+            message: format!("XML is not well-formed: {}", err.message),
+            source_file: Some(source_label.clone()),
+            evidence: Vec::new(),
+        },
+    };
+    let issues = vec![issue];
+    finalize_artifacts(
+        out_dir,
+        core_regime,
+        regime,
+        0,
+        &issues,
+        &[source_label],
         started_at,
         Utc::now(),
     )
