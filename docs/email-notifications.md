@@ -68,18 +68,23 @@ makes the email step a no-op (useful for staging).
 
 ## CLI flag
 
-`--email-config <path>` is currently wired into:
+`--email-config <path>` is currently wired into 9 commands:
 
 - `opendqi emir scan`
+- `opendqi emir feedback`
+- `opendqi emir tr-activity-scan`
+- `opendqi emir tr-state-scan`
+- `opendqi emir tr-audit`
+- `opendqi emir recon-stats`
 - `opendqi sftr scan`
-- `opendqi emir tr-state-scan` (TSR daily snapshot — most-emailed report in ops practice)
-- `opendqi emir tr-audit` (consolidated TAR + TSR + feedback report)
+- `opendqi sftr feedback`
+- `opendqi sftr tr-state-scan`
 
-Add it to the remaining commands (`emir tr-activity-scan`, `emir
-mar-scan`, `emir msr-scan`, `emir feedback`, `emir recon-stats`,
-`emir book-reconcile`, and their SFTR counterparts) by mirroring the
-same 3-line pattern (`SmtpConfig::from_yaml_file` →
-`send_report_email`) after the report-write block.
+The remaining commands (`emir mar-scan`, `emir msr-scan`, `emir
+book-reconcile`, `emir reconcile`, `sftr tr-activity-scan`, `sftr
+tr-audit`, `sftr book-reconcile`, `sftr reconcile`) follow the same
+3-line wiring pattern (`SmtpConfig::from_yaml_file` →
+`send_report_email`) and are tracked as polish.
 
 ## Tests
 

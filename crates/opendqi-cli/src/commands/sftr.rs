@@ -98,6 +98,10 @@ pub enum SftrAction {
         /// Directory where reports are written.
         #[arg(long)]
         out: PathBuf,
+        /// Optional SMTP configuration YAML — emails the SFTR
+        /// feedback report. See `docs/email-notifications.md`.
+        #[arg(long, value_name = "PATH")]
+        email_config: Option<PathBuf>,
     },
     /// Ingest a TR pairing / matching report and produce
     /// `SFTR.REC.*` issues for UNPAIRED / UNRECONCILED trades and
@@ -132,6 +136,10 @@ pub enum SftrAction {
         /// Directory where reports are written.
         #[arg(long)]
         out: PathBuf,
+        /// Optional SMTP configuration YAML — emails the SFTR TSR
+        /// report. See `docs/email-notifications.md`.
+        #[arg(long, value_name = "PATH")]
+        email_config: Option<PathBuf>,
     },
     /// Ingest an SFTR Trade Activity Report (TR replay of
     /// `auth.052`) and produce `SFTR.TRA.*` issues: repeated
@@ -237,16 +245,26 @@ pub fn run(action: SftrAction) -> Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
         SftrAction::Validate { input, xsd } => run_validate(&input, &xsd),
-        SftrAction::Feedback { input, store, out } => {
-            run_feedback(&input, &store, &out)?;
+        SftrAction::Feedback {
+            input,
+            store,
+            out,
+            email_config,
+        } => {
+            run_feedback(&input, &store, &out, email_config.as_deref())?;
             Ok(ExitCode::SUCCESS)
         }
         SftrAction::Reconcile { input, store, out } => {
             run_reconcile(&input, &store, &out)?;
             Ok(ExitCode::SUCCESS)
         }
-        SftrAction::TrStateScan { input, store, out } => {
-            run_tr_state_scan(&input, store.as_deref(), &out)?;
+        SftrAction::TrStateScan {
+            input,
+            store,
+            out,
+            email_config,
+        } => {
+            run_tr_state_scan(&input, store.as_deref(), &out, email_config.as_deref())?;
             Ok(ExitCode::SUCCESS)
         }
         SftrAction::TrActivityScan {
@@ -624,7 +642,12 @@ fn run_validate(input: &Path, xsd_path: &Path) -> Result<ExitCode> {
     })
 }
 
-fn run_feedback(input: &Path, store_path: &Path, out: &Path) -> Result<()> {
+fn run_feedback(
+    input: &Path,
+    store_path: &Path,
+    out: &Path,
+    email_config_path: Option<&Path>,
+) -> Result<()> {
     let started_at = Utc::now();
     let outcome = read_sftr_feedback_xml(input)
         .with_context(|| format!("reading feedback file {}", input.display()))?;
@@ -690,6 +713,22 @@ fn run_feedback(input: &Path, store_path: &Path, out: &Path) -> Result<()> {
     write_summary_json(&out.join("summary.json"), &summary)?;
     write_issues_csv(&out.join("issues.csv"), &issues)?;
     write_report_html(&out.join("report.html"), &summary, &issues, &sources)?;
+
+    if let Some(path) = email_config_path {
+        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
+        let sent = opendqi_report::send_report_email(
+            &cfg,
+            &summary,
+            &out.join("report.html"),
+            &out.join("summary.json"),
+            &out.join("issues.csv"),
+        )?;
+        if sent {
+            info!(to = ?cfg.to, "SFTR feedback report emailed");
+        } else {
+            info!("email config is disabled — skipped send");
+        }
+    }
 
     let critical = summary
         .issues_by_severity
@@ -825,7 +864,12 @@ fn run_reconcile(input: &Path, store_path: &Path, out: &Path) -> Result<()> {
     Ok(())
 }
 
-fn run_tr_state_scan(input: &Path, store_path: Option<&Path>, out: &Path) -> Result<()> {
+fn run_tr_state_scan(
+    input: &Path,
+    store_path: Option<&Path>,
+    out: &Path,
+    email_config_path: Option<&Path>,
+) -> Result<()> {
     let started_at = Utc::now();
     let outcome = read_sftr_tr_state_xml(input)
         .with_context(|| format!("reading SFTR TSR file {}", input.display()))?;
@@ -917,6 +961,22 @@ fn run_tr_state_scan(input: &Path, store_path: Option<&Path>, out: &Path) -> Res
         &issues,
         &sources,
     )?;
+
+    if let Some(path) = email_config_path {
+        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
+        let sent = opendqi_report::send_report_email(
+            &cfg,
+            &summary,
+            &out.join("tr_state_report.html"),
+            &out.join("summary.json"),
+            &out.join("tr_state_issues.csv"),
+        )?;
+        if sent {
+            info!(to = ?cfg.to, "SFTR TSR report emailed");
+        } else {
+            info!("email config is disabled — skipped send");
+        }
+    }
 
     let critical = summary
         .issues_by_severity

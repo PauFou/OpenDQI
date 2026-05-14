@@ -105,6 +105,10 @@ pub enum EmirAction {
         /// Directory where reports are written.
         #[arg(long)]
         out: PathBuf,
+        /// Optional SMTP configuration YAML — emails the feedback
+        /// report after writing it. See `docs/email-notifications.md`.
+        #[arg(long, value_name = "PATH")]
+        email_config: Option<PathBuf>,
     },
     /// Ingest an EMIR Trade Activity Report (TR replay of
     /// `auth.030`) and produce `EMIR.TRA.*` issues: distribution
@@ -127,6 +131,10 @@ pub enum EmirAction {
         /// Directory where reports are written.
         #[arg(long)]
         out: PathBuf,
+        /// Optional SMTP configuration YAML — emails the TAR report
+        /// after writing it. See `docs/email-notifications.md`.
+        #[arg(long, value_name = "PATH")]
+        email_config: Option<PathBuf>,
     },
     /// Ingest an EMIR Trade State Report (ISO 20022 `auth.107`) and
     /// produce `EMIR.TST.*` issues over the TR's snapshot:
@@ -271,6 +279,10 @@ pub enum EmirAction {
         /// Directory where reports are written.
         #[arg(long)]
         out: PathBuf,
+        /// Optional SMTP configuration YAML — emails the recon-stats
+        /// report after writing it. See `docs/email-notifications.md`.
+        #[arg(long, value_name = "PATH")]
+        email_config: Option<PathBuf>,
     },
     /// Normalize EMIR XML/CSV input into a canonical Parquet file
     /// (Snappy-compressed). Schema is stable and analytics-friendly
@@ -313,8 +325,13 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
         EmirAction::Validate { input, xsd } => run_validate(&input, &xsd),
-        EmirAction::Feedback { input, store, out } => {
-            run_feedback(&input, &store, &out)?;
+        EmirAction::Feedback {
+            input,
+            store,
+            out,
+            email_config,
+        } => {
+            run_feedback(&input, &store, &out, email_config.as_deref())?;
             Ok(ExitCode::SUCCESS)
         }
         EmirAction::Reconcile { input, store, out } => {
@@ -335,8 +352,15 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
             store,
             tsr,
             out,
+            email_config,
         } => {
-            run_tr_activity_scan(&input, store.as_deref(), tsr.as_deref(), &out)?;
+            run_tr_activity_scan(
+                &input,
+                store.as_deref(),
+                tsr.as_deref(),
+                &out,
+                email_config.as_deref(),
+            )?;
             Ok(ExitCode::SUCCESS)
         }
         EmirAction::TrAudit {
@@ -379,8 +403,15 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
             prior,
             config,
             out,
+            email_config,
         } => {
-            run_recon_stats(&input, prior.as_deref(), config.as_deref(), &out)?;
+            run_recon_stats(
+                &input,
+                prior.as_deref(),
+                config.as_deref(),
+                &out,
+                email_config.as_deref(),
+            )?;
             Ok(ExitCode::SUCCESS)
         }
         EmirAction::Normalize {
@@ -717,7 +748,12 @@ fn run_validate(input: &Path, xsd_path: &Path) -> Result<ExitCode> {
     })
 }
 
-fn run_feedback(input: &Path, store_path: &Path, out: &Path) -> Result<()> {
+fn run_feedback(
+    input: &Path,
+    store_path: &Path,
+    out: &Path,
+    email_config_path: Option<&Path>,
+) -> Result<()> {
     let started_at = Utc::now();
     let outcome = read_emir_feedback_xml(input)
         .with_context(|| format!("reading feedback file {}", input.display()))?;
@@ -781,6 +817,22 @@ fn run_feedback(input: &Path, store_path: &Path, out: &Path) -> Result<()> {
     write_issues_csv(&out.join("issues.csv"), &issues)?;
     write_report_html(&out.join("report.html"), &summary, &issues, &sources)?;
 
+    if let Some(path) = email_config_path {
+        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
+        let sent = opendqi_report::send_report_email(
+            &cfg,
+            &summary,
+            &out.join("report.html"),
+            &out.join("summary.json"),
+            &out.join("issues.csv"),
+        )?;
+        if sent {
+            info!(to = ?cfg.to, "feedback report emailed");
+        } else {
+            info!("email config is disabled — skipped send");
+        }
+    }
+
     let critical = summary
         .issues_by_severity
         .get(&Severity::Critical)
@@ -830,6 +882,7 @@ fn run_recon_stats(
     prior_path: Option<&Path>,
     config_path: Option<&Path>,
     out: &Path,
+    email_config_path: Option<&Path>,
 ) -> Result<()> {
     let started_at = Utc::now();
 
@@ -902,6 +955,22 @@ fn run_recon_stats(
         &issues,
         &sources,
     )?;
+
+    if let Some(path) = email_config_path {
+        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
+        let sent = opendqi_report::send_report_email(
+            &cfg,
+            &summary,
+            &out.join("recon_stats_report.html"),
+            &out.join("summary.json"),
+            &out.join("recon_stats_issues.csv"),
+        )?;
+        if sent {
+            info!(to = ?cfg.to, "recon-stats report emailed");
+        } else {
+            info!("email config is disabled — skipped send");
+        }
+    }
 
     let critical = summary
         .issues_by_severity
@@ -1331,6 +1400,7 @@ fn run_tr_activity_scan(
     store_path: Option<&Path>,
     tsr_path: Option<&Path>,
     out: &Path,
+    email_config_path: Option<&Path>,
 ) -> Result<()> {
     let started_at = Utc::now();
     let inputs = discover_emir_inputs(input)?;
@@ -1441,6 +1511,22 @@ fn run_tr_activity_scan(
         &issues,
         &sources,
     )?;
+
+    if let Some(path) = email_config_path {
+        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
+        let sent = opendqi_report::send_report_email(
+            &cfg,
+            &summary,
+            &out.join("tr_activity_report.html"),
+            &out.join("summary.json"),
+            &out.join("tr_activity_issues.csv"),
+        )?;
+        if sent {
+            info!(to = ?cfg.to, "TAR report emailed");
+        } else {
+            info!("email config is disabled — skipped send");
+        }
+    }
 
     let critical = summary
         .issues_by_severity
