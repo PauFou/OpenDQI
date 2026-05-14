@@ -8,7 +8,7 @@ use std::process::ExitCode;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use commands::{desktop, emir, feedback, sftr};
+use commands::{desktop, emir, feedback, sftr, smtp_test};
 
 #[derive(Parser)]
 #[command(
@@ -41,6 +41,10 @@ enum TopLevel {
     },
     /// Start the local web UI (planned for milestone 0.2).
     Desktop(desktop::DesktopArgs),
+    /// Validate an SMTP configuration YAML by sending a test email.
+    /// Use `--dry-run` to check the config + env var without sending.
+    /// See `docs/email-notifications.md`.
+    SmtpTest(smtp_test::SmtpTestArgs),
 }
 
 fn main() -> Result<ExitCode> {
@@ -57,6 +61,7 @@ fn main() -> Result<ExitCode> {
             desktop::run(args)?;
             Ok(ExitCode::SUCCESS)
         }
+        TopLevel::SmtpTest(args) => smtp_test::run(args),
     }
 }
 

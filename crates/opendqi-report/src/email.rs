@@ -154,6 +154,51 @@ pub fn send_report_email(
     Ok(true)
 }
 
+/// Send a tiny hello-world email via the same SMTP transport — used
+/// by `opendqi smtp-test` to validate the SMTP setup without
+/// running a scan. Returns `Ok(false)` when `enabled: false`,
+/// `Ok(true)` on successful send.
+pub fn send_smtp_test(config: &SmtpConfig) -> Result<bool> {
+    if !config.enabled {
+        return Ok(false);
+    }
+    let password = std::env::var(&config.password_env)
+        .map_err(|_| anyhow!("SMTP password env var '{}' is not set", config.password_env))?;
+
+    let html = "<p>OpenDQI SMTP test — \
+        if you can read this email your <code>--email-config</code> \
+        wiring is working.</p>";
+
+    let subject = "OpenDQI SMTP test";
+    let mut builder = Message::builder()
+        .from(config.from.parse().context("parsing `from` address")?)
+        .subject(subject);
+    for to in &config.to {
+        builder = builder.to(to.parse().with_context(|| format!("parsing `to` {to}"))?);
+    }
+    let mp = MultiPart::mixed().singlepart(
+        SinglePart::builder()
+            .header(ContentType::TEXT_HTML)
+            .body(html.to_string()),
+    );
+    let msg = builder.multipart(mp).context("building MIME message")?;
+
+    let creds = Credentials::new(config.username.clone(), password);
+    let mailer = if config.use_tls {
+        SmtpTransport::starttls_relay(&config.host)?
+            .port(config.port)
+            .credentials(creds)
+            .build()
+    } else {
+        SmtpTransport::builder_dangerous(&config.host)
+            .port(config.port)
+            .credentials(creds)
+            .build()
+    };
+    mailer.send(&msg).context("SMTP send failed")?;
+    Ok(true)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -231,5 +276,14 @@ mod tests {
         assert!(cfg.enabled);
         assert!(cfg.use_tls);
         assert_eq!(cfg.password_env, "OPENDQI_SMTP_PASS");
+    }
+
+    #[test]
+    fn smtp_test_disabled_is_a_noop() {
+        let mut cfg = dummy_config();
+        cfg.enabled = false;
+        // Missing password env is fine because disabled returns early.
+        let res = send_smtp_test(&cfg).unwrap();
+        assert!(!res);
     }
 }

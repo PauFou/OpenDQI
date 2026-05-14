@@ -86,6 +86,24 @@ tr-audit`, `sftr book-reconcile`, `sftr reconcile`) follow the same
 3-line wiring pattern (`SmtpConfig::from_yaml_file` →
 `send_report_email`) and are tracked as polish.
 
+## Testing the configuration
+
+Use the standalone `opendqi smtp-test` helper to validate your YAML
+without running a scan:
+
+```bash
+# Validate config + env var, send a test email.
+opendqi smtp-test --email-config smtp.yml
+
+# Validate only (no network — checks YAML + env var presence).
+opendqi smtp-test --email-config smtp.yml --dry-run
+```
+
+Output prints the parsed config (sans password) so you can confirm
+what was loaded. With `enabled: false`, the helper skips the SMTP
+contact entirely and exits 0 — useful for inspecting the parsed
+config in CI.
+
 ## Tests
 
 `crates/opendqi-report/src/email.rs::tests` covers:
