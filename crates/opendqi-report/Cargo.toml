@@ -14,6 +14,9 @@ opendqi-core = { path = "../opendqi-core" }
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+serde_yaml.workspace = true
 csv.workspace = true
 chrono.workspace = true
 minijinja.workspace = true
+lettre.workspace = true
+thiserror.workspace = true

@@ -72,6 +72,14 @@ pub enum EmirAction {
         /// patterns. See `docs/pre-submission-checks.md`.
         #[arg(long, value_name = "PATH")]
         rejection_profile: Option<PathBuf>,
+        /// Optional SMTP configuration YAML. When set, the HTML
+        /// report + `summary.json` + `issues.csv` are emailed to the
+        /// recipients listed in the config. The SMTP password is
+        /// read from the env var named in the config
+        /// (`OPENDQI_SMTP_PASS` by default). See
+        /// `docs/email-notifications.md`.
+        #[arg(long, value_name = "PATH")]
+        email_config: Option<PathBuf>,
     },
     /// Validate XML files: well-formedness check + XSD validation.
     /// Exits non-zero when at least one issue is found.
@@ -279,6 +287,7 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
             xsd,
             store,
             rejection_profile,
+            email_config,
         } => {
             run_scan(
                 &input,
@@ -288,6 +297,7 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
                 xsd.as_deref(),
                 store.as_deref(),
                 rejection_profile.as_deref(),
+                email_config.as_deref(),
             )?;
             Ok(ExitCode::SUCCESS)
         }
@@ -360,6 +370,7 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_scan(
     input: &Path,
     mapping_path: Option<&Path>,
@@ -368,6 +379,7 @@ fn run_scan(
     xsd_path: Option<&Path>,
     store_path: Option<&Path>,
     rejection_profile_path: Option<&Path>,
+    email_config_path: Option<&Path>,
 ) -> Result<()> {
     let started_at = Utc::now();
 
@@ -520,6 +532,22 @@ fn run_scan(
     write_report_html(&out.join("report.html"), &summary, &issues, &sources)?;
     if validator.is_some() {
         write_xsd_errors_csv(&out.join("xsd_errors.csv"), &xsd_rows)?;
+    }
+
+    if let Some(path) = email_config_path {
+        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
+        let sent = opendqi_report::send_report_email(
+            &cfg,
+            &summary,
+            &out.join("report.html"),
+            &out.join("summary.json"),
+            &out.join("issues.csv"),
+        )?;
+        if sent {
+            info!(to = ?cfg.to, "scan report emailed");
+        } else {
+            info!("email config is disabled — skipped send");
+        }
     }
 
     let critical = summary

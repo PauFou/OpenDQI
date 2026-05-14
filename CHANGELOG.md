@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (email notifications, lettre) — Phase 17
+
+- **CLAUDE.md priority #8 closed.** `opendqi emir scan` accepts
+  `--email-config <smtp.yml>` and emails the HTML report + summary
+  + issues CSV via SMTP after a scan finishes.
+- New `lettre = "0.11"` dep (default-features disabled; only
+  `builder`, `smtp-transport`, `rustls-tls`, `tokio1-rustls-tls`,
+  `hostname` — no OpenSSL link).
+- New module `crates/opendqi-report/src/email.rs` exposing:
+  - `SmtpConfig` struct with `enabled` / `host` / `port` / `use_tls`
+    / `username` / `password_env` / `from` / `to` /
+    `subject_template`. Loaded from YAML.
+  - `send_report_email(&config, &summary, html, json, csv) -> Result<bool>`
+    that returns `Ok(false)` when `enabled: false`, otherwise builds a
+    MIME multipart message and ships it via STARTTLS by default.
+- SMTP password is **never** stored in YAML — the config carries the
+  name of an env var (`OPENDQI_SMTP_PASS` by default) which is read at
+  send time. `.env.example` shipped at the repo root; `.gitignore`
+  already excludes `.env`/`.env.*` and whitelists `.env.example`.
+- Subject template supports `{regime}`, `{records}`, `{critical}`,
+  `{high}`, `{score}` / `{score:.1}` placeholders.
+- 3 unit tests cover subject substitution, the `enabled: false`
+  no-op path, and YAML round-trip with defaults.
+- New doc `docs/email-notifications.md` (config schema, security
+  notes, local smtpd test recipe).
+- `deny.toml` allow-list: add `0BSD` (transitive license via
+  `quoted_printable`, OSI-approved permissive).
+- CLI flag wired on `opendqi emir scan` for v1. `opendqi sftr scan` +
+  TR-layer commands inherit the same 3-line pattern when needed —
+  tracked as polish.
+
 ### Added (rejection-profile pre-submission loop) — Phase 14
 
 - **CLAUDE.md priority #4 closed.** The post-TR rejection analytics

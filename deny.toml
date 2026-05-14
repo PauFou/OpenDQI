@@ -39,6 +39,10 @@ allow = [
     # with our Apache-2.0 license posture. Pulled in by e.g. `notify`
     # / `tiny-keccak`-style transitive deps.
     "CC0-1.0",
+    # 0BSD ("zero-clause BSD") is OSI-approved permissive; equivalent
+    # to a no-attribution version of BSD-2-Clause. Pulled in by
+    # `quoted_printable` (transitive of `lettre`).
+    "0BSD",
 ]
 confidence-threshold = 0.93
 exceptions = []
