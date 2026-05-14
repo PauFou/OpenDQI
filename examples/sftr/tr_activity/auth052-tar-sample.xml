@@ -183,6 +183,86 @@
         </New>
       </Rpt>
 
+      <!-- 10. MGLD NEWT with no loan_value
+                  (SFTR.MAR.MGLD_NEEDS_LOAN_VALUE). -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><MgnLndg>
+            <UnqTxIdr>OPENDQI-SFTR-TAR-MGLD-0020</UnqTxIdr>
+            <EvtTp>NEWT</EvtTp>
+            <ExctnDtTm>2026-05-12T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-05-12T18:00:00Z</RptgDtTm>
+            <MtrtyDt>2027-05-12</MtrtyDt>
+          </MgnLndg></LnData>
+        </New>
+      </Rpt>
+
+      <!-- 11. MGLD NEWT with loan but no collateral
+                  (SFTR.MAR.MGLD_NEEDS_COLLATERAL). -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><MgnLndg>
+            <UnqTxIdr>OPENDQI-SFTR-TAR-MGLD-0021</UnqTxIdr>
+            <EvtTp>NEWT</EvtTp>
+            <ExctnDtTm>2026-05-12T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-05-12T18:00:00Z</RptgDtTm>
+            <MtrtyDt>2027-05-12</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">500000</Amt></PrncplAmt>
+          </MgnLndg></LnData>
+        </New>
+      </Rpt>
+
+      <!-- 12. MARU action with no updated field and no portfolio
+                  (SFTR.MAR.MARU_REQUIRES_VALUE_OR_HAIRCUT +
+                   SFTR.MAR.MARU_REQUIRES_PORTFOLIO). -->
+      <Rpt>
+        <MrgnUpd>
+          <CtrPtySpcfcData>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><MgnLndg>
+            <UnqTxIdr>OPENDQI-SFTR-TAR-MARU-0022</UnqTxIdr>
+            <EvtTp>MARU</EvtTp>
+            <ExctnDtTm>2026-05-12T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-05-12T18:00:00Z</RptgDtTm>
+            <MtrtyDt>2027-05-12</MtrtyDt>
+          </MgnLndg></LnData>
+        </MrgnUpd>
+      </Rpt>
+
+      <!-- 13. MGLD NEWT with haircut > 1
+                  (SFTR.MAR.MGLD_HAIRCUT_OUT_OF_RANGE). -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><MgnLndg>
+            <UnqTxIdr>OPENDQI-SFTR-TAR-MGLD-0023</UnqTxIdr>
+            <EvtTp>NEWT</EvtTp>
+            <ExctnDtTm>2026-05-12T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-05-12T18:00:00Z</RptgDtTm>
+            <MtrtyDt>2027-05-12</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">800000</Amt></PrncplAmt>
+          </MgnLndg></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">900000</Amt></CollVal>
+            <Hrcut>1.5</Hrcut>
+            <Sctys><Id>DE0001135275</Id></Sctys>
+          </CollData>
+        </New>
+      </Rpt>
+
     </TradData>
   </SctiesFincgRptgTxRpt>
 </Document>

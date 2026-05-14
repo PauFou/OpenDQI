@@ -476,6 +476,12 @@ pub fn default_sftr_checks() -> Vec<Box<dyn SftrCheck>> {
         Box::new(SftrEventTypeEnum),
         Box::new(SftrMasterAgreementTypeEnum),
         Box::new(SftrLendingFeeNegative),
+        // ---- Margin lending — activity layer (5) ----
+        Box::new(sftr::margin_activity::SftrMarMgldNeedsLoanValue),
+        Box::new(sftr::margin_activity::SftrMarMgldNeedsCollateral),
+        Box::new(sftr::margin_activity::SftrMarMaruRequiresValueOrHaircut),
+        Box::new(sftr::margin_activity::SftrMarMaruRequiresPortfolio),
+        Box::new(sftr::margin_activity::SftrMarMgldHaircutOutOfRange),
     ]
 }
 
@@ -954,7 +960,8 @@ pub use sftr::tr_state::{
     SftrMissingCollateralOnTsr, SftrOutstandingSummary, SftrStaleValuationOnTsr, SftrTrStateCheck,
 };
 
-/// Default SFTR TSR check registry (6 checks).
+/// Default SFTR TSR check registry (12 checks — 6 state-health + 6
+/// MGLD-specific margin-lending state-oriented checks).
 pub fn default_sftr_tr_state_checks() -> Vec<Box<dyn SftrTrStateCheck>> {
     vec![
         Box::new(SftrOutstandingSummary),
@@ -963,6 +970,13 @@ pub fn default_sftr_tr_state_checks() -> Vec<Box<dyn SftrTrStateCheck>> {
         Box::new(SftrActivePastMaturity),
         Box::new(SftrDuplicateActiveUti),
         Box::new(SftrHaircutOutOfRangeOnTsr),
+        // ---- Margin lending — state layer (6) ----
+        Box::new(sftr::margin_state::SftrMsrMgldOutstandingNeedsLoan),
+        Box::new(sftr::margin_state::SftrMsrMgldHaircutOutOfRange),
+        Box::new(sftr::margin_state::SftrMsrMgldCollateralUnderLoan),
+        Box::new(sftr::margin_state::SftrMsrMgldReuseRequiresPortfolio),
+        Box::new(sftr::margin_state::SftrMsrMgldLoanCollCurrencyMismatch),
+        Box::new(sftr::margin_state::SftrMsrMgldMissingIsin),
     ]
 }
 

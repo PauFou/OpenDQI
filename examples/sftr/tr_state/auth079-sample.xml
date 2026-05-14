@@ -106,5 +106,35 @@
       <TermntnDt>2026-04-30</TermntnDt>
     </SftStat>
 
+    <!-- 7. MGLD outstanding under-collateralised
+              (SFTR.MSR.MGLD_COLLATERAL_UNDER_LOAN) + missing ISIN
+              (SFTR.MSR.MGLD_MISSING_ISIN). -->
+    <SftStat>
+      <UnqTxIdr>OPENDQI-SFTR-TSR-MGLD-0007</UnqTxIdr>
+      <RptgCtrPty><LEI>ABCDEFGHIJKLMNOPQR01</LEI></RptgCtrPty>
+      <OthrCtrPty><LEI>ABCDEFGHIJKLMNOPQR02</LEI></OthrCtrPty>
+      <Sts>OUTSTANDING</Sts>
+      <SftTp>MGLD</SftTp>
+      <LoanAmt Ccy="EUR">1000000</LoanAmt>
+      <CollVal Ccy="EUR">700000</CollVal>
+      <Hrcut>0.05</Hrcut>
+      <MtrtyDt>2027-09-30</MtrtyDt>
+    </SftStat>
+
+    <!-- 8. MGLD outstanding with no loan_value
+              (SFTR.MSR.MGLD_OUTSTANDING_NEEDS_LOAN) +
+              loan/coll currency mismatch and reuse without portfolio. -->
+    <SftStat>
+      <UnqTxIdr>OPENDQI-SFTR-TSR-MGLD-0008</UnqTxIdr>
+      <RptgCtrPty><LEI>ABCDEFGHIJKLMNOPQR01</LEI></RptgCtrPty>
+      <OthrCtrPty><LEI>ABCDEFGHIJKLMNOPQR02</LEI></OthrCtrPty>
+      <Sts>OUTSTANDING</Sts>
+      <SftTp>MGLD</SftTp>
+      <CollVal Ccy="USD">500000</CollVal>
+      <Hrcut>1.5</Hrcut>
+      <RuseInd>true</RuseInd>
+      <MtrtyDt>2027-12-31</MtrtyDt>
+    </SftStat>
+
   </SftStateReport>
 </Document>
