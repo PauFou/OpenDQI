@@ -1,0 +1,50 @@
+# cargo-deny configuration — runs daily + on every push/PR via
+# .github/workflows/deny.yml. Local invocation:
+#
+#   cargo install cargo-deny    # one-shot
+#   cargo deny check
+#
+# The four subcommands we run are `advisories`, `bans`, `licenses`,
+# `sources`. See https://embarkstudios.github.io/cargo-deny/ for the
+# schema reference.
+
+[advisories]
+version = 2
+# RustSec advisories: any reported vulnerability fails the run.
+# Unmaintained / unsound crates are warned-on (default in v2).
+ignore = []
+
+[licenses]
+version = 2
+# Standard permissive licenses for an Apache-2.0 OSS project.
+# Reject anything not on this allow-list (no GPL, no AGPL, etc.).
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "Zlib",
+    "CDLA-Permissive-2.0",
+    "MPL-2.0",
+]
+confidence-threshold = 0.93
+exceptions = []
+
+[bans]
+# The arrow / parquet / tokio ecosystems carry legitimate duplicate
+# versions (e.g. hashbrown 0.14 alongside 0.15) that we can't easily
+# arbitrate. Warn so we notice growth, but don't block.
+multiple-versions = "warn"
+# No wildcard versions allowed in our Cargo.toml — discipline.
+wildcards = "deny"
+# Show full dependency tree on hits.
+highlight = "all"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

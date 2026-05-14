@@ -1,5 +1,8 @@
 # OpenDQI
 
+[![CI](https://github.com/PauFou/OpenDQI/actions/workflows/ci.yml/badge.svg)](https://github.com/PauFou/OpenDQI/actions/workflows/ci.yml)
+[![Security audit](https://github.com/PauFou/OpenDQI/actions/workflows/deny.yml/badge.svg)](https://github.com/PauFou/OpenDQI/actions/workflows/deny.yml)
+
 **OpenDQI turns EMIR/SFTR Trade Repository activity, state, and rejection files into actionable data quality intelligence.**
 
 A local-first engine that ingests both the reports a firm submits to its Trade Repository and the files the TR sends back, and converts them into reproducible HTML, JSON, CSV (and planned Parquet) outputs.
@@ -117,6 +120,10 @@ Public summary; see [`docs/positioning.md`](docs/positioning.md) for context.
 ## Status
 
 OpenDQI is in early development. The first supported regime is EMIR (CLI). SFTR is implemented for submission scanning and feedback; full TSR/TAR coverage is on the SFTR roadmap.
+
+- **CI** — `cargo fmt --check`, `cargo clippy -D warnings`, `cargo build`, `cargo test --workspace` on Ubuntu + macOS for every push and PR to `main`.
+- **Security audit** — `cargo-deny` runs `check advisories bans licenses sources` daily and on every push/PR.
+- **Run the same checks locally before pushing**: `./scripts/preflight.sh`.
 
 See [`CHANGELOG.md`](CHANGELOG.md) for release notes.
 
