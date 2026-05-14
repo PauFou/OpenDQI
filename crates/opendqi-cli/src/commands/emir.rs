@@ -9,14 +9,17 @@ use chrono::Utc;
 use clap::Subcommand;
 use opendqi_core::dq::{
     default_checks, default_feedback_checks, default_lifecycle_checks,
-    default_margin_activity_checks, default_margin_state_checks, default_reconciliation_checks,
-    default_tr_activity_checks, default_tr_state_checks, run_all, run_all_feedback,
-    run_all_lifecycle, run_all_margin_activity, run_all_margin_state, run_all_reconciliation,
-    run_all_tr_activity, run_all_tr_state, CheckContext,
+    default_margin_activity_checks, default_margin_activity_lifecycle_checks,
+    default_margin_state_checks, default_margin_state_lifecycle_checks,
+    default_reconciliation_checks, default_tr_activity_checks, default_tr_state_checks,
+    default_tr_state_lifecycle_checks, run_all, run_all_feedback, run_all_lifecycle,
+    run_all_margin_activity, run_all_margin_state, run_all_margin_state_lifecycle,
+    run_all_reconciliation, run_all_tr_activity, run_all_tr_state, run_all_tr_state_lifecycle,
+    CheckContext,
 };
 use opendqi_core::{
-    DqDimension, DqIssue, EmirRecord, MarginActivityRecord, Regime, ScanSummary, Severity,
-    Thresholds, TrActivitySummary,
+    DqDimension, DqIssue, EmirRecord, MarginActivityRecord, MarginStateRecord, Regime, ScanSummary,
+    Severity, Thresholds, TrActivitySummary, TrStateRecord,
 };
 use opendqi_io::{discover_emir_inputs, has_extension, read_emir_csv, CsvMapping};
 use opendqi_report::{write_issues_csv, write_report_html, write_summary_json};
@@ -730,31 +733,38 @@ fn run_tr_state_scan(input: &Path, store_path: Option<&Path>, out: &Path) -> Res
 
     let mut issues: Vec<DqIssue> = outcome.issues;
 
-    // Optional store enrichment: persist this TSR snapshot and load
-    // prior EMIR records for the UTIs present in the TSR (kept for
-    // forward-compat with EMIR record context; the new TSR
-    // cross-batch lifecycle checks land in a separate runner pass).
-    let prior: Vec<EmirRecord> = if let Some(store_path) = store_path {
-        let mut store = opendqi_store::open_store(store_path)
-            .with_context(|| format!("opening history store at {}", store_path.display()))?;
-        store
-            .persist_tr_state_batch(1, &outcome.records)
-            .context("persisting EMIR TSR batch to history store")?;
-        let utis: Vec<&str> = outcome
-            .records
-            .iter()
-            .filter_map(|r| r.uti.as_deref())
-            .map(str::trim)
-            .filter(|u| !u.is_empty())
-            .collect();
-        let prior = store
-            .load_prior_emir(&utis, i64::MAX)
-            .context("loading prior EMIR records from history store")?;
-        info!(prior_records = prior.len(), "loaded prior records");
-        prior
-    } else {
-        Vec::new()
-    };
+    // Optional store enrichment: persist this TSR snapshot, load
+    // prior EMIR records for the UTIs present in the TSR, and run
+    // the cross-batch lifecycle layer against prior TSR snapshots.
+    let (prior, prior_tsr): (Vec<EmirRecord>, Vec<TrStateRecord>) =
+        if let Some(store_path) = store_path {
+            let mut store = opendqi_store::open_store(store_path)
+                .with_context(|| format!("opening history store at {}", store_path.display()))?;
+            let scan_id = store
+                .persist_tr_state_batch(1, &outcome.records)
+                .context("persisting EMIR TSR batch to history store")?;
+            let utis: Vec<&str> = outcome
+                .records
+                .iter()
+                .filter_map(|r| r.uti.as_deref())
+                .map(str::trim)
+                .filter(|u| !u.is_empty())
+                .collect();
+            let prior = store
+                .load_prior_emir(&utis, i64::MAX)
+                .context("loading prior EMIR records from history store")?;
+            let prior_tsr = store
+                .load_latest_prior_tr_state(scan_id)
+                .context("loading prior EMIR TSR snapshot from history store")?;
+            info!(
+                prior_records = prior.len(),
+                prior_tsr_records = prior_tsr.len(),
+                "loaded prior records"
+            );
+            (prior, prior_tsr)
+        } else {
+            (Vec::new(), Vec::new())
+        };
 
     let now = Utc::now();
     let ctx = CheckContext {
@@ -765,6 +775,16 @@ fn run_tr_state_scan(input: &Path, store_path: Option<&Path>, out: &Path) -> Res
     let tsr_issues = run_all_tr_state(&default_tr_state_checks(), &outcome.records, &prior, &ctx);
     info!(tsr_issues = tsr_issues.len(), "TSR checks run");
     issues.extend(tsr_issues);
+    if !prior_tsr.is_empty() {
+        let lfc_issues = run_all_tr_state_lifecycle(
+            &default_tr_state_lifecycle_checks(),
+            &outcome.records,
+            &prior_tsr,
+            &ctx,
+        );
+        info!(lfc_issues = lfc_issues.len(), "TSR lifecycle checks run");
+        issues.extend(lfc_issues);
+    }
     sort_issues(&mut issues);
 
     let inputs = vec![input.to_path_buf()];
@@ -825,16 +845,11 @@ fn run_mar_scan(input: &Path, store_path: Option<&Path>, out: &Path) -> Result<(
         let scan_id = store
             .persist_margin_activity_batch(1, &outcome.records)
             .context("persisting MAR batch to history store")?;
-        let portfolios: Vec<&str> = outcome
-            .records
-            .iter()
-            .filter_map(|r| r.collateral_portfolio_code.as_deref())
-            .map(str::trim)
-            .filter(|p| !p.is_empty())
-            .collect();
+        // Use the latest-prior loader so PORTFOLIO_GAP can see
+        // portfolios that disappeared from the current batch.
         let prior = store
-            .load_prior_margin_activity(&portfolios, scan_id)
-            .context("loading prior MAR records from history store")?;
+            .load_latest_prior_margin_activity(scan_id)
+            .context("loading prior MAR snapshot from history store")?;
         info!(prior_records = prior.len(), "loaded prior MAR records");
         prior
     } else {
@@ -854,6 +869,16 @@ fn run_mar_scan(input: &Path, store_path: Option<&Path>, out: &Path) -> Result<(
     );
     info!(mar_issues = mar_issues.len(), "MAR checks run");
     issues.extend(mar_issues);
+    if !prior.is_empty() {
+        let lfc_issues = run_all_margin_activity(
+            &default_margin_activity_lifecycle_checks(),
+            &outcome.records,
+            &prior,
+            &ctx,
+        );
+        info!(lfc_issues = lfc_issues.len(), "MAR lifecycle checks run");
+        issues.extend(lfc_issues);
+    }
     sort_issues(&mut issues);
 
     let inputs = vec![input.to_path_buf()];
@@ -903,27 +928,35 @@ fn run_msr_scan(input: &Path, store_path: Option<&Path>, out: &Path) -> Result<(
 
     let mut issues: Vec<DqIssue> = outcome.issues;
 
-    let prior: Vec<EmirRecord> = if let Some(store_path) = store_path {
-        let mut store = opendqi_store::open_store(store_path)
-            .with_context(|| format!("opening history store at {}", store_path.display()))?;
-        store
-            .persist_margin_state_batch(1, &outcome.records)
-            .context("persisting EMIR MSR batch to history store")?;
-        let utis: Vec<&str> = outcome
-            .records
-            .iter()
-            .filter_map(|r| r.uti.as_deref())
-            .map(str::trim)
-            .filter(|u| !u.is_empty())
-            .collect();
-        let prior = store
-            .load_prior_emir(&utis, i64::MAX)
-            .context("loading prior EMIR records from history store")?;
-        info!(prior_records = prior.len(), "loaded prior records");
-        prior
-    } else {
-        Vec::new()
-    };
+    let (prior, prior_msr): (Vec<EmirRecord>, Vec<MarginStateRecord>) =
+        if let Some(store_path) = store_path {
+            let mut store = opendqi_store::open_store(store_path)
+                .with_context(|| format!("opening history store at {}", store_path.display()))?;
+            let scan_id = store
+                .persist_margin_state_batch(1, &outcome.records)
+                .context("persisting EMIR MSR batch to history store")?;
+            let utis: Vec<&str> = outcome
+                .records
+                .iter()
+                .filter_map(|r| r.uti.as_deref())
+                .map(str::trim)
+                .filter(|u| !u.is_empty())
+                .collect();
+            let prior = store
+                .load_prior_emir(&utis, i64::MAX)
+                .context("loading prior EMIR records from history store")?;
+            let prior_msr = store
+                .load_latest_prior_margin_state(scan_id)
+                .context("loading prior MSR snapshot from history store")?;
+            info!(
+                prior_records = prior.len(),
+                prior_msr_records = prior_msr.len(),
+                "loaded prior records"
+            );
+            (prior, prior_msr)
+        } else {
+            (Vec::new(), Vec::new())
+        };
 
     let now = Utc::now();
     let ctx = CheckContext {
@@ -939,6 +972,16 @@ fn run_msr_scan(input: &Path, store_path: Option<&Path>, out: &Path) -> Result<(
     );
     info!(msr_issues = msr_issues.len(), "MSR checks run");
     issues.extend(msr_issues);
+    if !prior_msr.is_empty() {
+        let lfc_issues = run_all_margin_state_lifecycle(
+            &default_margin_state_lifecycle_checks(),
+            &outcome.records,
+            &prior_msr,
+            &ctx,
+        );
+        info!(lfc_issues = lfc_issues.len(), "MSR lifecycle checks run");
+        issues.extend(lfc_issues);
+    }
     sort_issues(&mut issues);
 
     let inputs = vec![input.to_path_buf()];

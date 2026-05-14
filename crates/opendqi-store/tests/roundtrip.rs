@@ -346,6 +346,58 @@ fn empty_records_persist_creates_scan_row() {
 }
 
 #[test]
+fn load_latest_prior_tr_state_returns_most_recent_snapshot() {
+    let path = tmp("latest-tsr.db");
+    let mut store = open_store(&path).unwrap();
+    // Two prior scans: U1 in scan 1, U1+U2 in scan 2. The third
+    // (current) scan should see only the latest (scan 2 → 2 rows).
+    let scan1 = store
+        .persist_tr_state_batch(
+            1,
+            &[TrStateRecord {
+                uti: Some("U1".into()),
+                status: Some("OUTSTANDING".into()),
+                ..Default::default()
+            }],
+        )
+        .unwrap();
+    let scan2 = store
+        .persist_tr_state_batch(
+            1,
+            &[
+                TrStateRecord {
+                    uti: Some("U1".into()),
+                    status: Some("OUTSTANDING".into()),
+                    ..Default::default()
+                },
+                TrStateRecord {
+                    uti: Some("U2".into()),
+                    status: Some("OUTSTANDING".into()),
+                    ..Default::default()
+                },
+            ],
+        )
+        .unwrap();
+    let current_scan = scan2 + 1;
+    let latest = store.load_latest_prior_tr_state(current_scan).unwrap();
+    assert_eq!(latest.len(), 2, "should return scan 2's rows only");
+    let uti_set: std::collections::HashSet<&str> =
+        latest.iter().filter_map(|r| r.uti.as_deref()).collect();
+    assert!(uti_set.contains("U1") && uti_set.contains("U2"));
+
+    // Excluding scan2 leaves scan1 as the most recent prior.
+    let prior_of_scan2 = store.load_latest_prior_tr_state(scan2).unwrap();
+    assert_eq!(prior_of_scan2.len(), 1);
+    assert_eq!(prior_of_scan2[0].uti.as_deref(), Some("U1"));
+
+    // No prior at all → empty.
+    let empty = store.load_latest_prior_tr_state(scan1).unwrap();
+    assert!(empty.is_empty());
+
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
 fn margin_activity_by_portfolio_returns_empty_when_no_match() {
     let path = tmp("mar-nomatch.db");
     let mut store = open_store(&path).unwrap();

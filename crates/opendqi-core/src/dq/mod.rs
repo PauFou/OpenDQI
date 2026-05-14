@@ -50,7 +50,9 @@ mod lei_format_ccp;
 mod lei_format_err;
 mod lei_format_oc;
 mod lei_format_rc;
+mod margin_activity_lifecycle;
 mod margin_precision;
+mod margin_state_lifecycle;
 mod maru_requires_margin;
 mod maru_requires_portfolio;
 mod master_agreement_type_enum;
@@ -86,7 +88,9 @@ mod product_id_missing;
 mod reporting_before_execution;
 mod risk_mitigation;
 mod self_dealing;
+mod sftr_tr_state_lifecycle;
 mod termination_after_maturity;
+mod tr_state_lifecycle;
 mod trading_capacity_enum;
 mod trading_capacity_missing;
 mod valu_requires_valuation;
@@ -1024,6 +1028,108 @@ pub fn run_all_sftr_tr_activity(
     let mut issues: Vec<DqIssue> = checks
         .iter()
         .flat_map(|c| c.run(records, prior, tsr, ctx))
+        .collect();
+    sort_issues(&mut issues);
+    issues
+}
+
+// ---- Cross-batch lifecycle layers (Phase 7) ---------------------
+
+pub use margin_activity_lifecycle::{
+    EmirMarLfcNegativeTrend, EmirMarLfcPortfolioGap, EmirMarLfcRecurringLateMargin,
+};
+pub use margin_state_lifecycle::{
+    EmirMsrLfcCategoryChanged, EmirMsrLfcCollateralMarketValueRegression, EmirMsrLfcHaircutDrift,
+    MarginStateLifecycleCheck,
+};
+pub use sftr_tr_state_lifecycle::{
+    SftrTrStateLifecycleCheck, SftrTstLfcCollateralValueRegression, SftrTstLfcHaircutChanged,
+    SftrTstLfcUtiDroppedWithoutTermination,
+};
+pub use tr_state_lifecycle::{
+    EmirTstLfcCollateralPortfolioChanged, EmirTstLfcMaturityChanged,
+    EmirTstLfcUtiDroppedWithoutTermination, EmirTstLfcValuationRegression, TrStateLifecycleCheck,
+};
+
+/// Default EMIR TSR lifecycle check registry (4 checks).
+pub fn default_tr_state_lifecycle_checks() -> Vec<Box<dyn TrStateLifecycleCheck>> {
+    vec![
+        Box::new(EmirTstLfcUtiDroppedWithoutTermination),
+        Box::new(EmirTstLfcValuationRegression),
+        Box::new(EmirTstLfcMaturityChanged),
+        Box::new(EmirTstLfcCollateralPortfolioChanged),
+    ]
+}
+
+/// Run every EMIR TSR lifecycle check.
+pub fn run_all_tr_state_lifecycle(
+    checks: &[Box<dyn TrStateLifecycleCheck>],
+    current: &[TrStateRecord],
+    prior: &[TrStateRecord],
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    let mut issues: Vec<DqIssue> = checks
+        .iter()
+        .flat_map(|c| c.run(current, prior, ctx))
+        .collect();
+    sort_issues(&mut issues);
+    issues
+}
+
+/// Default SFTR TSR lifecycle check registry (3 checks).
+pub fn default_sftr_tr_state_lifecycle_checks() -> Vec<Box<dyn SftrTrStateLifecycleCheck>> {
+    vec![
+        Box::new(SftrTstLfcUtiDroppedWithoutTermination),
+        Box::new(SftrTstLfcCollateralValueRegression),
+        Box::new(SftrTstLfcHaircutChanged),
+    ]
+}
+
+/// Run every SFTR TSR lifecycle check.
+pub fn run_all_sftr_tr_state_lifecycle(
+    checks: &[Box<dyn SftrTrStateLifecycleCheck>],
+    current: &[SftrTrStateRecord],
+    prior: &[SftrTrStateRecord],
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    let mut issues: Vec<DqIssue> = checks
+        .iter()
+        .flat_map(|c| c.run(current, prior, ctx))
+        .collect();
+    sort_issues(&mut issues);
+    issues
+}
+
+/// Default EMIR MAR cross-batch check registry (3 checks). Re-uses
+/// the standard `MarginActivityCheck` trait — runner just passes the
+/// prior batch loaded from the store.
+pub fn default_margin_activity_lifecycle_checks() -> Vec<Box<dyn MarginActivityCheck>> {
+    vec![
+        Box::new(EmirMarLfcPortfolioGap),
+        Box::new(EmirMarLfcRecurringLateMargin),
+        Box::new(EmirMarLfcNegativeTrend),
+    ]
+}
+
+/// Default EMIR MSR lifecycle check registry (3 checks).
+pub fn default_margin_state_lifecycle_checks() -> Vec<Box<dyn MarginStateLifecycleCheck>> {
+    vec![
+        Box::new(EmirMsrLfcCollateralMarketValueRegression),
+        Box::new(EmirMsrLfcCategoryChanged),
+        Box::new(EmirMsrLfcHaircutDrift),
+    ]
+}
+
+/// Run every EMIR MSR lifecycle check.
+pub fn run_all_margin_state_lifecycle(
+    checks: &[Box<dyn MarginStateLifecycleCheck>],
+    current: &[MarginStateRecord],
+    prior: &[MarginStateRecord],
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    let mut issues: Vec<DqIssue> = checks
+        .iter()
+        .flat_map(|c| c.run(current, prior, ctx))
         .collect();
     sort_issues(&mut issues);
     issues

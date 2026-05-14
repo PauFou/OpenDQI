@@ -10,8 +10,9 @@ use clap::Subcommand;
 use opendqi_core::dq::{
     default_sftr_checks, default_sftr_feedback_checks, default_sftr_lifecycle_checks,
     default_sftr_reconciliation_checks, default_sftr_tr_activity_checks,
-    default_sftr_tr_state_checks, run_all_sftr, run_all_sftr_feedback, run_all_sftr_lifecycle,
-    run_all_sftr_reconciliation, run_all_sftr_tr_activity, run_all_sftr_tr_state, CheckContext,
+    default_sftr_tr_state_checks, default_sftr_tr_state_lifecycle_checks, run_all_sftr,
+    run_all_sftr_feedback, run_all_sftr_lifecycle, run_all_sftr_reconciliation,
+    run_all_sftr_tr_activity, run_all_sftr_tr_state, run_all_sftr_tr_state_lifecycle, CheckContext,
 };
 use opendqi_core::{
     DqDimension, DqIssue, Regime, ScanSummary, Severity, SftrRecord, SftrTrStateRecord, Thresholds,
@@ -663,27 +664,35 @@ fn run_tr_state_scan(input: &Path, store_path: Option<&Path>, out: &Path) -> Res
 
     let mut issues: Vec<DqIssue> = outcome.issues;
 
-    let prior: Vec<SftrRecord> = if let Some(store_path) = store_path {
-        let mut store = opendqi_store::open_store(store_path)
-            .with_context(|| format!("opening history store at {}", store_path.display()))?;
-        store
-            .persist_sftr_tr_state_batch(1, &outcome.records)
-            .context("persisting SFTR TSR batch to history store")?;
-        let utis: Vec<&str> = outcome
-            .records
-            .iter()
-            .filter_map(|r| r.uti.as_deref())
-            .map(str::trim)
-            .filter(|u| !u.is_empty())
-            .collect();
-        let prior = store
-            .load_prior_sftr(&utis, i64::MAX)
-            .context("loading prior SFTR records from history store")?;
-        info!(prior_records = prior.len(), "loaded prior records");
-        prior
-    } else {
-        Vec::new()
-    };
+    let (prior, prior_tsr): (Vec<SftrRecord>, Vec<SftrTrStateRecord>) =
+        if let Some(store_path) = store_path {
+            let mut store = opendqi_store::open_store(store_path)
+                .with_context(|| format!("opening history store at {}", store_path.display()))?;
+            let scan_id = store
+                .persist_sftr_tr_state_batch(1, &outcome.records)
+                .context("persisting SFTR TSR batch to history store")?;
+            let utis: Vec<&str> = outcome
+                .records
+                .iter()
+                .filter_map(|r| r.uti.as_deref())
+                .map(str::trim)
+                .filter(|u| !u.is_empty())
+                .collect();
+            let prior = store
+                .load_prior_sftr(&utis, i64::MAX)
+                .context("loading prior SFTR records from history store")?;
+            let prior_tsr = store
+                .load_latest_prior_sftr_tr_state(scan_id)
+                .context("loading prior SFTR TSR snapshot from history store")?;
+            info!(
+                prior_records = prior.len(),
+                prior_tsr_records = prior_tsr.len(),
+                "loaded prior records"
+            );
+            (prior, prior_tsr)
+        } else {
+            (Vec::new(), Vec::new())
+        };
 
     let now = Utc::now();
     let ctx = CheckContext {
@@ -699,6 +708,19 @@ fn run_tr_state_scan(input: &Path, store_path: Option<&Path>, out: &Path) -> Res
     );
     info!(tsr_issues = tsr_issues.len(), "SFTR TSR checks run");
     issues.extend(tsr_issues);
+    if !prior_tsr.is_empty() {
+        let lfc_issues = run_all_sftr_tr_state_lifecycle(
+            &default_sftr_tr_state_lifecycle_checks(),
+            &outcome.records,
+            &prior_tsr,
+            &ctx,
+        );
+        info!(
+            lfc_issues = lfc_issues.len(),
+            "SFTR TSR lifecycle checks run"
+        );
+        issues.extend(lfc_issues);
+    }
     sort_issues(&mut issues);
 
     let inputs = vec![input.to_path_buf()];

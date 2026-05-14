@@ -602,6 +602,347 @@ impl Store {
         Ok(out)
     }
 
+    /// Load every TSR row from the most recent prior scan
+    /// (`scan_id < exclude_scan_id`) that produced TSR rows. Used by
+    /// the cross-batch lifecycle layer to compare current vs. last
+    /// snapshot — covers UTIs that have been dropped (which the
+    /// per-UTI loader cannot return).
+    pub fn load_latest_prior_tr_state(
+        &self,
+        exclude_scan_id: i64,
+    ) -> Result<Vec<TrStateRecord>, StoreError> {
+        let latest: Option<i64> = self
+            .conn
+            .query_row(
+                "SELECT MAX(scan_id) FROM tr_state_records WHERE scan_id < ?1",
+                params![exclude_scan_id],
+                |r| r.get::<_, Option<i64>>(0),
+            )
+            .optional()?
+            .flatten();
+        let Some(scan_id) = latest else {
+            return Ok(Vec::new());
+        };
+        let sql = "SELECT record_id, source_file, state_as_of, uti, \
+                reporting_counterparty, other_counterparty, status, \
+                notional_amount, notional_currency, \
+                valuation_amount, valuation_currency, valuation_timestamp, \
+                effective_date, maturity_date, termination_date, \
+                collateral_portfolio_code \
+             FROM tr_state_records WHERE scan_id = ?1";
+        let mut stmt = self.conn.prepare(sql)?;
+        let rows = stmt.query_map(params![scan_id], |row| {
+            Ok((
+                row.get::<_, Option<String>>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                row.get::<_, Option<i64>>(2)?,
+                row.get::<_, Option<String>>(3)?,
+                row.get::<_, Option<String>>(4)?,
+                row.get::<_, Option<String>>(5)?,
+                row.get::<_, Option<String>>(6)?,
+                row.get::<_, Option<String>>(7)?,
+                row.get::<_, Option<String>>(8)?,
+                row.get::<_, Option<String>>(9)?,
+                row.get::<_, Option<String>>(10)?,
+                row.get::<_, Option<i64>>(11)?,
+                row.get::<_, Option<String>>(12)?,
+                row.get::<_, Option<String>>(13)?,
+                row.get::<_, Option<String>>(14)?,
+                row.get::<_, Option<String>>(15)?,
+            ))
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            let (rid, src, sao, uti, rc, oc, st, notional, ntccy, va, vc, vt, ed, md, td, pc) = r?;
+            out.push(TrStateRecord {
+                record_id: rid,
+                source_file: src,
+                regime: Regime::Emir,
+                state_as_of: ts_from(sao),
+                uti,
+                reporting_counterparty: rc,
+                other_counterparty: oc,
+                status: st,
+                notional_amount: decimal_from(notional)?,
+                notional_currency: ntccy,
+                valuation_amount: decimal_from(va)?,
+                valuation_currency: vc,
+                valuation_timestamp: ts_from(vt),
+                effective_date: date_from(ed)?,
+                maturity_date: date_from(md)?,
+                termination_date: date_from(td)?,
+                collateral_portfolio_code: pc,
+                ..Default::default()
+            });
+        }
+        Ok(out)
+    }
+
+    /// SFTR variant of [`Store::load_latest_prior_tr_state`].
+    pub fn load_latest_prior_sftr_tr_state(
+        &self,
+        exclude_scan_id: i64,
+    ) -> Result<Vec<SftrTrStateRecord>, StoreError> {
+        let latest: Option<i64> = self
+            .conn
+            .query_row(
+                "SELECT MAX(scan_id) FROM sftr_tr_state_records WHERE scan_id < ?1",
+                params![exclude_scan_id],
+                |r| r.get::<_, Option<i64>>(0),
+            )
+            .optional()?
+            .flatten();
+        let Some(scan_id) = latest else {
+            return Ok(Vec::new());
+        };
+        let sql = "SELECT record_id, source_file, state_as_of, uti, \
+                reporting_counterparty, other_counterparty, status, sft_type, \
+                loan_value, loan_currency, collateral_value, collateral_currency, \
+                haircut, reuse_indicator, \
+                effective_date, maturity_date, termination_date, settlement_date, \
+                collateral_portfolio_code, collateral_isin \
+             FROM sftr_tr_state_records WHERE scan_id = ?1";
+        let mut stmt = self.conn.prepare(sql)?;
+        let rows = stmt.query_map(params![scan_id], |row| {
+            Ok((
+                row.get::<_, Option<String>>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                row.get::<_, Option<i64>>(2)?,
+                row.get::<_, Option<String>>(3)?,
+                row.get::<_, Option<String>>(4)?,
+                row.get::<_, Option<String>>(5)?,
+                row.get::<_, Option<String>>(6)?,
+                row.get::<_, Option<String>>(7)?,
+                row.get::<_, Option<String>>(8)?,
+                row.get::<_, Option<String>>(9)?,
+                row.get::<_, Option<String>>(10)?,
+                row.get::<_, Option<String>>(11)?,
+                row.get::<_, Option<String>>(12)?,
+                row.get::<_, Option<i64>>(13)?,
+                row.get::<_, Option<String>>(14)?,
+                row.get::<_, Option<String>>(15)?,
+                row.get::<_, Option<String>>(16)?,
+                row.get::<_, Option<String>>(17)?,
+                row.get::<_, Option<String>>(18)?,
+                row.get::<_, Option<String>>(19)?,
+            ))
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            let (
+                rid,
+                src,
+                sao,
+                uti,
+                rc,
+                oc,
+                st,
+                sft,
+                ln,
+                lnc,
+                cv,
+                cvc,
+                h,
+                reu,
+                ed,
+                md,
+                td,
+                sd,
+                pc,
+                isin,
+            ) = r?;
+            out.push(SftrTrStateRecord {
+                record_id: rid,
+                source_file: src,
+                regime: Regime::Sftr,
+                state_as_of: ts_from(sao),
+                uti,
+                reporting_counterparty: rc,
+                other_counterparty: oc,
+                status: st,
+                sft_type: sft,
+                loan_value: decimal_from(ln)?,
+                loan_currency: lnc,
+                collateral_value: decimal_from(cv)?,
+                collateral_currency: cvc,
+                haircut: decimal_from(h)?,
+                reuse_indicator: reu.map(|i| i != 0),
+                effective_date: date_from(ed)?,
+                maturity_date: date_from(md)?,
+                termination_date: date_from(td)?,
+                settlement_date: date_from(sd)?,
+                collateral_portfolio_code: pc,
+                collateral_isin: isin,
+                ..Default::default()
+            });
+        }
+        Ok(out)
+    }
+
+    /// MSR variant: load every margin state row from the most recent
+    /// prior scan.
+    pub fn load_latest_prior_margin_state(
+        &self,
+        exclude_scan_id: i64,
+    ) -> Result<Vec<MarginStateRecord>, StoreError> {
+        let latest: Option<i64> = self
+            .conn
+            .query_row(
+                "SELECT MAX(scan_id) FROM margin_state_records WHERE scan_id < ?1",
+                params![exclude_scan_id],
+                |r| r.get::<_, Option<i64>>(0),
+            )
+            .optional()?
+            .flatten();
+        let Some(scan_id) = latest else {
+            return Ok(Vec::new());
+        };
+        let sql = "SELECT record_id, source_file, uti, counterparty_1, counterparty_2, \
+                collateral_portfolio_code, \
+                initial_margin_posted_current, initial_margin_collected_current, \
+                variation_margin_posted_current, variation_margin_collected_current, \
+                margin_currency, collateral_market_value, haircut_applied, \
+                collateralization_category, state_as_of \
+             FROM margin_state_records WHERE scan_id = ?1";
+        let mut stmt = self.conn.prepare(sql)?;
+        let rows = stmt.query_map(params![scan_id], |row| {
+            Ok((
+                row.get::<_, Option<String>>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, Option<String>>(3)?,
+                row.get::<_, Option<String>>(4)?,
+                row.get::<_, Option<String>>(5)?,
+                row.get::<_, Option<String>>(6)?,
+                row.get::<_, Option<String>>(7)?,
+                row.get::<_, Option<String>>(8)?,
+                row.get::<_, Option<String>>(9)?,
+                row.get::<_, Option<String>>(10)?,
+                row.get::<_, Option<String>>(11)?,
+                row.get::<_, Option<String>>(12)?,
+                row.get::<_, Option<String>>(13)?,
+                row.get::<_, Option<i64>>(14)?,
+            ))
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            let (rid, src, uti, c1, c2, pc, ip, ic, vp, vc, ccy, mkt, hcut, cat, sao) = r?;
+            out.push(MarginStateRecord {
+                record_id: rid,
+                source_file: src,
+                regime: Regime::Emir,
+                uti,
+                counterparty_1: c1,
+                counterparty_2: c2,
+                collateral_portfolio_code: pc,
+                initial_margin_posted_current: decimal_from(ip)?,
+                initial_margin_collected_current: decimal_from(ic)?,
+                variation_margin_posted_current: decimal_from(vp)?,
+                variation_margin_collected_current: decimal_from(vc)?,
+                margin_currency: ccy,
+                collateral_market_value: decimal_from(mkt)?,
+                haircut_applied: decimal_from(hcut)?,
+                collateralization_category: cat,
+                state_as_of: ts_from(sao),
+                ..Default::default()
+            });
+        }
+        Ok(out)
+    }
+
+    /// MAR variant: load every margin activity row from the most
+    /// recent prior scan.
+    pub fn load_latest_prior_margin_activity(
+        &self,
+        exclude_scan_id: i64,
+    ) -> Result<Vec<MarginActivityRecord>, StoreError> {
+        let latest: Option<i64> = self
+            .conn
+            .query_row(
+                "SELECT MAX(scan_id) FROM margin_activity_records WHERE scan_id < ?1",
+                params![exclude_scan_id],
+                |r| r.get::<_, Option<i64>>(0),
+            )
+            .optional()?
+            .flatten();
+        let Some(scan_id) = latest else {
+            return Ok(Vec::new());
+        };
+        let sql = "SELECT record_id, source_file, uti, counterparty_1, counterparty_2, \
+                action_type, event_type, collateral_portfolio_code, \
+                initial_margin_posted, initial_margin_collected, \
+                variation_margin_posted, variation_margin_collected, \
+                margin_currency, excess_collateral, collateral_haircut, \
+                event_timestamp, reporting_timestamp \
+             FROM margin_activity_records WHERE scan_id = ?1";
+        let mut stmt = self.conn.prepare(sql)?;
+        let rows = stmt.query_map(params![scan_id], |row| {
+            Ok((
+                row.get::<_, Option<String>>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, Option<String>>(3)?,
+                row.get::<_, Option<String>>(4)?,
+                row.get::<_, Option<String>>(5)?,
+                row.get::<_, Option<String>>(6)?,
+                row.get::<_, Option<String>>(7)?,
+                row.get::<_, Option<String>>(8)?,
+                row.get::<_, Option<String>>(9)?,
+                row.get::<_, Option<String>>(10)?,
+                row.get::<_, Option<String>>(11)?,
+                row.get::<_, Option<String>>(12)?,
+                row.get::<_, Option<String>>(13)?,
+                row.get::<_, Option<String>>(14)?,
+                row.get::<_, Option<i64>>(15)?,
+                row.get::<_, Option<i64>>(16)?,
+            ))
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            let (
+                rid,
+                src,
+                uti,
+                c1,
+                c2,
+                act,
+                evt,
+                pc,
+                ip,
+                ic,
+                vp,
+                vc,
+                ccy,
+                xs,
+                hcut,
+                evt_ts,
+                rpt_ts,
+            ) = r?;
+            out.push(MarginActivityRecord {
+                record_id: rid,
+                source_file: src,
+                regime: Regime::Emir,
+                uti,
+                counterparty_1: c1,
+                counterparty_2: c2,
+                action_type: act,
+                event_type: evt,
+                collateral_portfolio_code: pc,
+                initial_margin_posted: decimal_from(ip)?,
+                initial_margin_collected: decimal_from(ic)?,
+                variation_margin_posted: decimal_from(vp)?,
+                variation_margin_collected: decimal_from(vc)?,
+                margin_currency: ccy,
+                excess_collateral: decimal_from(xs)?,
+                collateral_haircut: decimal_from(hcut)?,
+                event_timestamp: ts_from(evt_ts),
+                reporting_timestamp: ts_from(rpt_ts),
+                ..Default::default()
+            });
+        }
+        Ok(out)
+    }
+
     /// Count rows in `emir_records`. Test helper.
     #[doc(hidden)]
     pub fn count_emir(&self) -> Result<i64, StoreError> {
