@@ -9,14 +9,19 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 use opendqi_core::dq::{
-    default_checks, default_sftr_checks, finalize_issues, run_all, run_all_sftr, CheckContext,
+    default_checks, default_recon_stats_checks, default_sftr_checks, default_sftr_tr_state_checks,
+    default_tr_state_checks, finalize_issues, run_all, run_all_recon_stats, run_all_sftr,
+    run_all_sftr_tr_state, run_all_tr_state, CheckContext,
 };
 use opendqi_core::{
     DqDimension, DqIssue, EmirRecord, Regime, ScanSummary, Severity, SftrRecord, Thresholds,
 };
 use opendqi_io::{has_extension, read_emir_parquet, read_sftr_parquet};
 use opendqi_report::{write_issues_csv, write_report_html, write_summary_json};
-use opendqi_xml::{read_emir_xml, read_sftr_xml};
+use opendqi_xml::{
+    read_emir_recon_stats_xml, read_emir_tr_state_xml, read_emir_xml, read_sftr_tr_state_xml,
+    read_sftr_xml,
+};
 
 /// What the user picked in the form.
 #[derive(Debug, Clone, Copy)]
@@ -42,6 +47,38 @@ impl UiRegime {
     }
 }
 
+/// Which scan operation the user picked. `Scan` runs the standard
+/// submission DQ check pack (default for backward compat). The other
+/// variants route to TR-layer scan helpers.
+#[derive(Debug, Clone, Copy)]
+pub enum UiOperation {
+    /// Standard submission scan (`opendqi {emir,sftr} scan`).
+    Scan,
+    /// Trade State Report scan (auth.107 EMIR / auth.079 SFTR).
+    TrStateScan,
+    /// EMIR Reconciliation Statistics scan (auth.091). EMIR-only.
+    ReconStats,
+}
+
+impl UiOperation {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "" | "scan" => Some(Self::Scan),
+            "tr-state-scan" | "tr_state_scan" => Some(Self::TrStateScan),
+            "recon-stats" | "recon_stats" => Some(Self::ReconStats),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Scan => "scan",
+            Self::TrStateScan => "tr-state-scan",
+            Self::ReconStats => "recon-stats",
+        }
+    }
+}
+
 /// Result of one server-side scan, ready for the results template.
 #[derive(Debug)]
 pub struct ScanArtifacts {
@@ -52,6 +89,30 @@ pub struct ScanArtifacts {
     pub issues_high: u32,
     pub quality_score: f32,
     pub artifact_files: Vec<String>,
+}
+
+/// Dispatch the chosen `operation` to the appropriate scan helper.
+/// Output artifacts always land under names the results page knows:
+/// `summary.json` / `issues.csv` / `report.html`.
+pub fn run_server_operation(
+    input: &Path,
+    regime: UiRegime,
+    operation: UiOperation,
+    out_dir: &Path,
+) -> Result<ScanArtifacts> {
+    match operation {
+        UiOperation::Scan => run_server_scan(input, regime, out_dir),
+        UiOperation::TrStateScan => match regime {
+            UiRegime::Emir => run_emir_tr_state_server(input, out_dir),
+            UiRegime::Sftr => run_sftr_tr_state_server(input, out_dir),
+        },
+        UiOperation::ReconStats => match regime {
+            UiRegime::Emir => run_emir_recon_stats_server(input, out_dir),
+            UiRegime::Sftr => Err(anyhow!(
+                "recon-stats is EMIR-only (auth.091); pick a different operation for SFTR."
+            )),
+        },
+    }
 }
 
 /// Run a scan over the uploaded `input` file and write the report
@@ -133,6 +194,161 @@ pub fn run_server_scan(input: &Path, regime: UiRegime, out_dir: &Path) -> Result
         issues_high: high,
         quality_score: summary.quality_score,
         artifact_files,
+    })
+}
+
+/// EMIR Trade State Report (auth.107) scan — server-side.
+fn run_emir_tr_state_server(input: &Path, out_dir: &Path) -> Result<ScanArtifacts> {
+    if !has_extension(input, "xml") {
+        return Err(anyhow!(
+            "tr-state-scan expects an XML input (auth.107). Got {}",
+            input.display()
+        ));
+    }
+    let started_at = Utc::now();
+    let outcome = read_emir_tr_state_xml(input)
+        .with_context(|| format!("reading TSR file {}", input.display()))?;
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+    let mut issues = outcome.issues;
+    issues.extend(run_all_tr_state(
+        &default_tr_state_checks(),
+        &outcome.records,
+        &[],
+        &ctx,
+    ));
+    finalize_issues(&mut issues, &ctx);
+    finalize_artifacts(
+        out_dir,
+        Regime::Emir,
+        UiRegime::Emir,
+        outcome.records.len() as u32,
+        &issues,
+        &[input.to_string_lossy().into_owned()],
+        started_at,
+        Utc::now(),
+    )
+}
+
+/// SFTR Trade State Report (auth.079) scan — server-side.
+fn run_sftr_tr_state_server(input: &Path, out_dir: &Path) -> Result<ScanArtifacts> {
+    if !has_extension(input, "xml") {
+        return Err(anyhow!(
+            "tr-state-scan expects an XML input (auth.079). Got {}",
+            input.display()
+        ));
+    }
+    let started_at = Utc::now();
+    let outcome = read_sftr_tr_state_xml(input)
+        .with_context(|| format!("reading SFTR TSR file {}", input.display()))?;
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+    let mut issues = outcome.issues;
+    issues.extend(run_all_sftr_tr_state(
+        &default_sftr_tr_state_checks(),
+        &outcome.records,
+        &[],
+        &ctx,
+    ));
+    finalize_issues(&mut issues, &ctx);
+    finalize_artifacts(
+        out_dir,
+        Regime::Sftr,
+        UiRegime::Sftr,
+        outcome.records.len() as u32,
+        &issues,
+        &[input.to_string_lossy().into_owned()],
+        started_at,
+        Utc::now(),
+    )
+}
+
+/// EMIR Reconciliation Statistics (auth.091) scan — server-side.
+fn run_emir_recon_stats_server(input: &Path, out_dir: &Path) -> Result<ScanArtifacts> {
+    if !has_extension(input, "xml") {
+        return Err(anyhow!(
+            "recon-stats expects an XML input (auth.091). Got {}",
+            input.display()
+        ));
+    }
+    let started_at = Utc::now();
+    let outcome = read_emir_recon_stats_xml(input)
+        .with_context(|| format!("reading auth.091 file {}", input.display()))?;
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+    let mut issues = outcome.issues;
+    issues.extend(run_all_recon_stats(
+        &default_recon_stats_checks(),
+        &outcome.records,
+        &[],
+        &ctx,
+    ));
+    finalize_issues(&mut issues, &ctx);
+    finalize_artifacts(
+        out_dir,
+        Regime::Emir,
+        UiRegime::Emir,
+        outcome.records.len() as u32,
+        &issues,
+        &[input.to_string_lossy().into_owned()],
+        started_at,
+        Utc::now(),
+    )
+}
+
+/// Shared post-processing: build a summary, write the three artifact
+/// files, and collect ScanArtifacts. Keeps the new scan helpers tiny.
+#[allow(clippy::too_many_arguments)]
+fn finalize_artifacts(
+    out_dir: &Path,
+    regime: Regime,
+    ui_regime: UiRegime,
+    records: u32,
+    issues: &[DqIssue],
+    sources: &[String],
+    started_at: chrono::DateTime<Utc>,
+    finished_at: chrono::DateTime<Utc>,
+) -> Result<ScanArtifacts> {
+    let summary = build_summary(regime, records, issues, 1, started_at, finished_at);
+    write_summary_json(&out_dir.join("summary.json"), &summary).context("writing summary.json")?;
+    write_issues_csv(&out_dir.join("issues.csv"), issues).context("writing issues.csv")?;
+    write_report_html(&out_dir.join("report.html"), &summary, issues, sources)
+        .context("writing report.html")?;
+
+    let critical = summary
+        .issues_by_severity
+        .get(&Severity::Critical)
+        .copied()
+        .unwrap_or(0);
+    let high = summary
+        .issues_by_severity
+        .get(&Severity::High)
+        .copied()
+        .unwrap_or(0);
+    Ok(ScanArtifacts {
+        regime: ui_regime,
+        records,
+        issues_total: summary.issues_total,
+        issues_critical: critical,
+        issues_high: high,
+        quality_score: summary.quality_score,
+        artifact_files: vec![
+            "report.html".to_string(),
+            "summary.json".to_string(),
+            "issues.csv".to_string(),
+        ],
     })
 }
 

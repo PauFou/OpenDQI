@@ -12,9 +12,14 @@ opendqi desktop --port 8080     # custom port
 
 The browser opens to a minimal upload form:
 
+- **Operation** — pick which scan to run:
+  - *Standard scan* (default) — submission XML/Parquet.
+  - *TR Trade State Report* — auth.107 (EMIR) / auth.079 (SFTR).
+  - *Reconciliation Statistics* — auth.091 (EMIR only).
 - **Regime** — EMIR or SFTR.
 - **File** — drop or pick an `.xml` or `.parquet` file.
-- **Run scan** — submits to `POST /api/scan`.
+- **Run** — submits to `POST /api/scan` carrying the chosen operation
+  in the multipart form.
 
 On submit the server saves the upload to a per-process temp dir,
 runs `default_checks()` (EMIR) or `default_sftr_checks()` (SFTR),

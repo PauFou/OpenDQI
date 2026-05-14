@@ -9,7 +9,9 @@ use axum::response::{Html, IntoResponse, Redirect, Response};
 use minijinja::context;
 use serde_json::json;
 
-use crate::scan::{new_scan_dir, run_server_scan, sanitize_upload_filename, UiRegime};
+use crate::scan::{
+    new_scan_dir, run_server_operation, sanitize_upload_filename, UiOperation, UiRegime,
+};
 use crate::state::AppState;
 
 /// `GET /` — render the upload form.
@@ -29,6 +31,7 @@ pub async fn scan(
     mut multipart: Multipart,
 ) -> Result<Response, AppError> {
     let mut regime: Option<UiRegime> = None;
+    let mut operation: UiOperation = UiOperation::Scan;
     let mut upload_name: Option<String> = None;
     let mut upload_bytes: Option<Vec<u8>> = None;
 
@@ -45,6 +48,14 @@ pub async fn scan(
                     .await
                     .map_err(|e| AppError::bad_request(format!("reading regime: {e}")))?;
                 regime = UiRegime::parse(&v);
+            }
+            "operation" => {
+                let v = field
+                    .text()
+                    .await
+                    .map_err(|e| AppError::bad_request(format!("reading operation: {e}")))?;
+                operation = UiOperation::parse(&v)
+                    .ok_or_else(|| AppError::bad_request(format!("invalid operation '{v}'")))?;
             }
             "file" => {
                 upload_name = field.file_name().map(sanitize_upload_filename);
@@ -78,8 +89,9 @@ pub async fn scan(
     // tokio task-blocking thread so the runtime stays responsive.
     let dir_for_task = scan_dir.clone();
     let regime_copy = regime;
+    let op_copy = operation;
     let artifacts = tokio::task::spawn_blocking(move || {
-        run_server_scan(&input_path, regime_copy, &dir_for_task)
+        run_server_operation(&input_path, regime_copy, op_copy, &dir_for_task)
     })
     .await
     .map_err(|e| AppError::server_error(format!("scan task panicked: {e}")))?
@@ -90,6 +102,7 @@ pub async fn scan(
     let sidecar = scan_dir.join("scan_meta.json");
     let meta = json!({
         "regime": artifacts.regime.as_str(),
+        "operation": operation.as_str(),
         "records": artifacts.records,
         "issues_total": artifacts.issues_total,
         "issues_critical": artifacts.issues_critical,
