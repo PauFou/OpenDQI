@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Pre-push hook: run preflight before any push.
+# Install once with: ./scripts/install-hooks.sh
+# Bypass for a single push: git push --no-verify
+exec "$(git rev-parse --show-toplevel)/scripts/preflight.sh"

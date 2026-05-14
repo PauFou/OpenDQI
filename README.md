@@ -123,7 +123,8 @@ OpenDQI is in early development. The first supported regime is EMIR (CLI). SFTR 
 
 - **CI** — `cargo fmt --check`, `cargo clippy -D warnings`, `cargo build`, `cargo test --workspace` on Ubuntu + macOS for every push and PR to `main`.
 - **Security audit** — `cargo-deny` runs `check advisories bans licenses sources` daily and on every push/PR.
-- **Run the same checks locally before pushing**: `./scripts/preflight.sh`.
+- **Run the same checks locally before pushing**: `./scripts/preflight.sh` (one-shot setup: `cargo install cargo-deny --locked`).
+- **Auto-run on every push**: `./scripts/install-hooks.sh` installs the pre-push git hook.
 
 See [`CHANGELOG.md`](CHANGELOG.md) for release notes.
 

@@ -25,6 +25,36 @@ Thanks for your interest in contributing.
 - No `unwrap` / `panic` in production code paths. Use `anyhow` / `thiserror` to surface explicit errors.
 - Prefer `BTreeMap` over `HashMap` when output is serialized — keeps outputs deterministic.
 
+## Before pushing
+
+Reproduce the CI checks locally so red runs stay rare:
+
+```bash
+cargo install cargo-deny --locked    # one-shot setup
+./scripts/preflight.sh
+```
+
+`preflight.sh` runs `cargo fmt --check`, `clippy -D warnings`, `build`,
+`test --workspace`, and `cargo deny check` — the same four pillars that
+guard `main`. It fails fast on the first error.
+
+For automatic enforcement on every `git push`, install the pre-push hook:
+
+```bash
+./scripts/install-hooks.sh   # symlinks .git/hooks/pre-push → scripts/git-hooks/pre-push
+```
+
+Bypass once with `git push --no-verify`; remove with `rm .git/hooks/pre-push`.
+
+If you need a full GitHub Actions reproduction (rarely useful — preflight
+covers the logic; only the action plumbing differs), install
+[`nektos/act`](https://github.com/nektos/act):
+
+```bash
+brew install act                                # macOS
+act -W .github/workflows/deny.yml --pull=false
+```
+
 ## Tests
 
 - Unit tests live alongside the code they exercise.
