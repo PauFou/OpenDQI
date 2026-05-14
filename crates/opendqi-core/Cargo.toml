@@ -14,3 +14,11 @@ serde_yaml.workspace = true
 chrono.workspace = true
 rust_decimal.workspace = true
 thiserror.workspace = true
+rayon.workspace = true
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "check_loop"
+harness = false

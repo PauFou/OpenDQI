@@ -1,6 +1,7 @@
 //! Data-quality check trait and the MVP EMIR check registry.
 
 use chrono::{DateTime, NaiveDate, Utc};
+use rayon::prelude::*;
 
 use crate::config::Thresholds;
 use crate::model::{
@@ -387,7 +388,10 @@ pub fn run_all(
     records: &[EmirRecord],
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
-    let mut issues: Vec<DqIssue> = checks.iter().flat_map(|c| c.run(records, ctx)).collect();
+    let mut issues: Vec<DqIssue> = checks
+        .par_iter()
+        .flat_map_iter(|c| c.run(records, ctx))
+        .collect();
     sort_issues(&mut issues);
     issues
 }
@@ -506,7 +510,10 @@ pub fn run_all_sftr(
     records: &[SftrRecord],
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
-    let mut issues: Vec<DqIssue> = checks.iter().flat_map(|c| c.run(records, ctx)).collect();
+    let mut issues: Vec<DqIssue> = checks
+        .par_iter()
+        .flat_map_iter(|c| c.run(records, ctx))
+        .collect();
     sort_issues(&mut issues);
     issues
 }
@@ -558,8 +565,8 @@ pub fn run_all_lifecycle(
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
     let mut issues: Vec<DqIssue> = checks
-        .iter()
-        .flat_map(|c| c.run(current, prior, ctx))
+        .par_iter()
+        .flat_map_iter(|c| c.run(current, prior, ctx))
         .collect();
     sort_issues(&mut issues);
     issues
@@ -587,8 +594,8 @@ pub fn run_all_sftr_lifecycle(
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
     let mut issues: Vec<DqIssue> = checks
-        .iter()
-        .flat_map(|c| c.run(current, prior, ctx))
+        .par_iter()
+        .flat_map_iter(|c| c.run(current, prior, ctx))
         .collect();
     sort_issues(&mut issues);
     issues
@@ -644,8 +651,8 @@ pub fn run_all_feedback(
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
     let mut issues: Vec<DqIssue> = checks
-        .iter()
-        .flat_map(|c| c.run(feedback, prior, ctx))
+        .par_iter()
+        .flat_map_iter(|c| c.run(feedback, prior, ctx))
         .collect();
     sort_issues(&mut issues);
     issues
@@ -675,8 +682,8 @@ pub fn run_all_sftr_feedback(
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
     let mut issues: Vec<DqIssue> = checks
-        .iter()
-        .flat_map(|c| c.run(feedback, prior, ctx))
+        .par_iter()
+        .flat_map_iter(|c| c.run(feedback, prior, ctx))
         .collect();
     sort_issues(&mut issues);
     issues
@@ -730,8 +737,8 @@ pub fn run_all_reconciliation(
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
     let mut issues: Vec<DqIssue> = checks
-        .iter()
-        .flat_map(|c| c.run(records, prior, ctx))
+        .par_iter()
+        .flat_map_iter(|c| c.run(records, prior, ctx))
         .collect();
     sort_issues(&mut issues);
     issues
@@ -759,8 +766,8 @@ pub fn run_all_sftr_reconciliation(
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
     let mut issues: Vec<DqIssue> = checks
-        .iter()
-        .flat_map(|c| c.run(records, prior, ctx))
+        .par_iter()
+        .flat_map_iter(|c| c.run(records, prior, ctx))
         .collect();
     sort_issues(&mut issues);
     issues
@@ -820,8 +827,8 @@ pub fn run_all_tr_state(
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
     let mut issues: Vec<DqIssue> = checks
-        .iter()
-        .flat_map(|c| c.run(records, prior, ctx))
+        .par_iter()
+        .flat_map_iter(|c| c.run(records, prior, ctx))
         .collect();
     sort_issues(&mut issues);
     issues
@@ -881,8 +888,8 @@ pub fn run_all_tr_activity(
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
     let mut issues: Vec<DqIssue> = checks
-        .iter()
-        .flat_map(|c| c.run(records, prior, tsr, ctx))
+        .par_iter()
+        .flat_map_iter(|c| c.run(records, prior, tsr, ctx))
         .collect();
     sort_issues(&mut issues);
     issues
@@ -920,8 +927,8 @@ pub fn run_all_margin_activity(
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
     let mut issues: Vec<DqIssue> = checks
-        .iter()
-        .flat_map(|c| c.run(records, prior, ctx))
+        .par_iter()
+        .flat_map_iter(|c| c.run(records, prior, ctx))
         .collect();
     sort_issues(&mut issues);
     issues
@@ -960,8 +967,8 @@ pub fn run_all_margin_state(
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
     let mut issues: Vec<DqIssue> = checks
-        .iter()
-        .flat_map(|c| c.run(records, prior, ctx))
+        .par_iter()
+        .flat_map_iter(|c| c.run(records, prior, ctx))
         .collect();
     sort_issues(&mut issues);
     issues
@@ -1002,8 +1009,8 @@ pub fn run_all_sftr_tr_state(
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
     let mut issues: Vec<DqIssue> = checks
-        .iter()
-        .flat_map(|c| c.run(records, prior, ctx))
+        .par_iter()
+        .flat_map_iter(|c| c.run(records, prior, ctx))
         .collect();
     sort_issues(&mut issues);
     issues
@@ -1036,8 +1043,8 @@ pub fn run_all_sftr_tr_activity(
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
     let mut issues: Vec<DqIssue> = checks
-        .iter()
-        .flat_map(|c| c.run(records, prior, tsr, ctx))
+        .par_iter()
+        .flat_map_iter(|c| c.run(records, prior, tsr, ctx))
         .collect();
     sort_issues(&mut issues);
     issues
@@ -1079,8 +1086,8 @@ pub fn run_all_tr_state_lifecycle(
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
     let mut issues: Vec<DqIssue> = checks
-        .iter()
-        .flat_map(|c| c.run(current, prior, ctx))
+        .par_iter()
+        .flat_map_iter(|c| c.run(current, prior, ctx))
         .collect();
     sort_issues(&mut issues);
     issues
@@ -1103,8 +1110,8 @@ pub fn run_all_sftr_tr_state_lifecycle(
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
     let mut issues: Vec<DqIssue> = checks
-        .iter()
-        .flat_map(|c| c.run(current, prior, ctx))
+        .par_iter()
+        .flat_map_iter(|c| c.run(current, prior, ctx))
         .collect();
     sort_issues(&mut issues);
     issues
@@ -1138,8 +1145,8 @@ pub fn run_all_margin_state_lifecycle(
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
     let mut issues: Vec<DqIssue> = checks
-        .iter()
-        .flat_map(|c| c.run(current, prior, ctx))
+        .par_iter()
+        .flat_map_iter(|c| c.run(current, prior, ctx))
         .collect();
     sort_issues(&mut issues);
     issues
