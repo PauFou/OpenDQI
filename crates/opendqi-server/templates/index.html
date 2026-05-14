@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block main %}
+<section class="card">
+  <h2>Scan a report</h2>
+  <p>Drop or pick an EMIR / SFTR <strong>XML</strong> or <strong>Parquet</strong> file. The scan runs locally; no data leaves your machine.</p>
+  <form action="/api/scan" method="post" enctype="multipart/form-data">
+    <label for="regime">Regime</label>
+    <select id="regime" name="regime" required>
+      <option value="emir">EMIR</option>
+      <option value="sftr">SFTR</option>
+    </select>
+
+    <label for="file">File</label>
+    <input id="file" name="file" type="file" accept=".xml,.parquet" required>
+
+    <button type="submit">Run scan</button>
+  </form>
+  <p style="margin-top:1.5rem;font-size:0.9rem;color:var(--muted);">
+    For CSV inputs (which require a YAML mapping file), use the CLI:
+    <code>opendqi emir scan</code>.
+  </p>
+</section>
+{% endblock %}

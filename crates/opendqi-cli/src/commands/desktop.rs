@@ -1,4 +1,4 @@
-//! `opendqi desktop` — local web UI placeholder for milestone 0.2.
+//! `opendqi desktop` — launch the local web UI on http://127.0.0.1:<port>.
 
 use anyhow::Result;
 use clap::Args;
@@ -11,9 +11,10 @@ pub struct DesktopArgs {
 }
 
 pub fn run(args: DesktopArgs) -> Result<()> {
-    println!(
-        "opendqi desktop: local web UI is planned for milestone 0.2 (would bind to http://localhost:{}).",
-        args.port
-    );
-    Ok(())
+    // Build a single-host tokio runtime in-thread; the server takes
+    // over until Ctrl-C.
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+    runtime.block_on(opendqi_server::serve(args.port))
 }

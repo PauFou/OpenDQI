@@ -93,7 +93,7 @@ fn sftr_roundtrip_preserves_lifecycle_fields() {
 
 #[test]
 fn empty_utis_short_circuit() {
-    let path = tmp("empty.db");
+    let path = tmp("empty-utis.db");
     let store = open_store(&path).unwrap();
     assert!(store.load_prior_emir(&[], 1).unwrap().is_empty());
     assert!(store.load_prior_sftr(&[], 1).unwrap().is_empty());

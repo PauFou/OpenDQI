@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block main %}
+<section class="card">
+  <h2>Scan results — {{ meta.regime }}</h2>
+  <p style="color:var(--muted);">Source: <code>{{ meta.upload_name }}</code></p>
+
+  <table>
+    <tr><th>Records processed</th><td>{{ meta.records }}</td></tr>
+    <tr><th>Issues total</th><td>{{ meta.issues_total }}</td></tr>
+    <tr><th>Critical</th><td>{% if meta.issues_critical > 0 %}<span class="pill critical">{{ meta.issues_critical }}</span>{% else %}{{ meta.issues_critical }}{% endif %}</td></tr>
+    <tr><th>High</th><td>{% if meta.issues_high > 0 %}<span class="pill high">{{ meta.issues_high }}</span>{% else %}{{ meta.issues_high }}{% endif %}</td></tr>
+    <tr><th>Quality score</th><td><span class="score">{{ "%.1f" | format(meta.quality_score) }}</span> / 100</td></tr>
+  </table>
+
+  <h3 style="margin-top:1.5rem;">Downloads</h3>
+  <ul class="downloads">
+  {% for artifact in meta.artifacts %}
+    <li><a href="/scans/{{ scan_id }}/{{ artifact }}">{{ artifact }}</a></li>
+  {% endfor %}
+  </ul>
+
+  <p style="margin-top:1.5rem;"><a href="/">← Run another scan</a></p>
+</section>
+{% endblock %}

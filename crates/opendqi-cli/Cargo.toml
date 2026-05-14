@@ -16,6 +16,7 @@ path = "src/main.rs"
 opendqi-core = { path = "../opendqi-core" }
 opendqi-io = { path = "../opendqi-io" }
 opendqi-report = { path = "../opendqi-report" }
+opendqi-server = { path = "../opendqi-server" }
 opendqi-store = { path = "../opendqi-store" }
 opendqi-xml = { path = "../opendqi-xml" }
 anyhow.workspace = true
@@ -25,5 +26,6 @@ csv.workspace = true
 rust_decimal.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true
+tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

@@ -112,7 +112,7 @@ Public summary; see [`docs/positioning.md`](docs/positioning.md) for context.
 - **Phase 4** — Combined `tr-audit` command. ✅
 - **Phase 5** — Book vs TSR reconciliation (`book-reconcile`). ✅
 - **Phase 6** — SFTR equivalent modules.
-- **Phase 7** — Local web UI.
+- **Phase 7** — Local web UI. ✅ (`opendqi desktop` opens http://127.0.0.1:7878 — see [`docs/desktop-web-ui.md`](docs/desktop-web-ui.md).)
 
 ## Status
 
