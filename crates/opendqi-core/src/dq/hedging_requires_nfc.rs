@@ -37,6 +37,7 @@ impl Check for HedgingRequiresNfc {
                 value: Some("true".into()),
                 message: "Hedging indicator is true but the reporting counterparty is not declared as Non-Financial (nature != 'N').".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

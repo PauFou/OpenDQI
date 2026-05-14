@@ -46,6 +46,7 @@ impl Check for CrRequiresUnderlying {
                 value: None,
                 message: "Credit derivative is missing the reference-entity identifier.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

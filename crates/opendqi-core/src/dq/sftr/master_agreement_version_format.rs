@@ -43,6 +43,7 @@ impl SftrCheck for SftrMasterAgreementVersionFormat {
                         value: Some(v.to_owned()),
                         message: format!("Master agreement version '{v}' is not a 4-digit year."),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

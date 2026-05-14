@@ -41,6 +41,7 @@ impl Check for Leg2NotionalNeedsCurrency {
                 value: None,
                 message: "Leg-2 notional amount is set but the currency is missing.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

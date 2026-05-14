@@ -47,6 +47,7 @@ impl SftrReconciliationCheck for SftrFieldMismatch {
                         uti_disp = uti.unwrap_or("(unknown UTI)"),
                     ),
                     source_file: r.source_file.clone(),
+                    evidence: Vec::new(),
                 });
             }
         }

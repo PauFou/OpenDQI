@@ -43,6 +43,7 @@ impl SftrCheck for SftrActionTypeEnum {
                         value: Some(a.to_owned()),
                         message: format!("Action type '{a}' is not a recognised SFTR code."),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

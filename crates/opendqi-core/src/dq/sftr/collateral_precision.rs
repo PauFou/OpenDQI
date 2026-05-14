@@ -40,6 +40,7 @@ impl SftrCheck for SftrCollateralPrecision {
                         value: Some(v.to_string()),
                         message: "Collateral value exceeds ESMA decimal:18.5 precision.".into(),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

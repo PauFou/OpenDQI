@@ -43,6 +43,7 @@ impl Check for VmNeedsCollateralPortfolio {
                     "Variation margin posted is set but no collateral portfolio code is reported."
                         .into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

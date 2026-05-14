@@ -42,6 +42,7 @@ impl Check for Leg1Leg2SameCurrency {
                             "Both legs reported in '{a}'. Expected for single-currency IRS but unusual for cross-currency products."
                         ),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

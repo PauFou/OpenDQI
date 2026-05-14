@@ -41,6 +41,7 @@ impl SftrCheck for SftrCollateralCurrencyMissing {
                 value: None,
                 message: "Collateral value is set but the currency is missing.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

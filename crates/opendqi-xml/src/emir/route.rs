@@ -40,6 +40,7 @@ pub fn read_emir_xml(path: &Path) -> anyhow::Result<XmlReadOutcome> {
                 value: None,
                 message: format!("XML is not well-formed: {}", err.message),
                 source_file: Some(source_label),
+                evidence: Vec::new(),
             }],
         });
     }

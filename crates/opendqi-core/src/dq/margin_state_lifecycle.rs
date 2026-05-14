@@ -47,6 +47,7 @@ fn issue(
         value,
         message,
         source_file,
+        evidence: Vec::new(),
     }
 }
 

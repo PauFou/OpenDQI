@@ -41,6 +41,7 @@ impl SftrTrStateCheck for SftrMissingCollateralOnTsr {
                 message: "TR shows the SFT as outstanding but no collateral value is reported."
                     .into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

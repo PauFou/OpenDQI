@@ -1183,6 +1183,7 @@ fn run_tr_audit(
                         "SFT UTI {uti} was NEWT'd in the TAR but is absent from the TSR — submission may not have been accepted."
                     ),
                     source_file: r.source_file.clone(),
+                    evidence: Vec::new(),
                 });
             }
         }
@@ -1202,6 +1203,7 @@ fn run_tr_audit(
                     "SFT UTI {uti} is outstanding in the TSR but no record appears in the TAR for this period."
                 ),
                 source_file: Some(tsr_path.to_string_lossy().into_owned()),
+                evidence: Vec::new(),
             });
         }
     }
@@ -1220,6 +1222,7 @@ fn run_tr_audit(
                     "SFT UTI {uti} is reported rejected in the feedback file yet appears outstanding in the TSR — TR-side inconsistency."
                 ),
                 source_file: Some(feedback_path.to_string_lossy().into_owned()),
+                evidence: Vec::new(),
             });
         }
     }
@@ -1556,6 +1559,7 @@ fn sftr_brec_issue(
         value,
         message,
         source_file,
+        evidence: Vec::new(),
     }
 }
 
@@ -1713,6 +1717,7 @@ fn xsd_violation_issue(path: &Path, violation: &XsdViolation) -> DqIssue {
         },
         message: violation.message.clone(),
         source_file: Some(path.to_string_lossy().into_owned()),
+        evidence: Vec::new(),
     }
 }
 
@@ -1728,6 +1733,7 @@ fn xsd_tool_error_issue(path: &Path, message: &str) -> DqIssue {
         value: None,
         message: format!("XSD validator could not run: {message}"),
         source_file: Some(path.to_string_lossy().into_owned()),
+        evidence: Vec::new(),
     }
 }
 

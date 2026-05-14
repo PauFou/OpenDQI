@@ -46,6 +46,7 @@ impl Check for NotionalPrecisionByCurrency {
                         actual = amt.scale(),
                     ),
                     source_file: r.source_file.clone(),
+                    evidence: Vec::new(),
                 })
             })
             .collect()

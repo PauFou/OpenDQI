@@ -44,6 +44,7 @@ impl SftrCheck for SftrRebateRequiresRepoOrBsb {
                             "Rebate rate is reported but SFT type '{t}' is neither REPO nor BSB."
                         ),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

@@ -60,6 +60,7 @@ impl SftrCheck for SftrSecurityIdentifierMissing {
                     r.sft_type.as_deref().unwrap_or("?")
                 ),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

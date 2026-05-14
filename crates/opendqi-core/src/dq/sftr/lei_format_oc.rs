@@ -41,6 +41,7 @@ impl SftrCheck for SftrLeiFormatOc {
                             "Other counterparty LEI '{lei}' is not a valid ISO 17442 identifier."
                         ),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

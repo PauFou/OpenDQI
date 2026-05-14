@@ -39,6 +39,7 @@ impl Check for ValuationPrecision {
                         value: Some(v.to_string()),
                         message: "Valuation amount exceeds ESMA decimal:18.5 precision.".into(),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

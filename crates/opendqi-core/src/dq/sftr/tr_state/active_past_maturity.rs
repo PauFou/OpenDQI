@@ -50,6 +50,7 @@ impl SftrTrStateCheck for SftrActivePastMaturity {
                         "TR shows SFT as outstanding on {reference} but maturity is {maturity}."
                     ),
                     source_file: r.source_file.clone(),
+                    evidence: Vec::new(),
                 })
             })
             .collect()

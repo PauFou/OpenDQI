@@ -54,6 +54,7 @@ impl TrStateCheck for EmirActivePastMaturity {
                         "TR shows trade as outstanding on {reference} but its maturity date is {maturity}."
                     ),
                     source_file: r.source_file.clone(),
+                    evidence: Vec::new(),
                 })
             })
             .collect()

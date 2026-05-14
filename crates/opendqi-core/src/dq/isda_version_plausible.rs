@@ -44,6 +44,7 @@ impl Check for IsdaVersionPlausible {
                         value: Some(v.to_owned()),
                         message: format!("ISDA version '{v}' is not one of {{1992, 2002, 2017}}."),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

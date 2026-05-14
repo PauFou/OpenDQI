@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use super::{Check, CheckContext};
-use crate::model::{DqDimension, DqIssue, EmirRecord, Regime, Severity};
+use crate::model::{DqDimension, DqIssue, EmirRecord, EvidenceItem, Regime, Severity};
 
 /// Check implementation.
 pub struct DuplicateUti;
@@ -45,6 +45,16 @@ impl Check for DuplicateUti {
             } else {
                 format!(" Sources: {}.", sources.join(", "))
             };
+            let evidence: Vec<EvidenceItem> = indices
+                .iter()
+                .filter_map(|&i| records[i].record_id.clone())
+                .map(|id| EvidenceItem {
+                    field: "record_id".into(),
+                    before: None,
+                    after: Some(id),
+                    source_line: None,
+                })
+                .collect();
             for &idx in &indices {
                 let r = &records[idx];
                 out.push(DqIssue {
@@ -61,6 +71,7 @@ impl Check for DuplicateUti {
                         n = indices.len()
                     ),
                     source_file: r.source_file.clone(),
+                    evidence: evidence.clone(),
                 });
             }
         }
@@ -94,6 +105,14 @@ mod tests {
         let ctx = CheckContext::now_with_defaults();
         let issues = DuplicateUti.run(&records, &ctx);
         assert_eq!(issues.len(), 2);
+        // Each issue carries evidence for both duplicates.
+        assert!(issues.iter().all(|i| i.evidence.len() == 2));
+        let after: Vec<&str> = issues[0]
+            .evidence
+            .iter()
+            .filter_map(|e| e.after.as_deref())
+            .collect();
+        assert_eq!(after, vec!["1", "2"]);
     }
 
     #[test]

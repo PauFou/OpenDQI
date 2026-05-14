@@ -55,6 +55,7 @@ impl LifecycleCheck for DuplicateNewtForUti {
                         n = prevs.len()
                     ),
                     source_file: r.source_file.clone(),
+                    evidence: Vec::new(),
                 });
             }
         }

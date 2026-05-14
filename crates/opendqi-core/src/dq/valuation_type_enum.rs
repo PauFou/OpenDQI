@@ -41,6 +41,7 @@ impl Check for ValuationTypeEnum {
                             "Valuation type '{v}' is not in the allowed set {{MTMA, MTMO}}."
                         ),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

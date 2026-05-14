@@ -43,6 +43,7 @@ impl MarginStateCheck for EmirMsrCollateralMarketValueNegative {
                         value: Some(v.to_string()),
                         message: format!("collateral_market_value is negative: {v}."),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     });
                 }
             }

@@ -45,6 +45,7 @@ impl MarginActivityCheck for EmirMarPortfolioCodeMissing {
                     value: None,
                     message: "Margin activity record has no collateral_portfolio_code.".into(),
                     source_file: r.source_file.clone(),
+                    evidence: Vec::new(),
                 });
             }
         }

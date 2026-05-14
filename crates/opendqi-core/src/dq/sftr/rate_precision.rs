@@ -42,6 +42,7 @@ impl SftrCheck for SftrRatePrecision {
                             value: Some(v.to_string()),
                             message: format!("{field} exceeds ESMA decimal:11.10 precision."),
                             source_file: r.source_file.clone(),
+                            evidence: Vec::new(),
                         });
                     }
                 }

@@ -41,6 +41,7 @@ impl SftrCheck for SftrSftTypeEnum {
                         value: Some(t.to_owned()),
                         message: format!("SFT type '{t}' is not one of REPO / BSB / SLEB / MGLD."),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

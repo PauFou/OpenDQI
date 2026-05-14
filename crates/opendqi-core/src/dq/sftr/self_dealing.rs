@@ -39,6 +39,7 @@ impl SftrCheck for SftrSelfDealing {
                         value: Some(c2.to_owned()),
                         message: format!("Counterparties are identical ('{c1}'): self-dealing."),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

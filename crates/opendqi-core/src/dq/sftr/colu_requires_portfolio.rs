@@ -44,6 +44,7 @@ impl SftrCheck for SftrColuRequiresPortfolio {
                 value: None,
                 message: "Action type is COLU but no collateral portfolio code is reported.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

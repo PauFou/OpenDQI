@@ -42,6 +42,7 @@ impl Check for MaruRequiresMargin {
                 value: Some("MARU".into()),
                 message: "Action type is MARU but no margin amount is reported.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

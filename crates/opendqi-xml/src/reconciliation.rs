@@ -82,6 +82,7 @@ fn read_with_regime(
                 value: None,
                 message: format!("XML is not well-formed: {}", err.message),
                 source_file: Some(source_label),
+                evidence: Vec::new(),
             }],
         });
     }
@@ -108,6 +109,7 @@ fn read_with_regime(
                         "Root namespace is '{actual}', expected 'urn:iso:std:iso:20022:tech:xsd:{expected_label}'."
                     ),
                     source_file: Some(source_label),
+                    evidence: Vec::new(),
                 }],
             })
         }

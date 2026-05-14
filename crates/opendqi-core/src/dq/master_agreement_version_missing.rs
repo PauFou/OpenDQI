@@ -45,6 +45,7 @@ impl Check for MasterAgreementVersionMissing {
                 value: None,
                 message: "Master agreement type is set but the version is missing.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

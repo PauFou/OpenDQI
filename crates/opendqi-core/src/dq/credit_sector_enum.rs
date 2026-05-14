@@ -67,6 +67,7 @@ impl Check for CreditSectorEnum {
                         "Credit underlying_id '{underlying}' is neither a valid ISIN nor a recognised credit index family."
                     ),
                     source_file: r.source_file.clone(),
+                    evidence: Vec::new(),
                 })
             })
             .collect()

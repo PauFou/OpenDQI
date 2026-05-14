@@ -44,6 +44,7 @@ impl Check for ClearedRequiresCcp {
                 message: "Clearing status is 'cleared' but no Central Counterparty LEI is present."
                     .into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

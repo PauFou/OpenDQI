@@ -34,6 +34,7 @@ impl Check for NatureMissing {
                 value: None,
                 message: "Nature of the reporting counterparty is missing.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

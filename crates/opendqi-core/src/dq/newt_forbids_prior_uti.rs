@@ -37,6 +37,7 @@ impl Check for NewtForbidsPriorUti {
                 value: r.prior_uti.clone(),
                 message: "Action type is NEWT but a prior UTI is reported — re-identification belongs to MODI.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

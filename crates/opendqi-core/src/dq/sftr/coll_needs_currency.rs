@@ -40,6 +40,7 @@ impl SftrCheck for SftrCollNeedsCurrency {
                 value: None,
                 message: "Collateral value is reported but collateral currency is missing.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

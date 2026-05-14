@@ -67,6 +67,7 @@ impl SftrTrActivityCheck for SftrNewtNotInTsr {
                         "UTI {uti} is NEWT in the SFTR TAR but absent from the companion TSR."
                     ),
                     source_file: r.source_file.clone(),
+                    evidence: Vec::new(),
                 })
             })
             .collect()

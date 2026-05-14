@@ -41,6 +41,7 @@ impl Check for TradingCapacityEnum {
                             "Trading capacity '{v}' is not in the allowed set {{AGEN, PRIN}}."
                         ),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

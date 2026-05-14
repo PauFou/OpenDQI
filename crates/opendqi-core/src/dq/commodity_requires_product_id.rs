@@ -46,6 +46,7 @@ impl Check for CommodityRequiresProductId {
                 value: None,
                 message: "Commodity derivative is missing a product identifier.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

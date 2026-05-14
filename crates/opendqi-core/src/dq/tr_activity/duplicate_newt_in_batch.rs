@@ -67,6 +67,7 @@ impl TrActivityCheck for EmirDuplicateNewtInBatch {
                         n = indices.len()
                     ),
                     source_file: r.source_file.clone(),
+                    evidence: Vec::new(),
                 });
             }
         }

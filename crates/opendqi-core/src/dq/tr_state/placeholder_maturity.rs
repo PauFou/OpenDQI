@@ -50,6 +50,7 @@ impl TrStateCheck for EmirPlaceholderMaturity {
                     value: Some(s.clone()),
                     message: format!("TR holds a placeholder maturity date ({s}) on this trade."),
                     source_file: r.source_file.clone(),
+                    evidence: Vec::new(),
                 })
             })
             .collect()

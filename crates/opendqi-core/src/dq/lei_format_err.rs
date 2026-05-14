@@ -41,6 +41,7 @@ impl Check for LeiFormatErr {
                             "Entity-responsible-for-reporting LEI '{lei}' is not a valid ISO 17442 identifier (EMIR-VR-1004-01)."
                         ),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

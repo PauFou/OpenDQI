@@ -34,6 +34,7 @@ impl Check for IntragroupIndicatorMissing {
                 value: None,
                 message: "Intragroup transaction indicator is missing.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

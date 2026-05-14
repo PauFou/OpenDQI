@@ -40,6 +40,7 @@ impl SftrCheck for SftrHaircutPrecision {
                         value: Some(v.to_string()),
                         message: "Haircut exceeds ESMA decimal:11.10 precision.".into(),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

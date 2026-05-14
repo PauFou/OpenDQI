@@ -39,6 +39,7 @@ impl Check for ClearingStatusMissing {
                 value: None,
                 message: "Clearing status is missing.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

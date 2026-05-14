@@ -63,6 +63,7 @@ impl TrActivityCheck for EmirSpikeTerm {
             source_file: records
                 .first()
                 .and_then(|r| r.source_file.clone()),
+            evidence: Vec::new(),
         }]
     }
 }

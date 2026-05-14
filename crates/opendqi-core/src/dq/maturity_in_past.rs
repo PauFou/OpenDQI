@@ -39,6 +39,7 @@ impl Check for MaturityInPast {
                         value: Some(m.to_string()),
                         message: format!("Outstanding trade has maturity {m} already in the past (today={today}).", today = ctx.today),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 } else {
                     None

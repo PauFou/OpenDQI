@@ -37,6 +37,7 @@ impl Check for TerminationAfterMaturity {
                         value: Some(t.to_string()),
                         message: format!("Termination date {t} is after maturity date {m}."),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 } else {
                     None

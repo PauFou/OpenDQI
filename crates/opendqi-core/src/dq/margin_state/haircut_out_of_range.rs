@@ -42,6 +42,7 @@ impl MarginStateCheck for EmirMsrHaircutOutOfRange {
                         value: Some(h.to_string()),
                         message: format!("Haircut {h} is out of [0, 1]."),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     });
                 }
             }

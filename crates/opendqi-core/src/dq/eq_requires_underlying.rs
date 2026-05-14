@@ -46,6 +46,7 @@ impl Check for EqRequiresUnderlying {
                 value: None,
                 message: "Equity trade is missing its underlying instrument identifier.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

@@ -53,6 +53,7 @@ impl SftrFeedbackCheck for SftrTrInaccurateReported {
                         "TR flagged UTI {uti} as inaccurate on field '{field}': {desc}"
                     ),
                     source_file: f.source_file.clone(),
+                    evidence: Vec::new(),
                 }
             })
             .collect()

@@ -39,6 +39,7 @@ impl SftrCheck for SftrMaturityBeforeEffective {
                             "Maturity {maturity} precedes effective date {effective}."
                         ),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 } else {
                     None

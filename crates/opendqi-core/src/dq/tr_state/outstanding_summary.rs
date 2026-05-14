@@ -54,6 +54,7 @@ impl TrStateCheck for EmirOutstandingSummary {
                         "Outstanding trade UTI {uti}: notional={notional}, maturity={maturity}."
                     ),
                     source_file: r.source_file.clone(),
+                    evidence: Vec::new(),
                 }
             })
             .collect()

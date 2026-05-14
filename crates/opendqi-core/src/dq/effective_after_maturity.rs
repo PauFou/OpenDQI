@@ -37,6 +37,7 @@ impl Check for EffectiveAfterMaturity {
                         value: Some(e.to_string()),
                         message: format!("Effective date {e} is after maturity date {m}."),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 } else {
                     None

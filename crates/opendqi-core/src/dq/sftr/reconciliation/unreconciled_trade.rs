@@ -50,6 +50,7 @@ impl SftrReconciliationCheck for SftrUnreconciledTrade {
                         "TR reports UTI {uti} as UNRECONCILED — {n} field(s) disagree with the counterparty's submission."
                     ),
                     source_file: r.source_file.clone(),
+                    evidence: Vec::new(),
                 }
             })
             .collect()

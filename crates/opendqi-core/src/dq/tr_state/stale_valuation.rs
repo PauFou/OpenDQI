@@ -66,6 +66,7 @@ impl TrStateCheck for EmirStaleValuationOnTsr {
                         ref = reference.to_rfc3339(),
                     ),
                     source_file: r.source_file.clone(),
+                    evidence: Vec::new(),
                 })
             })
             .collect()

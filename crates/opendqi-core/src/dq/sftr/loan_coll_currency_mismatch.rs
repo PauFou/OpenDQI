@@ -43,6 +43,7 @@ impl SftrCheck for SftrLoanCollCurrencyMismatch {
                             "Collateral currency '{c}' differs from loan currency '{l}'."
                         ),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

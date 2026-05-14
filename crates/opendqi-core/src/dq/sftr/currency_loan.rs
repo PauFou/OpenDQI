@@ -41,6 +41,7 @@ impl SftrCheck for SftrCurrencyLoan {
                             "Loan currency '{ccy}' is not a valid ISO 4217 code (3 uppercase letters)."
                         ),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

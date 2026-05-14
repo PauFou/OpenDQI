@@ -40,6 +40,7 @@ impl SftrCheck for SftrCounterparty2Missing {
                 value: None,
                 message: "Other counterparty LEI is missing.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

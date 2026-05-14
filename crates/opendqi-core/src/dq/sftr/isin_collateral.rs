@@ -41,6 +41,7 @@ impl SftrCheck for SftrIsinCollateral {
                             "Collateral ISIN '{isin}' is not a valid ISO 6166 identifier (2 letters + 9 alphanumeric + 1 digit)."
                         ),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

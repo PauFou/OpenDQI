@@ -42,6 +42,7 @@ impl Check for AssetClassEnum {
                         value: Some(v.to_owned()),
                         message: format!("Asset class '{v}' is not in the EMIR enumeration."),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

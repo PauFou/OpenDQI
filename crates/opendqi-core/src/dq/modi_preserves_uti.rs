@@ -4,7 +4,7 @@
 //! re-statements are NOVA / CORR actions, not pure MODI.
 
 use super::{Check, CheckContext};
-use crate::model::{DqDimension, DqIssue, EmirRecord, Regime, Severity};
+use crate::model::{DqDimension, DqIssue, EmirRecord, EvidenceItem, Regime, Severity};
 
 /// Check implementation.
 pub struct ModiPreservesUti;
@@ -51,6 +51,12 @@ impl Check for ModiPreservesUti {
                         "{action} for UTI {uti} carries a prior_uti identical to its current UTI — no-op."
                     ),
                     source_file: r.source_file.clone(),
+                    evidence: vec![EvidenceItem {
+                        field: "uti".into(),
+                        before: Some(prior.to_owned()),
+                        after: Some(uti.to_owned()),
+                        source_line: None,
+                    }],
                 })
             })
             .collect()
@@ -68,12 +74,13 @@ mod tests {
             prior_uti: Some("U1".into()),
             ..Default::default()
         };
-        assert_eq!(
-            ModiPreservesUti
-                .run(&[r], &CheckContext::now_with_defaults())
-                .len(),
-            1
-        );
+        let issues = ModiPreservesUti.run(&[r], &CheckContext::now_with_defaults());
+        assert_eq!(issues.len(), 1);
+        // Evidence captures the before/after UTI pair.
+        assert_eq!(issues[0].evidence.len(), 1);
+        assert_eq!(issues[0].evidence[0].field, "uti");
+        assert_eq!(issues[0].evidence[0].before.as_deref(), Some("U1"));
+        assert_eq!(issues[0].evidence[0].after.as_deref(), Some("U1"));
     }
     #[test]
     fn ignores_different_prior() {

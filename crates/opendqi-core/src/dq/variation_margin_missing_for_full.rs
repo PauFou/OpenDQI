@@ -42,6 +42,7 @@ impl Check for VariationMarginMissingForFull {
                     "Collateralisation category is FLCL but variation margin posted is missing."
                         .into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

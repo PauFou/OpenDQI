@@ -38,6 +38,7 @@ impl Check for NegativeInitialMarginCollected {
                 value: r.initial_margin_collected.map(|d| d.to_string()),
                 message: "Initial margin collected is negative.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

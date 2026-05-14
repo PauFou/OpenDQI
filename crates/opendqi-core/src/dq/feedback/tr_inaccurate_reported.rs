@@ -52,6 +52,7 @@ impl FeedbackCheck for TrInaccurateReported {
                         "TR flagged UTI {uti} as inaccurate on field '{field}': {desc}"
                     ),
                     source_file: f.source_file.clone(),
+                    evidence: Vec::new(),
                 }
             })
             .collect()

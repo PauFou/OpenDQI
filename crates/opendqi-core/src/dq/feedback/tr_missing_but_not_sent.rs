@@ -53,6 +53,7 @@ impl FeedbackCheck for TrMissingButNotSent {
                         "TR reports UTI {uti} as missing and no prior NEWT exists in the local history store — confirmed gap."
                     ),
                     source_file: f.source_file.clone(),
+                    evidence: Vec::new(),
                 })
             })
             .collect()

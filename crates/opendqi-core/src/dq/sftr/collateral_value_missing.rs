@@ -35,6 +35,7 @@ impl SftrCheck for SftrCollateralValueMissing {
                 value: None,
                 message: "Outstanding SFT has no collateral value.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

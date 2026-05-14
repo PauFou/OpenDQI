@@ -1220,6 +1220,7 @@ mod tests {
             value: None,
             message: String::new(),
             source_file: None,
+            evidence: Vec::new(),
         }
     }
 

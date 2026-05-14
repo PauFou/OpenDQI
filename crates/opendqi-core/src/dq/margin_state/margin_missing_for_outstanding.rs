@@ -44,6 +44,7 @@ impl MarginStateCheck for EmirMsrMarginMissingForOutstanding {
                     value: None,
                     message: "MSR record carries no margin amount for an outstanding UTI.".into(),
                     source_file: r.source_file.clone(),
+                    evidence: Vec::new(),
                 });
             }
         }

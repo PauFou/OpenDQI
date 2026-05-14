@@ -68,6 +68,7 @@ impl Check for ActionEventCompatibility {
                         "Event type '{event}' is not compatible with action '{action}'. Expected one of: {allowed:?}.",
                     ),
                     source_file: r.source_file.clone(),
+                    evidence: Vec::new(),
                 })
             })
             .collect()

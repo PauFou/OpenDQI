@@ -86,6 +86,7 @@ pub(crate) fn build_issue(
         value: None,
         message: String::new(),
         source_file: rec.source_file.clone(),
+        evidence: Vec::new(),
     }
 }
 

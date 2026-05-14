@@ -53,6 +53,7 @@ impl ReconciliationCheck for UnpairedTrade {
                         "TR reports UTI {uti} as UNPAIRED — counterparty {other} has not submitted a matching report."
                     ),
                     source_file: r.source_file.clone(),
+                    evidence: Vec::new(),
                 }
             })
             .collect()

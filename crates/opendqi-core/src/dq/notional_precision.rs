@@ -39,6 +39,7 @@ impl Check for NotionalPrecision {
                         value: Some(n.to_string()),
                         message: "Notional amount exceeds ESMA decimal:18.5 precision.".into(),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

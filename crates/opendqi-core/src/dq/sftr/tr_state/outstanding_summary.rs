@@ -45,6 +45,7 @@ impl SftrTrStateCheck for SftrOutstandingSummary {
                     value: r.sft_type.clone(),
                     message: format!("Outstanding SFT UTI {uti}: loan={loan}."),
                     source_file: r.source_file.clone(),
+                    evidence: Vec::new(),
                 }
             })
             .collect()

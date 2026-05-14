@@ -39,6 +39,7 @@ impl Check for TradingCapacityMissing {
                 value: None,
                 message: "Trading capacity is missing.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

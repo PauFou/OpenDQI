@@ -40,6 +40,7 @@ impl Check for NatureEnum {
                         value: Some(v.to_owned()),
                         message: format!("Nature '{v}' is not one of {{F, N, C}}."),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

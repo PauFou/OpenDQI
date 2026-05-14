@@ -53,6 +53,7 @@ impl Check for CommodityBaseEnum {
                         "Commodity product_id '{product_id}' does not start with a recognised base code (AG/EN/FR/IN/OT/EX)."
                     ),
                     source_file: r.source_file.clone(),
+                    evidence: Vec::new(),
                 })
             })
             .collect()

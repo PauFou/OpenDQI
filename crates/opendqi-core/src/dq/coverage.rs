@@ -28,6 +28,7 @@ fn emir_issue(
         value,
         message,
         source_file: r.source_file.clone(),
+        evidence: Vec::new(),
     }
 }
 
@@ -51,6 +52,7 @@ fn sftr_issue(
         value,
         message,
         source_file: r.source_file.clone(),
+        evidence: Vec::new(),
     }
 }
 

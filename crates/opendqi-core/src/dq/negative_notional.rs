@@ -38,6 +38,7 @@ impl Check for NegativeNotional {
                 value: r.notional_amount.map(|d| d.to_string()),
                 message: "Notional amount is negative.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

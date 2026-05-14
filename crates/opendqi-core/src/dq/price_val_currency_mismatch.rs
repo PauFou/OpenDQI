@@ -41,6 +41,7 @@ impl Check for PriceValCurrencyMismatch {
                             "Valuation currency '{v}' differs from price currency '{p}'."
                         ),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

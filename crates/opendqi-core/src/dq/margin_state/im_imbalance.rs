@@ -58,6 +58,7 @@ impl MarginStateCheck for EmirMsrImImbalance {
                             diff * 100.0
                         ),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     });
                 }
             }

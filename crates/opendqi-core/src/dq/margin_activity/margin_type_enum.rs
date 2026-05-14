@@ -44,6 +44,7 @@ impl MarginActivityCheck for EmirMarMarginTypeEnum {
                             "Action type '{a}' is not in the EMIR margin set {{MARU, MARV, MARC, MARN}}."
                         ),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     });
                 }
             }

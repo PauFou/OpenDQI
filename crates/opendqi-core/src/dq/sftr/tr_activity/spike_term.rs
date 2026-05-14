@@ -57,6 +57,7 @@ impl SftrTrActivityCheck for SftrSpikeTerm {
                 "ETRM spike: {count:.0}/{total:.0} ({pct:.1}%) of the SFTR TAR are ETRM (threshold {THRESHOLD_PCT:.0}%)."
             ),
             source_file: records.first().and_then(|r| r.source_file.clone()),
+            evidence: Vec::new(),
         }]
     }
 }

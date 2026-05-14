@@ -53,6 +53,7 @@ impl FeedbackCheck for TrMissingDespiteSubmission {
                         "TR reports UTI {uti} as missing, yet the local history store records a prior NEWT for it — TR ingestion failure or stale feedback."
                     ),
                     source_file: f.source_file.clone(),
+                    evidence: Vec::new(),
                 })
             })
             .collect()

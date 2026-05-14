@@ -45,6 +45,7 @@ impl MarginStateCheck for EmirMsrCollateralizationCategoryEnum {
                             "Collateralisation category '{c}' is not in {{FCOL, PCOL, UCOL, OCOL}}."
                         ),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     });
                 }
             }

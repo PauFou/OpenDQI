@@ -34,6 +34,7 @@ impl Check for ValuationTimestampMissing {
                 value: None,
                 message: "Valuation amount is set but the valuation timestamp is missing.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

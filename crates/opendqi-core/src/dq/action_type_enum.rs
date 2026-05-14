@@ -44,6 +44,7 @@ impl Check for ActionTypeEnum {
                             "Action type '{v}' is not in the ESMA-defined enumeration."
                         ),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

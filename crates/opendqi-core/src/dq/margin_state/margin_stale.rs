@@ -48,6 +48,7 @@ impl MarginStateCheck for EmirMsrMarginStale {
                             age.num_days()
                         ),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     });
                 }
             }

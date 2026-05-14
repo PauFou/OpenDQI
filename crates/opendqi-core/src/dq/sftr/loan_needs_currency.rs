@@ -40,6 +40,7 @@ impl SftrCheck for SftrLoanNeedsCurrency {
                 value: None,
                 message: "Loan value is reported but loan currency is missing.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

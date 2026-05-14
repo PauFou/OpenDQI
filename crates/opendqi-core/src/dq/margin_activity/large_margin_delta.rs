@@ -82,6 +82,7 @@ impl MarginActivityCheck for EmirMarLargeMarginDelta {
                                     rel * 100.0
                                 ),
                                 source_file: b.source_file.clone(),
+                                evidence: Vec::new(),
                             });
                         }
                     }

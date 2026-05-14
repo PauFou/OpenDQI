@@ -88,6 +88,7 @@ impl LifecycleCheck for ValuationRegression {
                             prev = prev_ts.to_rfc3339(),
                         ),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     });
                 }
             }

@@ -335,6 +335,7 @@ fn push_unknown(
                 "Element <{local}> is not part of the OpenDQI EMIR v0.1 schema; ignored."
             ),
             source_file: Some(source_label.to_owned()),
+            evidence: Vec::new(),
         });
     }
 }
@@ -356,6 +357,7 @@ fn format_issue(
         value: None,
         message,
         source_file: Some(source_label.to_owned()),
+        evidence: Vec::new(),
     }
 }
 

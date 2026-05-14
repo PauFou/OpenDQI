@@ -54,6 +54,7 @@ impl SftrFeedbackCheck for SftrTrRejectedUti {
                     value: f.reason_code.clone(),
                     message: format!("TR rejected report for UTI {uti}: {reason}{desc}"),
                     source_file: f.source_file.clone(),
+                    evidence: Vec::new(),
                 }
             })
             .collect()

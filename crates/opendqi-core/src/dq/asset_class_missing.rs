@@ -39,6 +39,7 @@ impl Check for AssetClassMissing {
                 value: None,
                 message: "Asset class is missing.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

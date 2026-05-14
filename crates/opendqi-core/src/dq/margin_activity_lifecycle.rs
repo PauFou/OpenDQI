@@ -34,6 +34,7 @@ fn issue(
         value,
         message: format!("[portfolio={portfolio}] {message}"),
         source_file,
+        evidence: Vec::new(),
     }
 }
 

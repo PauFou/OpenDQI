@@ -61,6 +61,7 @@ impl SftrTrStateCheck for SftrDuplicateActiveUti {
                         n = indices.len()
                     ),
                     source_file: r.source_file.clone(),
+                    evidence: Vec::new(),
                 });
             }
         }

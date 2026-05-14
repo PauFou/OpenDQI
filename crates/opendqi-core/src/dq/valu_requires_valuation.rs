@@ -40,6 +40,7 @@ impl Check for ValuRequiresValuation {
                 value: None,
                 message: "Action type is VALU but no valuation amount is reported.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

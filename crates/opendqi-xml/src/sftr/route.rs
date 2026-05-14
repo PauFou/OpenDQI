@@ -37,6 +37,7 @@ pub fn read_sftr_xml(path: &Path) -> anyhow::Result<SftrXmlReadOutcome> {
                 value: None,
                 message: format!("XML is not well-formed: {}", err.message),
                 source_file: Some(source_label),
+                evidence: Vec::new(),
             }],
         });
     }
@@ -63,6 +64,7 @@ pub fn read_sftr_xml(path: &Path) -> anyhow::Result<SftrXmlReadOutcome> {
                         "Root namespace is '{actual}', expected 'urn:iso:std:iso:20022:tech:xsd:auth.052.001.02'."
                     ),
                     source_file: Some(source_label),
+                    evidence: Vec::new(),
                 }],
             })
         }

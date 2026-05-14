@@ -45,6 +45,7 @@ impl Check for ProductIdMissing {
                 value: None,
                 message: "Product identifier is missing while an asset class is declared.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

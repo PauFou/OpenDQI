@@ -44,6 +44,7 @@ impl Check for FxRequiresLeg2Currency {
                 value: None,
                 message: "FX trade is missing the second-leg currency (currency pair).".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

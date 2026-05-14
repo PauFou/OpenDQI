@@ -42,6 +42,7 @@ impl Check for CollateralisationCategoryEnum {
                             "Collateralisation category '{v}' is not in the allowed set {{FLCL, OWCL, PRCL, UNCL}}."
                         ),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

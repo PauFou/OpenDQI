@@ -52,6 +52,7 @@ pub fn read_emir_recon_stats_xml(path: &Path) -> anyhow::Result<ReconStatsXmlRea
                 value: None,
                 message: format!("XML is not well-formed: {}", err.message),
                 source_file: Some(source_label),
+                evidence: Vec::new(),
             }],
         });
     }
@@ -78,6 +79,7 @@ pub fn read_emir_recon_stats_xml(path: &Path) -> anyhow::Result<ReconStatsXmlRea
                         "Root namespace is '{actual}', expected 'urn:iso:std:iso:20022:tech:xsd:auth.091.001.01'."
                     ),
                     source_file: Some(source_label),
+                    evidence: Vec::new(),
                 }],
             })
         }

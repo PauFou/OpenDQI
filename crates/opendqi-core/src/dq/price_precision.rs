@@ -39,6 +39,7 @@ impl Check for PricePrecision {
                         value: Some(p.to_string()),
                         message: "Price exceeds ESMA decimal:18.5 precision.".into(),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

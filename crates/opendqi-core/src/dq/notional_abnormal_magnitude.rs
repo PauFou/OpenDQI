@@ -46,6 +46,7 @@ impl Check for NotionalAbnormalMagnitude {
                         "Notional amount {n} exceeds the plausible cap of 10^15 — likely data-entry error."
                     ),
                     source_file: r.source_file.clone(),
+                    evidence: Vec::new(),
                 })
             })
             .collect()

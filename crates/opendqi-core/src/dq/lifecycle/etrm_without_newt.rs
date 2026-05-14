@@ -54,6 +54,7 @@ impl LifecycleCheck for EtrmWithoutNewt {
                         "ETRM for UTI {uti} but no prior NEWT exists in the history store."
                     ),
                     source_file: r.source_file.clone(),
+                    evidence: Vec::new(),
                 });
             }
         }

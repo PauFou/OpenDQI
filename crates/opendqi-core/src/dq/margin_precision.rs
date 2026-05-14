@@ -46,6 +46,7 @@ impl Check for MarginPrecision {
                                     "Margin field '{field}' exceeds ESMA decimal:18.5 precision."
                                 ),
                                 source_file: r.source_file.clone(),
+                                evidence: Vec::new(),
                             });
                         }
                     }

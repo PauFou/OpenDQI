@@ -41,6 +41,7 @@ impl SftrCheck for SftrNewtForbidsTerminationDate {
                 value: r.termination_date.map(|d| d.to_string()),
                 message: "Action type is NEWT but a termination date is reported.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

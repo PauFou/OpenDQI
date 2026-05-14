@@ -38,6 +38,7 @@ impl Check for NegativeVariationMarginCollected {
                 value: r.variation_margin_collected.map(|d| d.to_string()),
                 message: "Variation margin collected is negative.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

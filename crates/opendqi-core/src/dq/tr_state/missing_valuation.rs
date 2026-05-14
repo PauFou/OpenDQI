@@ -40,6 +40,7 @@ impl TrStateCheck for EmirMissingValuationOnTsr {
                 value: None,
                 message: "TR shows this trade as outstanding but holds no valuation amount.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

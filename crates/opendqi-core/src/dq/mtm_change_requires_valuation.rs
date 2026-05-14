@@ -34,6 +34,7 @@ impl Check for MtmChangeRequiresValuation {
                 value: None,
                 message: "MtM value change is set but no valuation amount is reported.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

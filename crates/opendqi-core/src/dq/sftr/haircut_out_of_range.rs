@@ -38,6 +38,7 @@ impl SftrCheck for SftrHaircutOutOfRange {
                         value: Some(h.to_string()),
                         message: format!("Haircut {h} is outside the expected [0, 1.0] range."),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 } else {
                     None

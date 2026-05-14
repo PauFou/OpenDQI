@@ -43,6 +43,7 @@ impl SftrCheck for SftrNewtForbidsPriorUti {
                 value: r.prior_uti.clone(),
                 message: "Action type is NEWT but a prior UTI is reported.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

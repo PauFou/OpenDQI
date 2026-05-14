@@ -46,6 +46,7 @@ pub fn read_emir_mar_xml(path: &Path) -> anyhow::Result<MarXmlReadOutcome> {
                 value: None,
                 message: format!("XML is not well-formed: {}", err.message),
                 source_file: Some(source_label),
+                evidence: Vec::new(),
             }],
         });
     }
@@ -72,6 +73,7 @@ pub fn read_emir_mar_xml(path: &Path) -> anyhow::Result<MarXmlReadOutcome> {
                         "Root namespace is '{actual}', expected 'urn:iso:std:iso:20022:tech:xsd:auth.108.001.01'."
                     ),
                     source_file: Some(source_label),
+                    evidence: Vec::new(),
                 }],
             })
         }

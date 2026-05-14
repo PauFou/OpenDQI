@@ -53,6 +53,7 @@ impl MarginStateCheck for EmirMsrInitialMarginNegative {
                             value: Some(v.to_string()),
                             message: format!("{field} is negative: {v}."),
                             source_file: r.source_file.clone(),
+                            evidence: Vec::new(),
                         });
                     }
                 }

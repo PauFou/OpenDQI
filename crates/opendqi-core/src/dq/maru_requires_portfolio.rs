@@ -44,6 +44,7 @@ impl Check for MaruRequiresPortfolio {
                 value: None,
                 message: "Action type is MARU but no collateral portfolio code is reported.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

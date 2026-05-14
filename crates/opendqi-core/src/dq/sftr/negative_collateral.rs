@@ -39,6 +39,7 @@ impl SftrCheck for SftrNegativeCollateral {
                 value: r.collateral_value.map(|d| d.to_string()),
                 message: "Collateral value is negative.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

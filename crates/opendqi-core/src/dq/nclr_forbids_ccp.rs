@@ -48,6 +48,7 @@ impl Check for NclrForbidsCcp {
                 message: "Clearing status is NCLR (not cleared) but a CCP LEI is also reported."
                     .into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

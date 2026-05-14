@@ -33,6 +33,7 @@ fn issue(
         value,
         message,
         source_file: r.source_file.clone(),
+        evidence: Vec::new(),
     }
 }
 

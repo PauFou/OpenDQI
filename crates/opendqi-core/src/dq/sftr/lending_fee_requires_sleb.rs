@@ -40,6 +40,7 @@ impl SftrCheck for SftrLendingFeeRequiresSleb {
                         value: r.lending_fee.map(|x| x.to_string()),
                         message: format!("Lending fee is reported but SFT type '{t}' is not SLEB."),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

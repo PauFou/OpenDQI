@@ -84,6 +84,27 @@ impl std::fmt::Display for DqDimension {
     }
 }
 
+/// One discrete piece of evidence supporting a `DqIssue`. Captures
+/// the `field`, the `before` / `after` values for cross-batch
+/// comparisons (e.g. MODI lifecycle), and the originating
+/// `source_line` when the record's index in its source file is
+/// known. All fields are optional so checks can populate only what
+/// is meaningful.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EvidenceItem {
+    /// Field name the evidence relates to.
+    pub field: String,
+    /// Value observed before the change (or in the prior batch).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub before: Option<String>,
+    /// Value observed after the change (or in the current batch).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub after: Option<String>,
+    /// Line number / index in the source file when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_line: Option<u64>,
+}
+
 /// A single data-quality finding.
 ///
 /// All optional fields are populated on a best-effort basis so that the
@@ -112,6 +133,12 @@ pub struct DqIssue {
     pub message: String,
     /// Source file path the record came from, when known.
     pub source_file: Option<String>,
+    /// Structured supporting evidence. Empty by default; populated by
+    /// checks where `before` / `after` comparisons, source lines, or
+    /// per-field details add audit value (e.g. duplicate-UTI source
+    /// lines, MODI-preserves-UTI before/after).
+    #[serde(default)]
+    pub evidence: Vec<EvidenceItem>,
 }
 
 /// Canonical EMIR record.
@@ -854,4 +881,31 @@ pub struct ScanSummary {
     pub started_at: DateTime<Utc>,
     /// Scan completion timestamp.
     pub finished_at: DateTime<Utc>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn evidence_item_serde_round_trip() {
+        let e = EvidenceItem {
+            field: "uti".into(),
+            before: Some("OLD".into()),
+            after: Some("NEW".into()),
+            source_line: Some(42),
+        };
+        let j = serde_json::to_string(&e).unwrap();
+        let back: EvidenceItem = serde_json::from_str(&j).unwrap();
+        assert_eq!(e, back);
+    }
+
+    #[test]
+    fn dq_issue_evidence_default_round_trip() {
+        // Backward-compat: a JSON payload without `evidence` deserialises
+        // with an empty vec (serde(default)).
+        let json = r#"{"check_id":"X","regime":"emir","severity":"high","dimension":"completeness","record_id":null,"uti":null,"field":null,"value":null,"message":"m","source_file":null}"#;
+        let issue: DqIssue = serde_json::from_str(json).unwrap();
+        assert!(issue.evidence.is_empty());
+    }
 }

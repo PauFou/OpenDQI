@@ -42,6 +42,7 @@ impl Check for ZeroNotional {
                 value: Some("0".into()),
                 message: "Notional amount is exactly zero on a non-position record.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

@@ -55,6 +55,7 @@ impl SftrCheck for SftrGmraGmslaVersionPlausible {
                         value: Some(v.to_owned()),
                         message: format!("{tp} version '{v}' is not a known published edition."),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

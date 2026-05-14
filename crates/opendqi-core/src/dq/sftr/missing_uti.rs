@@ -34,6 +34,7 @@ impl SftrCheck for SftrMissingUti {
                 value: None,
                 message: "UTI is missing or empty.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

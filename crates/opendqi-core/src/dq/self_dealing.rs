@@ -41,6 +41,7 @@ impl Check for SelfDealing {
                             "Reporting counterparty and other counterparty are identical ({a})."
                         ),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

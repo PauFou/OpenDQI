@@ -42,6 +42,7 @@ impl Check for IrRequiresNotional {
                 value: None,
                 message: "Interest-rate trade has no notional amount.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

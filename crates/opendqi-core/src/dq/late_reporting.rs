@@ -47,6 +47,7 @@ impl Check for LateReporting {
                             limit_h = ctx.thresholds.timeliness.max_reporting_delay_hours
                         ),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 } else {
                     None

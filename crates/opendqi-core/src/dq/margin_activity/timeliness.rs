@@ -49,6 +49,7 @@ impl MarginActivityCheck for EmirMarTimeliness {
                             ctx.thresholds.timeliness.max_reporting_delay_hours
                         ),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     });
                 }
             }

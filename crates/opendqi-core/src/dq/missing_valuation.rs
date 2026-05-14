@@ -33,6 +33,7 @@ impl Check for MissingValuation {
                 value: None,
                 message: "Outstanding trade has no valuation amount.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

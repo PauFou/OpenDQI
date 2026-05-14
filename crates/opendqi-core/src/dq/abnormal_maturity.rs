@@ -71,6 +71,7 @@ impl Check for AbnormalMaturity {
                     value: Some(maturity.to_string()),
                     message,
                     source_file: r.source_file.clone(),
+                    evidence: Vec::new(),
                 });
             }
         }

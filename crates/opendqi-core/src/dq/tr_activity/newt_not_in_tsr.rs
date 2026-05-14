@@ -69,6 +69,7 @@ impl TrActivityCheck for EmirNewtNotInTsr {
                         "UTI {uti} appears as NEWT in the TAR batch but is absent from the companion TSR — submission may not have been accepted."
                     ),
                     source_file: r.source_file.clone(),
+                    evidence: Vec::new(),
                 })
             })
             .collect()

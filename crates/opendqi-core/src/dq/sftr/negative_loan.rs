@@ -35,6 +35,7 @@ impl SftrCheck for SftrNegativeLoan {
                 value: r.loan_value.map(|d| d.to_string()),
                 message: "Loan value is negative.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

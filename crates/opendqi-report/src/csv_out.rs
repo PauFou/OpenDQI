@@ -26,6 +26,7 @@ pub fn write_issues_csv(path: &Path, issues: &[DqIssue]) -> Result<()> {
         "value",
         "message",
         "source_file",
+        "evidence_json",
     ])?;
 
     let mut sorted: Vec<&DqIssue> = issues.iter().collect();
@@ -38,6 +39,11 @@ pub fn write_issues_csv(path: &Path, issues: &[DqIssue]) -> Result<()> {
     });
 
     for issue in sorted {
+        let evidence_json = if issue.evidence.is_empty() {
+            String::new()
+        } else {
+            serde_json::to_string(&issue.evidence).unwrap_or_default()
+        };
         writer.write_record([
             issue.check_id.as_str(),
             &issue.regime.to_string(),
@@ -49,6 +55,7 @@ pub fn write_issues_csv(path: &Path, issues: &[DqIssue]) -> Result<()> {
             issue.value.as_deref().unwrap_or(""),
             issue.message.as_str(),
             issue.source_file.as_deref().unwrap_or(""),
+            evidence_json.as_str(),
         ])?;
     }
     writer.flush()?;
@@ -72,6 +79,7 @@ mod tests {
             value: None,
             message: "x".into(),
             source_file: Some("f.csv".into()),
+            evidence: Vec::new(),
         }
     }
 

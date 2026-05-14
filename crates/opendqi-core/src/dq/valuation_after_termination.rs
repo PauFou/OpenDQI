@@ -41,6 +41,7 @@ impl Check for ValuationAfterTermination {
                             term
                         ),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 } else {
                     None

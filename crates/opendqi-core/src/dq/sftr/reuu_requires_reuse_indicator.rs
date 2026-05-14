@@ -41,6 +41,7 @@ impl SftrCheck for SftrReuuRequiresReuseIndicator {
                 value: None,
                 message: "Action type is REUU but no reuse indicator is reported.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

@@ -46,6 +46,7 @@ impl Check for IrRequiresLeg1Freq {
                 value: None,
                 message: "Interest-rate trade has no first-leg payment frequency.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

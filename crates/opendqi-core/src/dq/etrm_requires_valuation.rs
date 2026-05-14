@@ -40,6 +40,7 @@ impl Check for EtrmRequiresValuation {
                 value: None,
                 message: "Action type is ETRM but no final valuation is reported.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

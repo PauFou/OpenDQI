@@ -88,6 +88,7 @@ impl LifecycleCheck for LifecycleValuationAfterTermination {
                             td = td,
                         ),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     });
                 }
             }

@@ -41,6 +41,7 @@ impl Check for ValuationCurrencyMissing {
                 value: None,
                 message: "Valuation amount is set but the currency is missing.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

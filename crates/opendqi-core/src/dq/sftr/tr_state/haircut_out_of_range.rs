@@ -48,6 +48,7 @@ impl SftrTrStateCheck for SftrHaircutOutOfRangeOnTsr {
                         value: Some(h.to_string()),
                         message: format!("Haircut {h} on outstanding SFT is outside [0, 1.0]."),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 } else {
                     None

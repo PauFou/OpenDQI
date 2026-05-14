@@ -41,6 +41,7 @@ impl Check for NotionalValCurrencyMismatch {
                             "Valuation currency '{v}' differs from notional currency '{n}'."
                         ),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

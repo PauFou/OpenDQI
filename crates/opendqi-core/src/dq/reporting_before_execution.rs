@@ -41,6 +41,7 @@ impl Check for ReportingBeforeExecution {
                             exec.to_rfc3339()
                         ),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 } else {
                     None

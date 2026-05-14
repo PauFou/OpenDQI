@@ -40,6 +40,7 @@ impl Check for EtrmRequiresTerminationDate {
                 value: None,
                 message: "Action type is ETRM but no termination date is reported.".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

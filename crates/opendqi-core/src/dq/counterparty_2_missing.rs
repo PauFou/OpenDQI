@@ -40,6 +40,7 @@ impl Check for Counterparty2Missing {
                 value: None,
                 message: "Other counterparty LEI is missing (EMIR-VR-1006).".into(),
                 source_file: r.source_file.clone(),
+                evidence: Vec::new(),
             })
             .collect()
     }

@@ -42,6 +42,7 @@ impl Check for ClearingStatusEnum {
                             "Clearing status '{v}' is not in the allowed set {{CLRD, NCLR, ICLR, INCL}}."
                         ),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

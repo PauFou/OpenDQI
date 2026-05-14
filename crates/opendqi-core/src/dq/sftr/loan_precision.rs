@@ -40,6 +40,7 @@ impl SftrCheck for SftrLoanPrecision {
                         value: Some(v.to_string()),
                         message: "Loan value exceeds ESMA decimal:18.5 precision.".into(),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

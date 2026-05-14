@@ -56,6 +56,7 @@ impl MarginActivityCheck for EmirMarDuplicateMarginCall {
                     value: Some(ev.clone()),
                     message: format!("Portfolio {pc} has multiple margin events at {ev}."),
                     source_file: r.source_file.clone(),
+                    evidence: Vec::new(),
                 });
             }
         }

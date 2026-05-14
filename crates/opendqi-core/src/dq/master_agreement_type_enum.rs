@@ -45,6 +45,7 @@ impl Check for MasterAgreementTypeEnum {
                             "Master agreement type '{v}' is not in the recognised enumeration."
                         ),
                         source_file: r.source_file.clone(),
+                        evidence: Vec::new(),
                     })
                 }
             })

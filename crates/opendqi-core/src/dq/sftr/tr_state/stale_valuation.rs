@@ -62,6 +62,7 @@ impl SftrTrStateCheck for SftrStaleValuationOnTsr {
                         ts = state_as_of.to_rfc3339(),
                     ),
                     source_file: r.source_file.clone(),
+                    evidence: Vec::new(),
                 })
             })
             .collect()
