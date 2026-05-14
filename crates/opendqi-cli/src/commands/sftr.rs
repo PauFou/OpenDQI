@@ -18,7 +18,9 @@ use opendqi_core::{
     DqDimension, DqIssue, Regime, ScanSummary, Severity, SftrRecord, SftrTrStateRecord, Thresholds,
     TrActivitySummary,
 };
-use opendqi_io::{discover_emir_inputs, has_extension, read_sftr_csv, CsvMapping};
+use opendqi_io::{
+    discover_emir_inputs, has_extension, read_sftr_csv, write_sftr_parquet, CsvMapping,
+};
 use opendqi_report::{write_issues_csv, write_report_html, write_summary_json};
 use opendqi_xml::{
     check_wellformedness, read_sftr_feedback_xml, read_sftr_reconciliation_xml,
@@ -178,11 +180,17 @@ pub enum SftrAction {
         #[arg(long)]
         out: PathBuf,
     },
-    /// Normalize an SFTR file into Parquet — planned milestone.
+    /// Normalize SFTR XML/CSV input into a canonical Parquet file
+    /// (Snappy-compressed). Schema is stable and analytics-friendly.
+    /// See `docs/parquet-normalize.md`.
     Normalize {
-        /// Path to the input file.
+        /// Path to an XML/CSV file or a directory of such files.
         input: PathBuf,
-        /// Parquet output path.
+        /// Path to the YAML mapping describing CSV columns. Required
+        /// when the input set contains at least one CSV file.
+        #[arg(long)]
+        mapping: Option<PathBuf>,
+        /// Output Parquet file path.
         #[arg(long)]
         out: PathBuf,
     },
@@ -249,10 +257,12 @@ pub fn run(action: SftrAction) -> Result<ExitCode> {
             run_book_reconcile(&book, &tsr, &mapping, &out)?;
             Ok(ExitCode::SUCCESS)
         }
-        SftrAction::Normalize { .. } => {
-            println!(
-                "opendqi sftr normalize: Parquet normalization is planned for a future milestone."
-            );
+        SftrAction::Normalize {
+            input,
+            mapping,
+            out,
+        } => {
+            run_normalize(&input, mapping.as_deref(), &out)?;
             Ok(ExitCode::SUCCESS)
         }
     }
@@ -422,6 +432,66 @@ fn run_scan(
         summary.quality_score
     );
     println!("Report: {}", out.join("report.html").display());
+    Ok(())
+}
+
+fn run_normalize(input: &Path, mapping_path: Option<&Path>, out: &Path) -> Result<()> {
+    let inputs = discover_emir_inputs(input)?;
+    if inputs.is_empty() {
+        return Err(anyhow!("no inputs found at {}", input.display()));
+    }
+    info!(count = inputs.len(), "discovered inputs");
+
+    let has_csv = inputs.iter().any(|p| has_extension(p, "csv"));
+    let csv_mapping = match (has_csv, mapping_path) {
+        (true, Some(mp)) => Some(
+            CsvMapping::from_path(mp)
+                .with_context(|| format!("loading CSV mapping {}", mp.display()))?,
+        ),
+        (true, None) => {
+            return Err(anyhow!(
+                "input set contains CSV files but --mapping was not provided"
+            ));
+        }
+        (false, _) => None,
+    };
+
+    let mut records: Vec<SftrRecord> = Vec::new();
+    for path in &inputs {
+        if has_extension(path, "xml") {
+            let mut outcome = read_sftr_xml(path)?;
+            info!(
+                file = %path.display(),
+                records = outcome.records.len(),
+                "loaded SFTR XML for normalization",
+            );
+            records.append(&mut outcome.records);
+        } else if has_extension(path, "csv") {
+            let mapping = csv_mapping
+                .as_ref()
+                .expect("csv_mapping is Some when at least one CSV is in the input set");
+            let mut csv_records = read_sftr_csv(path, mapping)?;
+            info!(
+                file = %path.display(),
+                records = csv_records.len(),
+                "loaded SFTR CSV for normalization",
+            );
+            records.append(&mut csv_records);
+        } else {
+            warn!(path = %path.display(), "unsupported file extension; only XML and CSV are normalized");
+        }
+    }
+
+    write_sftr_parquet(out, &records)
+        .with_context(|| format!("writing Parquet to {}", out.display()))?;
+
+    let bytes = std::fs::metadata(out).map(|m| m.len()).unwrap_or(0);
+    println!(
+        "Normalized {} SFTR record(s) into {} ({} bytes, Snappy-compressed Parquet).",
+        records.len(),
+        out.display(),
+        bytes
+    );
     Ok(())
 }
 

@@ -12,9 +12,13 @@ description = "OpenDQI IO: CSV ingestion, YAML mapping, file discovery."
 opendqi-core = { path = "../opendqi-core" }
 anyhow.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 serde_yaml.workspace = true
 csv.workspace = true
 chrono.workspace = true
 rust_decimal.workspace = true
 tracing.workspace = true
 walkdir.workspace = true
+arrow-array.workspace = true
+arrow-schema.workspace = true
+parquet.workspace = true

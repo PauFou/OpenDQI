@@ -35,6 +35,9 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 walkdir = "2.5"
 rusqlite = { version = "0.31", features = ["bundled", "chrono"] }
+arrow-array = "53"
+arrow-schema = "53"
+parquet = { version = "53", default-features = false, features = ["arrow", "snap"] }
 
 [profile.release]
 lto = "thin"

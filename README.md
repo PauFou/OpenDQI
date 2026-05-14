@@ -98,7 +98,7 @@ Planned:
 - TR-output mode for `auth.030` (Phase 2).
 - ISO 20022 `auth.079` (SFTR TSR — Phase 6).
 - ZIP/GZIP archives.
-- Parquet output.
+- Parquet output — shipped. See [`docs/parquet-normalize.md`](docs/parquet-normalize.md) for the schema and downstream usage with DuckDB / Polars / PyArrow.
 
 ## Roadmap
 
