@@ -15,7 +15,7 @@ version = "0.1.0"
 edition = "2021"
 rust-version = "1.75"
 license = "Apache-2.0"
-repository = "https://github.com/pfournier597/opendqi"
+repository = "https://github.com/PauFou/OpenDQI"
 authors = ["OpenDQI contributors"]
 
 [workspace.dependencies]
