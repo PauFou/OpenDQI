@@ -1,0 +1,28 @@
+# OpenDQI thresholds — example file.
+# Pass via `--config` to any `opendqi emir scan` invocation.
+# Values below mirror the compile-time defaults so this file is
+# idempotent on its own; tweak as needed when ESMA updates a class
+# or phase.
+#
+# NFC clearing thresholds (EMIR Article 10) — notional in EUR, by
+# canonical asset-class short code. Providing the
+# `nfc_clearing_thresholds_eur` key replaces the entire map; omit it
+# to keep the ESMA defaults.
+#
+# AANA initial-margin threshold (EMIR Article 11 RTS) — phase 6
+# (8 G€). Older phases used larger amounts (e.g. 50 G€ in phase 5).
+#
+# Other sections (timeliness, maturity) are unaffected if not listed.
+
+emir_rmt:
+  nfc_clearing_thresholds_eur:
+    CR: 1000000000
+    EQ: 1000000000
+    IR: 3000000000
+    FX: 3000000000
+    CO: 4000000000
+  aana_im_threshold_eur: 8000000000
+
+timeliness:
+  max_reporting_delay_hours: 24
+  max_valuation_age_business_days: 1

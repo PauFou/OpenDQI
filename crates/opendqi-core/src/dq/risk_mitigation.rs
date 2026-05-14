@@ -2,15 +2,15 @@
 //! derivatives. Each check first filters on `clearing_status` and only
 //! runs when the trade is non-cleared. Cleared trades are skipped.
 //!
+//! Notional thresholds (`NFC_ABOVE_CLEARING_THRESHOLD` per asset
+//! class and `INITIAL_MARGIN_THRESHOLD`) live in
+//! [`crate::config::EmirRmtThresholds`] and are overridable via YAML.
 //! See [`docs/emir-risk-mitigation.md`].
-//!
-//! v1 thresholds (notional `NFC_ABOVE_CLEARING_THRESHOLD` and
-//! `INITIAL_MARGIN_THRESHOLD`) are compile-time constants; future work
-//! will migrate them to the `Thresholds` configuration.
 
 use chrono::Duration;
 use rust_decimal::Decimal;
 
+use crate::dq::formats::canonical_asset_class;
 use crate::dq::{Check, CheckContext};
 use crate::model::{DqDimension, DqIssue, EmirRecord, Regime, Severity};
 
@@ -57,9 +57,6 @@ fn issue(
 fn is_outstanding(r: &EmirRecord) -> bool {
     r.termination_date.is_none()
 }
-
-const NFC_NOTIONAL_THRESHOLD_EUR: i64 = 1_000_000_000;
-const AANA_NOTIONAL_THRESHOLD_EUR: i64 = 8_000_000_000;
 
 // -------- EMIR.RMT.UNCLEARED_NEEDS_CONFIRMATION --------------------
 
@@ -314,8 +311,9 @@ impl Check for EmirRmtInitialMarginThreshold {
     fn severity(&self) -> Severity {
         Severity::Warning
     }
-    fn run(&self, records: &[EmirRecord], _ctx: &CheckContext) -> Vec<DqIssue> {
-        let threshold = Decimal::from(AANA_NOTIONAL_THRESHOLD_EUR);
+    fn run(&self, records: &[EmirRecord], ctx: &CheckContext) -> Vec<DqIssue> {
+        let aana_eur = ctx.thresholds.emir_rmt.aana_im_threshold_eur;
+        let threshold = Decimal::from(aana_eur);
         records
             .iter()
             .filter(|r| is_uncleared(r.clearing_status.as_deref()))
@@ -333,7 +331,7 @@ impl Check for EmirRmtInitialMarginThreshold {
                         r.notional_amount.map(|n| n.to_string()).unwrap_or_default()
                     )),
                     format!(
-                        "Non-cleared OTC derivative with notional > {AANA_NOTIONAL_THRESHOLD_EUR} EUR has no initial margin posted or collected (Article 11(3) AANA-threshold heuristic)."
+                        "Non-cleared OTC derivative with notional > {aana_eur} EUR has no initial margin posted or collected (Article 11(3) AANA-threshold heuristic)."
                     ),
                 )
             })
@@ -402,44 +400,49 @@ impl Check for EmirRmtNfcAboveClearingThreshold {
     fn severity(&self) -> Severity {
         Severity::Warning
     }
-    fn run(&self, records: &[EmirRecord], _ctx: &CheckContext) -> Vec<DqIssue> {
-        let threshold = Decimal::from(NFC_NOTIONAL_THRESHOLD_EUR);
-        records
-            .iter()
-            .filter(|r| is_uncleared(r.clearing_status.as_deref()))
-            .filter(|r| {
-                r.nature
-                    .as_deref()
-                    .map(|n| n.trim().eq_ignore_ascii_case("NFC"))
-                    .unwrap_or(false)
-            })
-            .filter(|r| {
-                r.asset_class
-                    .as_deref()
-                    .map(|c| {
-                        let u = c.trim().to_uppercase();
-                        u == "IR" || u == "CR" || u == "INTR" || u == "CRDT"
-                    })
-                    .unwrap_or(false)
-            })
-            .filter(|r| r.notional_amount.map(|n| n > threshold).unwrap_or(false))
-            .map(|r| {
-                issue(
+    fn run(&self, records: &[EmirRecord], ctx: &CheckContext) -> Vec<DqIssue> {
+        let table = &ctx.thresholds.emir_rmt.nfc_clearing_thresholds_eur;
+        let mut out = Vec::new();
+        for r in records {
+            if !is_uncleared(r.clearing_status.as_deref()) {
+                continue;
+            }
+            let is_nfc = r
+                .nature
+                .as_deref()
+                .map(|n| n.trim().eq_ignore_ascii_case("NFC"))
+                .unwrap_or(false);
+            if !is_nfc {
+                continue;
+            }
+            let Some(asset_class) = r.asset_class.as_deref() else {
+                continue;
+            };
+            let Some(canonical) = canonical_asset_class(asset_class) else {
+                continue;
+            };
+            let Some(&threshold_eur) = table.get(canonical) else {
+                continue;
+            };
+            let threshold = Decimal::from(threshold_eur);
+            let Some(notional) = r.notional_amount else {
+                continue;
+            };
+            if notional > threshold {
+                out.push(issue(
                     self.id(),
                     self.severity(),
                     self.dimension(),
                     r,
                     Some("nature"),
-                    Some(format!(
-                        "notional={}",
-                        r.notional_amount.map(|n| n.to_string()).unwrap_or_default()
-                    )),
+                    Some(format!("notional={notional}")),
                     format!(
-                        "NFC counterparty trading IR/CR uncleared above the {NFC_NOTIONAL_THRESHOLD_EUR} EUR clearing threshold — verify EMIR Article 10 clearing obligation."
+                        "NFC counterparty trading {canonical} uncleared above the {threshold_eur} EUR clearing threshold — verify EMIR Article 10 clearing obligation."
                     ),
-                )
-            })
-            .collect()
+                ));
+            }
+        }
+        out
     }
 }
 
@@ -672,7 +675,8 @@ mod tests {
         let mut r = uncleared();
         r.nature = Some("NFC".into());
         r.asset_class = Some("IR".into());
-        r.notional_amount = Some(Decimal::from(2_000_000_000i64));
+        // 5 G€ is above the IR default (3 G€) — fires.
+        r.notional_amount = Some(Decimal::from(5_000_000_000i64));
         assert_eq!(
             EmirRmtNfcAboveClearingThreshold
                 .run(&[r.clone()], &ctx())
@@ -683,6 +687,70 @@ mod tests {
         assert!(EmirRmtNfcAboveClearingThreshold
             .run(&[r], &ctx())
             .is_empty());
+    }
+
+    #[test]
+    fn nfc_above_threshold_ir_uses_3g_default() {
+        // Regression of the v1 false positive: IR at 2 G€ was flagged
+        // under the uniform 1 G€ threshold; under the per-class table
+        // IR sits at 3 G€, so 2 G€ stays silent.
+        let mut r = uncleared();
+        r.nature = Some("NFC".into());
+        r.asset_class = Some("IR".into());
+        r.notional_amount = Some(Decimal::from(2_000_000_000i64));
+        assert!(EmirRmtNfcAboveClearingThreshold
+            .run(&[r], &ctx())
+            .is_empty());
+    }
+
+    #[test]
+    fn nfc_above_threshold_co_now_fires() {
+        // Coverage expansion: commodity wasn't checked in v1 at all.
+        // With the per-class table (CO default = 4 G€), a 5 G€ CO trade
+        // fires.
+        let mut r = uncleared();
+        r.nature = Some("NFC".into());
+        r.asset_class = Some("CO".into());
+        r.notional_amount = Some(Decimal::from(5_000_000_000i64));
+        assert_eq!(EmirRmtNfcAboveClearingThreshold.run(&[r], &ctx()).len(), 1);
+    }
+
+    #[test]
+    fn nfc_above_threshold_respects_yaml_override() {
+        // ctx with the IR threshold bumped to 5 G€: an IR trade at
+        // 4 G€ that would fire under the default 3 G€ no longer fires.
+        let yaml = "emir_rmt:\n  nfc_clearing_thresholds_eur:\n    IR: 5000000000\n";
+        let thresholds: crate::config::Thresholds = serde_yaml::from_str(yaml).unwrap();
+        let ctx = CheckContext {
+            thresholds,
+            today: chrono::NaiveDate::from_ymd_opt(2026, 5, 14).unwrap(),
+            now: chrono::DateTime::parse_from_rfc3339("2026-05-14T08:00:00Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc),
+        };
+        let mut r = uncleared();
+        r.nature = Some("NFC".into());
+        r.asset_class = Some("IR".into());
+        r.notional_amount = Some(Decimal::from(4_000_000_000i64));
+        assert!(EmirRmtNfcAboveClearingThreshold.run(&[r], &ctx).is_empty());
+    }
+
+    #[test]
+    fn im_threshold_respects_yaml_override() {
+        // ctx with AANA threshold raised to phase-5's 50 G€: a 10 G€
+        // trade without IM stops firing.
+        let yaml = "emir_rmt:\n  aana_im_threshold_eur: 50000000000\n";
+        let thresholds: crate::config::Thresholds = serde_yaml::from_str(yaml).unwrap();
+        let ctx = CheckContext {
+            thresholds,
+            today: chrono::NaiveDate::from_ymd_opt(2026, 5, 14).unwrap(),
+            now: chrono::DateTime::parse_from_rfc3339("2026-05-14T08:00:00Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc),
+        };
+        let mut r = uncleared();
+        r.notional_amount = Some(Decimal::from(10_000_000_000i64));
+        assert!(EmirRmtInitialMarginThreshold.run(&[r], &ctx).is_empty());
     }
 
     #[test]

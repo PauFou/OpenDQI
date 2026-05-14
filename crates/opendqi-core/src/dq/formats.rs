@@ -128,6 +128,26 @@ pub fn currency_max_scale(ccy: &str) -> Option<u32> {
         .map(|(_, scale)| *scale)
 }
 
+/// Canonicalises an `asset_class` string to one of OpenDQI's short
+/// codes — `IR`, `CR`, `EQ`, `FX`, `CO` — or returns `None` when the
+/// input does not match any known alias. The mapping covers the ESMA
+/// short codes and the variants used by ISO 20022 (`INTR`, `CRDT`,
+/// `EQTY`, `CURR`, `COMM`).
+///
+/// Centralises the lookup so per-asset-class threshold checks
+/// (`EMIR.RMT.NFC_ABOVE_CLEARING_THRESHOLD`, …) don't repeat the
+/// matching inline.
+pub fn canonical_asset_class(raw: &str) -> Option<&'static str> {
+    match raw.trim().to_uppercase().as_str() {
+        "IR" | "INTR" | "RATE" => Some("IR"),
+        "CR" | "CRDT" => Some("CR"),
+        "EQ" | "EQTY" => Some("EQ"),
+        "FX" | "CU" | "CURR" => Some("FX"),
+        "CO" | "COMM" => Some("CO"),
+        _ => None,
+    }
+}
+
 /// Returns true if `s` matches the ISO 6166 ISIN shape: 12 characters
 /// total — 2 uppercase letters (country code), 9 alphanumeric, and 1
 /// numeric check digit.
@@ -271,5 +291,29 @@ mod tests {
         // 6 fractional digits.
         let d = Decimal::from_str("1.234567").unwrap();
         assert!(!within_decimal_bounds(&d, 18, 5));
+    }
+
+    #[test]
+    fn canonical_asset_class_recognises_short_codes_and_aliases() {
+        // Canonical short codes pass through.
+        assert_eq!(canonical_asset_class("IR"), Some("IR"));
+        assert_eq!(canonical_asset_class("CR"), Some("CR"));
+        assert_eq!(canonical_asset_class("EQ"), Some("EQ"));
+        assert_eq!(canonical_asset_class("FX"), Some("FX"));
+        assert_eq!(canonical_asset_class("CO"), Some("CO"));
+        // ISO 20022 / ESMA aliases.
+        assert_eq!(canonical_asset_class("INTR"), Some("IR"));
+        assert_eq!(canonical_asset_class("CRDT"), Some("CR"));
+        assert_eq!(canonical_asset_class("EQTY"), Some("EQ"));
+        assert_eq!(canonical_asset_class("CURR"), Some("FX"));
+        assert_eq!(canonical_asset_class("COMM"), Some("CO"));
+        // Case + whitespace insensitive.
+        assert_eq!(canonical_asset_class("  ir "), Some("IR"));
+    }
+
+    #[test]
+    fn canonical_asset_class_rejects_unknown() {
+        assert_eq!(canonical_asset_class("FOO"), None);
+        assert_eq!(canonical_asset_class(""), None);
     }
 }
