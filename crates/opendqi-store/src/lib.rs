@@ -19,14 +19,17 @@ use rusqlite::Connection;
 
 mod error;
 mod load;
+mod migrations;
 mod persist;
-mod schema;
 
 pub use error::StoreError;
 pub use load::FeedbackRow;
 
-/// Open (or create) the SQLite store at `path` and run idempotent
-/// schema migrations. The returned [`Store`] owns the connection.
+/// Open (or create) the SQLite store at `path` and run the versioned
+/// migration pipeline. Existing databases (created before the
+/// migration tooling existed) are detected and back-filled at v1.
+/// See [`migrations`] for the migration model. The returned [`Store`]
+/// owns the connection.
 pub fn open_store(path: &Path) -> Result<Store, StoreError> {
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
@@ -36,7 +39,7 @@ pub fn open_store(path: &Path) -> Result<Store, StoreError> {
     let conn = Connection::open(path)?;
     conn.pragma_update(None, "journal_mode", "WAL").ok();
     conn.pragma_update(None, "foreign_keys", "ON")?;
-    schema::migrate(&conn)?;
+    migrations::migrate(&conn)?;
     Ok(Store { conn })
 }
 

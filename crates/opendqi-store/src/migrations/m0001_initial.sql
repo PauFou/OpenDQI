@@ -1,17 +1,9 @@
-//! SQLite schema for the OpenDQI history store. Idempotent migrations
-//! run on every `open_store` call — no separate migration tooling
-//! needed for the v1 schema.
+-- Migration v1 — initial OpenDQI history store schema.
+-- Idempotent (CREATE TABLE IF NOT EXISTS / CREATE INDEX IF NOT EXISTS)
+-- so a re-run on an already-migrated database is a safe no-op. The
+-- migration pipeline records this version in the `schema_version`
+-- table once applied; future migrations append rows there.
 
-use rusqlite::Connection;
-
-use crate::error::StoreError;
-
-pub(crate) fn migrate(conn: &Connection) -> Result<(), StoreError> {
-    conn.execute_batch(SCHEMA_V1)?;
-    Ok(())
-}
-
-const SCHEMA_V1: &str = r#"
 CREATE TABLE IF NOT EXISTS scans (
     scan_id        INTEGER PRIMARY KEY AUTOINCREMENT,
     regime         TEXT    NOT NULL CHECK(regime IN ('EMIR','SFTR')),
@@ -190,4 +182,3 @@ CREATE TABLE IF NOT EXISTS margin_state_records (
 CREATE INDEX IF NOT EXISTS margin_state_records_uti ON margin_state_records(uti);
 CREATE INDEX IF NOT EXISTS margin_state_records_portfolio
     ON margin_state_records(collateral_portfolio_code);
-"#;

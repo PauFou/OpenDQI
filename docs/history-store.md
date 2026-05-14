@@ -29,11 +29,44 @@ prior records yet). Subsequent runs see the accumulated history and
 will start raising `DUPLICATE_NEWT_FOR_UTI`, `VALUATION_REGRESSION`,
 and `VALUATION_AFTER_TERMINATION` issues as appropriate.
 
-## Schema
+## Schema migrations
 
-Idempotent `CREATE TABLE IF NOT EXISTS` statements run on every
-`open_store` call. The schema is additive — new tables are added in
-later releases without breaking older databases.
+Schema changes are managed by a versioned migration pipeline
+(`crates/opendqi-store/src/migrations.rs`). Each migration carries a
+strictly monotonic `version` (i32) and lives as a standalone SQL
+file under `crates/opendqi-store/src/migrations/m000N_<name>.sql`.
+
+On every `open_store()`, the migrator:
+
+1. Creates the `schema_version (version, name, applied_at)` table if
+   absent.
+2. Loads the set of already-applied versions.
+3. **Legacy backfill**: if no versions are recorded yet but the
+   root table `scans` already exists, the migrator marks v1 as
+   applied without re-running the SQL — protecting databases
+   created before this pipeline existed (any OpenDQI release ≤
+   Phase 8).
+4. Applies each remaining migration in ascending version order,
+   each in its own transaction, recording the version in
+   `schema_version` on success.
+
+To add a new migration:
+
+1. Create `crates/opendqi-store/src/migrations/m000N_<short_name>.sql`
+   with your DDL. Prefer idempotent forms (`CREATE TABLE IF NOT
+   EXISTS`, `CREATE INDEX IF NOT EXISTS`) as a defence in depth.
+2. Append a `Migration { version: N, name: "<short_name>", sql:
+   include_str!(...) }` entry to the `MIGRATIONS` const.
+
+Migrations are **forward-only**. To roll back, restore a backup of
+the SQLite file; this is consistent with OpenDQI's local-first
+posture.
+
+## Schema (v1 — initial)
+
+Below is the schema after running migration v1. Subsequent
+migrations may extend, alter, or refactor these tables — consult
+the latest migration files for the authoritative shape.
 
 ```sql
 scans(scan_id, regime, started_at, file_count, record_count)

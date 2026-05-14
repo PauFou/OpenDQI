@@ -112,6 +112,92 @@ fn migrate_is_idempotent() {
 }
 
 #[test]
+fn fresh_open_records_schema_version() {
+    let path = tmp("fresh-sv.db");
+    let _ = open_store(&path).unwrap();
+    let conn = rusqlite::Connection::open(&path).unwrap();
+    let mut stmt = conn
+        .prepare("SELECT version, name FROM schema_version ORDER BY version")
+        .unwrap();
+    let rows: Vec<(i32, String)> = stmt
+        .query_map([], |row| {
+            Ok((row.get::<_, i32>(0)?, row.get::<_, String>(1)?))
+        })
+        .unwrap()
+        .map(|r| r.unwrap())
+        .collect();
+    assert_eq!(rows, vec![(1, "initial_schema".to_string())]);
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn legacy_db_is_backfilled() {
+    let path = tmp("legacy.db");
+    let _ = std::fs::remove_file(&path);
+    // Simulate a database created by an older binary: it has the
+    // root `scans` table but no `schema_version`.
+    {
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute_batch("CREATE TABLE scans (scan_id INTEGER PRIMARY KEY);")
+            .unwrap();
+    }
+    // open_store must succeed and record v1 as a legacy backfill,
+    // without re-running the migration SQL (which would fail on the
+    // pre-existing scans table if the IF NOT EXISTS guard wasn't there).
+    let _ = open_store(&path).unwrap();
+    let conn = rusqlite::Connection::open(&path).unwrap();
+    let (version, name): (i32, String) = conn
+        .query_row("SELECT version, name FROM schema_version", [], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })
+        .unwrap();
+    assert_eq!(version, 1);
+    assert!(name.contains("legacy"), "name was: {name}");
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn already_migrated_open_does_not_duplicate_rows() {
+    let path = tmp("already-migrated.db");
+    let _ = open_store(&path).unwrap();
+    let _ = open_store(&path).unwrap();
+    let conn = rusqlite::Connection::open(&path).unwrap();
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM schema_version", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(count, 1, "second open must not re-insert v1");
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn unknown_future_version_does_not_panic() {
+    let path = tmp("future-version.db");
+    let _ = std::fs::remove_file(&path);
+    {
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE schema_version (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at INTEGER NOT NULL);
+             INSERT INTO schema_version (version, name, applied_at) VALUES (42, 'future', 0);",
+        )
+        .unwrap();
+    }
+    let _ = open_store(&path).unwrap();
+    let conn = rusqlite::Connection::open(&path).unwrap();
+    let versions: Vec<i32> = conn
+        .prepare("SELECT version FROM schema_version ORDER BY version")
+        .unwrap()
+        .query_map([], |r| r.get::<_, i32>(0))
+        .unwrap()
+        .map(|r| r.unwrap())
+        .collect();
+    // v1 was applied (since not previously in `applied`) and v42
+    // remains as a forward marker — the migrator must tolerate it.
+    assert!(versions.contains(&1));
+    assert!(versions.contains(&42));
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
 fn feedback_persist_list_resolve_workflow() {
     let path = tmp("feedback.db");
     let mut store = open_store(&path).unwrap();
