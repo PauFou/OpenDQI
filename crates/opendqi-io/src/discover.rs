@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, Context, Result};
 
 /// Extensions accepted by `discover_emir_inputs`.
-const SUPPORTED_EXTENSIONS: &[&str] = &["csv", "xml"];
+const SUPPORTED_EXTENSIONS: &[&str] = &["csv", "xml", "parquet"];
 
 /// Discover EMIR inputs at `path`.
 ///

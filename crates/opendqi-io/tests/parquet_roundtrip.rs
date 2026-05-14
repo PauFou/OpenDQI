@@ -209,3 +209,108 @@ fn timestamp_microsecond_resolution_survives() {
     assert_eq!(micros, dt.timestamp_micros());
     let _ = std::fs::remove_file(&path);
 }
+
+// =================================================================
+// Read-back integration tests (Phase 8.7)
+// =================================================================
+
+use opendqi_io::{read_emir_parquet, read_sftr_parquet};
+
+#[test]
+fn emir_write_then_read_preserves_fields() {
+    let mapping = CsvMapping::from_path(Path::new("../../examples/emir/sample_mapping.yml"))
+        .expect("load mapping");
+    let records = opendqi_io::read_emir_csv(Path::new("../../examples/emir/sample.csv"), &mapping)
+        .expect("load CSV");
+    assert!(!records.is_empty());
+    let path = tmp("emir-roundback");
+    write_emir_parquet(&path, &records).unwrap();
+    let back = read_emir_parquet(&path).unwrap();
+    assert_eq!(back.len(), records.len());
+    // Spot-check the first record.
+    assert_eq!(back[0].uti, records[0].uti);
+    assert_eq!(back[0].action_type, records[0].action_type);
+    assert_eq!(back[0].notional_amount, records[0].notional_amount);
+    assert_eq!(back[0].notional_currency, records[0].notional_currency);
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn sftr_write_then_read_preserves_fields() {
+    let mapping =
+        CsvMapping::from_path(Path::new("../../examples/sftr/tier2.yml")).expect("load mapping");
+    let records = opendqi_io::read_sftr_csv(Path::new("../../examples/sftr/tier2.csv"), &mapping)
+        .expect("load CSV");
+    assert!(!records.is_empty());
+    let path = tmp("sftr-roundback");
+    write_sftr_parquet(&path, &records).unwrap();
+    let back = read_sftr_parquet(&path).unwrap();
+    assert_eq!(back.len(), records.len());
+    assert_eq!(back[0].uti, records[0].uti);
+    assert_eq!(back[0].sft_type, records[0].sft_type);
+    assert_eq!(back[0].loan_value, records[0].loan_value);
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn read_parquet_with_wrong_regime_fails() {
+    let r = EmirRecord {
+        uti: Some("UTI-A".into()),
+        ..Default::default()
+    };
+    let path = tmp("emir-for-sftr-read");
+    write_emir_parquet(&path, &[r]).unwrap();
+    // Attempt to read the EMIR file as SFTR — must error.
+    let err = read_sftr_parquet(&path).unwrap_err();
+    let msg = format!("{err:?}");
+    assert!(
+        msg.to_uppercase().contains("EMIR") && msg.to_uppercase().contains("SFTR"),
+        "expected mismatch hint, got: {msg}"
+    );
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn raw_fields_roundtrip_via_parquet() {
+    let mut raw = std::collections::BTreeMap::new();
+    raw.insert("foo".to_string(), "bar".to_string());
+    raw.insert("baz".to_string(), "qux".to_string());
+    let r = EmirRecord {
+        uti: Some("UTI-RF".into()),
+        raw_fields: raw.clone(),
+        ..Default::default()
+    };
+    let path = tmp("emir-rf-back");
+    write_emir_parquet(&path, &[r]).unwrap();
+    let back = read_emir_parquet(&path).unwrap();
+    assert_eq!(back.len(), 1);
+    assert_eq!(back[0].raw_fields, raw);
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn negative_decimal_roundtrip_via_parquet() {
+    let r = EmirRecord {
+        uti: Some("UTI-NEG".into()),
+        valuation_amount: Some(Decimal::new(-12345, 2)), // -123.45
+        ..Default::default()
+    };
+    let path = tmp("emir-neg-back");
+    write_emir_parquet(&path, std::slice::from_ref(&r)).unwrap();
+    let back = read_emir_parquet(&path).unwrap();
+    assert_eq!(back.len(), 1);
+    let recovered = back[0].valuation_amount.unwrap();
+    // Decimal128 stored at scale 10; comparing values rather than the
+    // scale representation.
+    assert_eq!(recovered, Decimal::new(-12345, 2));
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn empty_parquet_round_reads_as_empty_vec() {
+    let path = tmp("emir-empty-back");
+    write_emir_parquet(&path, &[]).unwrap();
+    let back = read_emir_parquet(&path).unwrap();
+    assert!(back.is_empty());
+    let _ = std::fs::remove_file(&path);
+}

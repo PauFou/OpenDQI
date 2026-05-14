@@ -22,7 +22,8 @@ use opendqi_core::{
     Severity, Thresholds, TrActivitySummary, TrStateRecord,
 };
 use opendqi_io::{
-    discover_emir_inputs, has_extension, read_emir_csv, write_emir_parquet, CsvMapping,
+    discover_emir_inputs, has_extension, read_emir_csv, read_emir_parquet, write_emir_parquet,
+    CsvMapping,
 };
 use opendqi_report::{write_issues_csv, write_report_html, write_summary_json};
 use opendqi_xml::{
@@ -401,6 +402,14 @@ fn run_scan(
                     }
                 }
             }
+        } else if has_extension(path, "parquet") {
+            let mut pq_records = read_emir_parquet(path)?;
+            info!(
+                file = %path.display(),
+                records = pq_records.len(),
+                "loaded EMIR Parquet",
+            );
+            records.append(&mut pq_records);
         } else {
             warn!(path = %path.display(), "unsupported file extension; skipping");
         }

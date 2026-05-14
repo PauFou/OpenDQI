@@ -140,16 +140,45 @@ Tested with:
 - DuckDB ≥ 0.10 (Decimal128, JSON, Snappy).
 - Polars ≥ 0.40, PyArrow ≥ 14.
 
-## Round-trip notes
+## Reading Parquet back (Phase 8.7)
 
-OpenDQI v1 implements **write-only**. If a later milestone needs to
-re-ingest a normalized Parquet file back into `EmirRecord` /
-`SftrRecord`, it would be a separate "read Parquet" module — the
-schema in this document is the contract.
+`opendqi {emir,sftr} scan` accepts `.parquet` inputs alongside XML
+and CSV. The round-trip is complete:
+
+```bash
+# Normalize one source, then scan the Parquet via the same checks
+opendqi emir normalize examples/emir/sample.csv \
+  --mapping examples/emir/sample_mapping.yml \
+  --out /tmp/emir.parquet
+
+opendqi emir scan /tmp/emir.parquet --out /tmp/scan-from-parquet/
+```
+
+Schema tolerance:
+
+- **Missing columns** — the reader looks columns up by name. Any
+  field absent from the file stays at `Default` / `None` on the
+  reconstructed record. Forward-compat with producers that emit a
+  subset of the canonical schema.
+- **Extra unknown columns** — ignored.
+- **`regime` mismatch** — if the file contains a `regime` column
+  with a value incompatible with the runner (e.g. `read_emir_parquet`
+  on a `regime=SFTR` file), the read returns a clear error.
+- **Decimal scale** — values written at scale 10 are normalised on
+  read (trailing zeros stripped), so checks that key on
+  `Decimal::scale()` (e.g. `EMIR.VLD.NOTIONAL_PRECISION_BY_CURRENCY`)
+  behave identically whether the input came from CSV or Parquet.
+
+The identity:
+
+```
+scan(csv)  ≡  normalize(csv) -> scan(parquet)
+```
+
+holds modulo the `source_file` column (which naturally differs).
 
 ## Hors-scope (v1)
 
-- Lecture Parquet → records (round-trip complet).
 - Compression alternative (Zstd, LZ4) — Snappy uniquement v1.
 - Row-group customisation (taille, statistiques avancées).
 - Chunking / streaming — single RecordBatch par fichier, suffisant
@@ -157,3 +186,6 @@ schema in this document is the contract.
 - Schema versionning : si le schéma évolue, un nouveau milestone
   ajoutera une colonne `_opendqi_schema_version` ou utilisera la
   metadata Parquet pour le marquer.
+- Lecture Parquet pour les sous-commandes hors `scan` (feedback,
+  reconcile, tr-state-scan, mar-scan, …) : `scan` est le seul
+  use-case clair v1.

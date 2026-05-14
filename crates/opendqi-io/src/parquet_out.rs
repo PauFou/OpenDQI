@@ -26,9 +26,9 @@ use parquet::basic::Compression;
 use parquet::file::properties::WriterProperties;
 use rust_decimal::Decimal;
 
-const DECIMAL_PRECISION: u8 = 38;
-const DECIMAL_SCALE: i8 = 10;
-const TS_UTC: &str = "UTC";
+pub(crate) const DECIMAL_PRECISION: u8 = 38;
+pub(crate) const DECIMAL_SCALE: i8 = 10;
+pub(crate) const TS_UTC: &str = "UTC";
 
 // =================================================================
 // Public API

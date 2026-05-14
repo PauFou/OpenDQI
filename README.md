@@ -98,7 +98,7 @@ Planned:
 - TR-output mode for `auth.030` (Phase 2).
 - ISO 20022 `auth.079` (SFTR TSR — Phase 6).
 - ZIP/GZIP archives.
-- Parquet output — shipped. See [`docs/parquet-normalize.md`](docs/parquet-normalize.md) for the schema and downstream usage with DuckDB / Polars / PyArrow.
+- Parquet output **and input** — shipped, round-trip complete. `opendqi emir scan path/to/normalized.parquet --out report/` accepts Parquet alongside CSV / XML. See [`docs/parquet-normalize.md`](docs/parquet-normalize.md) for the schema and downstream usage with DuckDB / Polars / PyArrow.
 - Parallel check execution via `rayon` — see [`docs/performance.md`](docs/performance.md) for benchmark numbers (~400 k EMIR records/sec, ~1.2 M SFTR records/sec on commodity hardware).
 
 ## Roadmap

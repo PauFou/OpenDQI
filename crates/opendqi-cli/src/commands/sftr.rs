@@ -19,7 +19,8 @@ use opendqi_core::{
     TrActivitySummary,
 };
 use opendqi_io::{
-    discover_emir_inputs, has_extension, read_sftr_csv, write_sftr_parquet, CsvMapping,
+    discover_emir_inputs, has_extension, read_sftr_csv, read_sftr_parquet, write_sftr_parquet,
+    CsvMapping,
 };
 use opendqi_report::{write_issues_csv, write_report_html, write_summary_json};
 use opendqi_xml::{
@@ -358,8 +359,16 @@ fn run_scan(
                 "loaded SFTR CSV",
             );
             records.append(&mut csv_records);
+        } else if has_extension(path, "parquet") {
+            let mut pq_records = read_sftr_parquet(path)?;
+            info!(
+                file = %path.display(),
+                records = pq_records.len(),
+                "loaded SFTR Parquet",
+            );
+            records.append(&mut pq_records);
         } else {
-            warn!(path = %path.display(), "unsupported file extension; only XML and CSV are supported by opendqi sftr scan");
+            warn!(path = %path.display(), "unsupported file extension; supported: XML, CSV, Parquet");
         }
     }
 
