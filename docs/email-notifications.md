@@ -71,10 +71,15 @@ makes the email step a no-op (useful for staging).
 `--email-config <path>` is currently wired into:
 
 - `opendqi emir scan`
+- `opendqi sftr scan`
+- `opendqi emir tr-state-scan` (TSR daily snapshot — most-emailed report in ops practice)
+- `opendqi emir tr-audit` (consolidated TAR + TSR + feedback report)
 
-Add to `opendqi sftr scan` and the TR-layer commands by mirroring the
-same 3-line pattern (`SmtpConfig::from_yaml_file` → `send_report_email`)
-after the report-write block. Tracked as a polish follow-up.
+Add it to the remaining commands (`emir tr-activity-scan`, `emir
+mar-scan`, `emir msr-scan`, `emir feedback`, `emir recon-stats`,
+`emir book-reconcile`, and their SFTR counterparts) by mirroring the
+same 3-line pattern (`SmtpConfig::from_yaml_file` →
+`send_report_email`) after the report-write block.
 
 ## Tests
 

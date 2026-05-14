@@ -145,6 +145,12 @@ pub enum EmirAction {
         /// Directory where reports are written.
         #[arg(long)]
         out: PathBuf,
+        /// Optional SMTP configuration YAML. When set, the HTML
+        /// report + summary.json + issues.csv are emailed to the
+        /// recipients listed in the config after the scan. See
+        /// `docs/email-notifications.md`.
+        #[arg(long, value_name = "PATH")]
+        email_config: Option<PathBuf>,
     },
     /// Ingest a TR pairing / matching report and produce
     /// `EMIR.REC.*` issues for UNPAIRED / UNRECONCILED trades and
@@ -187,6 +193,11 @@ pub enum EmirAction {
         /// Directory where reports are written.
         #[arg(long)]
         out: PathBuf,
+        /// Optional SMTP configuration YAML. When set, the consolidated
+        /// `tr_audit_report.html` is emailed to the recipients listed
+        /// in the config. See `docs/email-notifications.md`.
+        #[arg(long, value_name = "PATH")]
+        email_config: Option<PathBuf>,
     },
     /// Reconcile a firm's internal booking system export against a
     /// TR Trade State Report (auth.107). Produces `EMIR.BREC.*`
@@ -310,8 +321,13 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
             run_reconcile(&input, &store, &out)?;
             Ok(ExitCode::SUCCESS)
         }
-        EmirAction::TrStateScan { input, store, out } => {
-            run_tr_state_scan(&input, store.as_deref(), &out)?;
+        EmirAction::TrStateScan {
+            input,
+            store,
+            out,
+            email_config,
+        } => {
+            run_tr_state_scan(&input, store.as_deref(), &out, email_config.as_deref())?;
             Ok(ExitCode::SUCCESS)
         }
         EmirAction::TrActivityScan {
@@ -329,8 +345,16 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
             feedback,
             store,
             out,
+            email_config,
         } => {
-            run_tr_audit(&tar, &tsr, &feedback, store.as_deref(), &out)?;
+            run_tr_audit(
+                &tar,
+                &tsr,
+                &feedback,
+                store.as_deref(),
+                &out,
+                email_config.as_deref(),
+            )?;
             Ok(ExitCode::SUCCESS)
         }
         EmirAction::BookReconcile {
@@ -983,7 +1007,12 @@ fn run_reconcile(input: &Path, store_path: &Path, out: &Path) -> Result<()> {
     Ok(())
 }
 
-fn run_tr_state_scan(input: &Path, store_path: Option<&Path>, out: &Path) -> Result<()> {
+fn run_tr_state_scan(
+    input: &Path,
+    store_path: Option<&Path>,
+    out: &Path,
+    email_config_path: Option<&Path>,
+) -> Result<()> {
     let started_at = Utc::now();
     let outcome = read_emir_tr_state_xml(input)
         .with_context(|| format!("reading TSR file {}", input.display()))?;
@@ -1070,6 +1099,22 @@ fn run_tr_state_scan(input: &Path, store_path: Option<&Path>, out: &Path) -> Res
         &issues,
         &sources,
     )?;
+
+    if let Some(path) = email_config_path {
+        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
+        let sent = opendqi_report::send_report_email(
+            &cfg,
+            &summary,
+            &out.join("tr_state_report.html"),
+            &out.join("summary.json"),
+            &out.join("tr_state_issues.csv"),
+        )?;
+        if sent {
+            info!(to = ?cfg.to, "TSR report emailed");
+        } else {
+            info!("email config is disabled — skipped send");
+        }
+    }
 
     let critical = summary
         .issues_by_severity
@@ -1415,12 +1460,14 @@ fn run_tr_activity_scan(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_tr_audit(
     tar_path: &Path,
     tsr_path: &Path,
     feedback_path: &Path,
     store_path: Option<&Path>,
     out: &Path,
+    email_config_path: Option<&Path>,
 ) -> Result<()> {
     use std::collections::HashSet;
 
@@ -1662,6 +1709,22 @@ fn run_tr_audit(
         &issues,
         &sources,
     )?;
+
+    if let Some(path) = email_config_path {
+        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
+        let sent = opendqi_report::send_report_email(
+            &cfg,
+            &summary,
+            &out.join("tr_audit_report.html"),
+            &out.join("summary.json"),
+            &out.join("tr_audit_issues.csv"),
+        )?;
+        if sent {
+            info!(to = ?cfg.to, "TR audit report emailed");
+        } else {
+            info!("email config is disabled — skipped send");
+        }
+    }
 
     let critical = summary
         .issues_by_severity
