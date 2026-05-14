@@ -9,9 +9,10 @@ use chrono::Utc;
 use clap::Subcommand;
 use opendqi_core::dq::{
     default_sftr_checks, default_sftr_feedback_checks, default_sftr_lifecycle_checks,
-    default_sftr_reconciliation_checks, default_sftr_tr_activity_checks,
-    default_sftr_tr_state_checks, default_sftr_tr_state_lifecycle_checks, finalize_issues,
-    run_all_sftr, run_all_sftr_feedback, run_all_sftr_lifecycle, run_all_sftr_reconciliation,
+    default_sftr_pre_submission_checks, default_sftr_reconciliation_checks,
+    default_sftr_tr_activity_checks, default_sftr_tr_state_checks,
+    default_sftr_tr_state_lifecycle_checks, finalize_issues, run_all_sftr, run_all_sftr_feedback,
+    run_all_sftr_lifecycle, run_all_sftr_pre_submission, run_all_sftr_reconciliation,
     run_all_sftr_tr_activity, run_all_sftr_tr_state, run_all_sftr_tr_state_lifecycle, sort_issues,
     CheckContext,
 };
@@ -61,6 +62,13 @@ pub enum SftrAction {
         /// run against the accumulated history.
         #[arg(long, value_name = "PATH")]
         store: Option<PathBuf>,
+        /// Optional path to a `rejection_profile.yml` exported by
+        /// `opendqi feedback analytics`. When set, the scan runs the
+        /// pre-submission `SFTR.PSC.*` family that flags records
+        /// likely to be rejected by the TR based on historical
+        /// patterns. See `docs/pre-submission-checks.md`.
+        #[arg(long, value_name = "PATH")]
+        rejection_profile: Option<PathBuf>,
     },
     /// Validate XML files: well-formedness check + XSD validation.
     /// Exits non-zero when at least one issue is found.
@@ -207,6 +215,7 @@ pub fn run(action: SftrAction) -> Result<ExitCode> {
             config,
             xsd,
             store,
+            rejection_profile,
         } => {
             run_scan(
                 &input,
@@ -215,6 +224,7 @@ pub fn run(action: SftrAction) -> Result<ExitCode> {
                 config.as_deref(),
                 xsd.as_deref(),
                 store.as_deref(),
+                rejection_profile.as_deref(),
             )?;
             Ok(ExitCode::SUCCESS)
         }
@@ -270,6 +280,7 @@ pub fn run(action: SftrAction) -> Result<ExitCode> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_scan(
     input: &Path,
     out: &Path,
@@ -277,6 +288,7 @@ fn run_scan(
     config_path: Option<&Path>,
     xsd_path: Option<&Path>,
     store_path: Option<&Path>,
+    rejection_profile_path: Option<&Path>,
 ) -> Result<()> {
     let started_at = Utc::now();
 
@@ -407,6 +419,30 @@ fn run_scan(
             "lifecycle checks run"
         );
         issues.extend(lifecycle_issues);
+    }
+
+    if let Some(profile_path) = rejection_profile_path {
+        let text = std::fs::read_to_string(profile_path)
+            .with_context(|| format!("reading rejection profile {}", profile_path.display()))?;
+        let file: opendqi_core::RejectionProfileFile = serde_yaml::from_str(&text)
+            .with_context(|| format!("parsing rejection profile {}", profile_path.display()))?;
+        let profile = file.profile;
+        info!(
+            top_causes = profile.top_causes.len(),
+            repeated_rejected_utis = profile.repeated_rejected_utis.len(),
+            "loaded rejection profile"
+        );
+        let psc_issues = run_all_sftr_pre_submission(
+            &default_sftr_pre_submission_checks(),
+            &records,
+            &profile,
+            &ctx,
+        );
+        info!(
+            psc_issues = psc_issues.len(),
+            "SFTR pre-submission checks run"
+        );
+        issues.extend(psc_issues);
     }
 
     finalize_issues(&mut issues, &ctx);

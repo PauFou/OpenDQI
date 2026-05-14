@@ -398,7 +398,7 @@ fn run_analytics(
 fn suggested_check_for_reason(code: &str) -> String {
     let upper = code.trim().to_ascii_uppercase();
     match upper.as_str() {
-        // Completeness-style ESMA codes (heuristic mapping).
+        // ---- EMIR (auth.092) reason-code mappings ----
         "VAL01" | "MISSING_NOTIONAL_CCY" => "EMIR.COMP.NOTIONAL_CURRENCY_MISSING".into(),
         "VAL02" | "MISSING_NOTIONAL" | "ZERO_NOTIONAL" => "EMIR.ACC.ZERO_NOTIONAL".into(),
         "VAL03" | "NEGATIVE_NOTIONAL" => "EMIR.ACC.NEGATIVE_NOTIONAL".into(),
@@ -406,6 +406,16 @@ fn suggested_check_for_reason(code: &str) -> String {
         "VAL10" | "MISSING_CP1_LEI" => "EMIR.COMP.COUNTERPARTY_1_MISSING".into(),
         "VAL11" | "MISSING_CP2_LEI" => "EMIR.COMP.COUNTERPARTY_2_MISSING".into(),
         "VAL12" | "MISSING_UTI" => "EMIR.COMP.UTI_MISSING".into(),
+        // ---- SFTR (auth.080) reason-code mappings ----
+        "SFTRVAL01" | "MISSING_LOAN_VALUE" => "SFTR.COMP.COLLATERAL_VALUE_MISSING".into(),
+        "SFTRVAL02" | "MISSING_COLLATERAL" => "SFTR.COMP.COLLATERAL_VALUE_MISSING".into(),
+        "SFTRVAL03" | "NEGATIVE_LOAN" => "SFTR.ACC.NEGATIVE_LOAN".into(),
+        "SFTRVAL04" | "NEGATIVE_COLLATERAL" => "SFTR.ACC.NEGATIVE_COLLATERAL".into(),
+        "SFTRVAL05" | "MISSING_SFT_TYPE" => "SFTR.COMP.SFT_TYPE_MISSING".into(),
+        "SFTRVAL10" | "MISSING_SFT_CP1_LEI" => "SFTR.COMP.COUNTERPARTY_1_MISSING".into(),
+        "SFTRVAL11" | "MISSING_SFT_CP2_LEI" => "SFTR.COMP.COUNTERPARTY_2_MISSING".into(),
+        "SFTRVAL12" | "MISSING_SFT_UTI" => "SFTR.COMP.UTI_MISSING".into(),
+        "SFTRVAL13" | "HAIRCUT_OUT_OF_RANGE" => "SFTR.ACC.HAIRCUT_OUT_OF_RANGE".into(),
         _ => format!("(no canonical check for {code})"),
     }
 }

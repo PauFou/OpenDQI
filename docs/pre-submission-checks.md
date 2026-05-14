@@ -94,6 +94,35 @@ before — even when those records pass every other check. Critical
 for back-office teams who want to break the cycle of submitting
 known-problematic UTIs.
 
+## SFTR variant
+
+`opendqi sftr scan --rejection-profile <yml>` runs the same loop with
+the SFTR-specific `SFTR.PSC.*` family:
+
+- `SFTR.PSC.REPEATED_REJECTION` (high) — UTI in `repeated_rejected_utis`.
+- `SFTR.PSC.LIKELY_REJECTION_PATTERN` (warning) — mirror of the EMIR
+  variant with SFTR-tuned predicates: missing UTI, missing collateral
+  value, missing SFT type, missing counterparty LEI, negative loan,
+  negative collateral, haircut out of `[0, 1]` range.
+
+The analytics export `suggested_check_for_reason` recognises SFTR
+reason codes (`SFTRVAL01` … `SFTRVAL13`) and emits canonical
+`SFTR.*` check IDs. Synthetic SFTR fixture:
+[`examples/sftr/rejection_profile/sample.yml`](../examples/sftr/rejection_profile/sample.yml).
+
+Run with both regimes side-by-side:
+
+```bash
+opendqi feedback analytics --store ./hist.db --out ./analytics/
+opendqi emir  scan ./submissions.csv --mapping mapping.yml \
+  --rejection-profile ./analytics/rejection_profile.yml --out ./emir-report/
+opendqi sftr scan ./sft-submissions.csv --mapping sft-mapping.yml \
+  --rejection-profile ./analytics/rejection_profile.yml --out ./sftr-report/
+```
+
+The same `rejection_profile.yml` powers both — EMIR and SFTR causes
+coexist in the YAML, each PSC engine ignores the codes it can't map.
+
 ## Bundled fixture
 
 [`examples/emir/rejection_profile/sample.yml`](../examples/emir/rejection_profile/sample.yml)

@@ -1,0 +1,20 @@
+# OpenDQI SFTR rejection profile — synthetic sample.
+# Mirrors the shape emitted by `opendqi feedback analytics --regime sftr`.
+profile:
+  generated_at: "2026-05-14T12:00:00+00:00"
+  total_feedbacks: 200
+  top_causes:
+    - reason_code: "SFTRVAL02"
+      count: 80
+      suggested_check: "SFTR.COMP.COLLATERAL_VALUE_MISSING"
+    - reason_code: "SFTRVAL12"
+      count: 50
+      suggested_check: "SFTR.COMP.UTI_MISSING"
+    - reason_code: "SFTRVAL13"
+      count: 25
+      suggested_check: "SFTR.ACC.HAIRCUT_OUT_OF_RANGE"
+  repeated_rejected_utis:
+    - uti: "SFT-CHRONIC-001"
+      count: 6
+    - uti: "SFT-CHRONIC-002"
+      count: 3

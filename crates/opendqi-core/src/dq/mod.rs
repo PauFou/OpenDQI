@@ -1208,6 +1208,28 @@ pub fn run_all_pre_submission(
     issues
 }
 
+// ---- SFTR pre-submission checks (rejection-profile driven) ------
+
+pub use sftr::pre_submission::{
+    default_sftr_pre_submission_checks, SftrPreSubmissionCheck, SftrPscLikelyRejectionPattern,
+    SftrPscRepeatedRejection,
+};
+
+/// Run every SFTR pre-submission check against the records + profile.
+pub fn run_all_sftr_pre_submission(
+    checks: &[Box<dyn SftrPreSubmissionCheck>],
+    records: &[SftrRecord],
+    profile: &RejectionProfile,
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    let mut issues: Vec<DqIssue> = checks
+        .par_iter()
+        .flat_map_iter(|c| c.run(records, profile, ctx))
+        .collect();
+    finalize_issues(&mut issues, ctx);
+    issues
+}
+
 // ---- EMIR Reconciliation Statistics (auth.091) checks ----------
 
 mod emir_recon_stats;
