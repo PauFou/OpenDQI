@@ -7,8 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-15
+
+Real TR Schema Hardening — the TR feedback/state parsers are now
+aligned with the real ESMA ISO 20022 schemas (read locally; the
+SWIFT-licensed XSDs are never redistributed). Backwards-compatible:
+no canonical-model, check-ID or store-schema change.
+
 ### Added
 
+- **Real ESMA schema alignment of the TR feedback/state parsers.**
+  Coverage moves `verified (synthetic schema)` →
+  **`schema-verified (subset)`** for EMIR `auth.107` (Trade State
+  Report), `auth.108` / `auth.109` (Margin Activity / State),
+  `auth.091` (Derivatives Trade Reconciliation Statistical Report) and
+  `auth.092` (Derivatives Trade Rejection Statistical Report), and SFTR
+  `auth.079` (SFT Trade State Report). Each parser now anchors on the
+  real message envelope and element paths; each ships a per-message
+  coverage note under [`docs/auth-messages/`](docs/auth-messages/)
+  documenting the extracted-field map, the ignored branches and the
+  honest limits (including checks that are unreachable from the real
+  message — e.g. `EMIR.MSR.HAIRCUT_OUT_OF_RANGE`,
+  `EMIR.RST.OUTSTANDING_UNPAIRED_HIGH`). `auth.091`'s pairing /
+  reconciliation rates are *derived* from the real cohort counts.
 - **ZIP/GZIP archive ingestion.** Any scan command that accepts a
   file path now also accepts a `.zip` (its `csv` / `xml` / `parquet`
   members are extracted; member directory components are dropped — no
@@ -17,8 +38,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   contract as `opendqi desktop`). Resolved at the single
   `discover_emir_inputs` chokepoint, so EMIR and SFTR are covered
   together; the previous "archives are not yet supported" error is
-  removed. The last cross-cutting roadmap item from
-  `docs/positioning.md` — email being the other, already shipped.
+  removed.
+- **No-activity report handling.** ISO 20022 `DataSetActn = "NOTX"`
+  reports now yield zero records plus a single informational note
+  (`EMIR.FMT.{TSR,MAR,MSR,FBK,RST}_NO_RECORDS`,
+  `SFTR.FMT.SFTR_TSR_NO_RECORDS`) instead of an error.
+
+### Changed
+
+- **Honest message-naming caveats.** Real `auth.092` is a rejection
+  *statistics* report (not a per-UTI feed) and real `auth.080` is an
+  SFTR *reconciliation status advice* (not rejection feedback); the
+  scalar feedback model is documented as a deliberate lossy projection
+  and the SFTR `auth.080` path stays honestly `partial`. A faithful
+  feedback / reconciliation re-model (repeating validation-rule codes,
+  reconciliation-status, hierarchical detail, store migration) is
+  tracked as a separate future milestone.
+- Workspace version `0.2.0` → `0.3.0`.
+
+### Infrastructure
+
+- CI gained an MSRV job pinned to Rust **1.87.0** and a non-gating
+  `cargo-llvm-cov` coverage workflow.
+- Dev/test builds use `debug = "line-tables-only"` (smaller, faster
+  links; backtraces keep file:line); a local Cargo tuning directory
+  `/.cargo/` is gitignored.
 
 ## [0.2.0] - 2026-05-15
 
@@ -134,6 +178,7 @@ sends back, and turns them into reproducible HTML / JSON / CSV
 - No SWIFT-licensed XSDs or real client data are committed; all
   fixtures are synthetic.
 
-[Unreleased]: https://github.com/PauFou/OpenDQI/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/PauFou/OpenDQI/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/PauFou/OpenDQI/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/PauFou/OpenDQI/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/PauFou/OpenDQI/releases/tag/v0.1.0
