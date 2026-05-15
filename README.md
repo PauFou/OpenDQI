@@ -93,6 +93,11 @@ Supported today:
 - A matching-style placeholder for `auth.106` / `auth.083` (see naming caveat in [`docs/auth-messages.md`](docs/auth-messages.md)).
 - OpenDQI v0.1 simplified XML ([`docs/xml-format.md`](docs/xml-format.md)).
 - Directories of mixed CSV/XML files.
+- `.zip` archives (only `csv` / `xml` / `parquet` members are read;
+  directory components in member names are ignored — no zip-slip) and
+  single-stream `.gz` (e.g. `foo.csv.gz`), accepted wherever a scan
+  command takes a file path. Extraction is to a per-run temp directory,
+  reclaimed by the OS on reboot (same contract as `opendqi desktop`).
 - Optional XSD validation via `xmllint` ([`docs/xsd-validation.md`](docs/xsd-validation.md)).
 
 Planned:
@@ -100,7 +105,6 @@ Planned:
 - ISO 20022 `auth.107` (EMIR TSR — Phase 1).
 - TR-output mode for `auth.030` (Phase 2).
 - ISO 20022 `auth.079` (SFTR TSR — Phase 6).
-- ZIP/GZIP archives.
 - Parquet output **and input** — shipped, round-trip complete. `opendqi emir scan path/to/normalized.parquet --out report/` accepts Parquet alongside CSV / XML. See [`docs/parquet-normalize.md`](docs/parquet-normalize.md) for the schema and downstream usage with DuckDB / Polars / PyArrow.
 - Parallel check execution via `rayon` — see [`docs/performance.md`](docs/performance.md) for benchmark numbers (~400 k EMIR records/sec, ~1.2 M SFTR records/sec on commodity hardware).
 

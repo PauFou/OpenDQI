@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **ZIP/GZIP archive ingestion.** Any scan command that accepts a
+  file path now also accepts a `.zip` (its `csv` / `xml` / `parquet`
+  members are extracted; member directory components are dropped — no
+  zip-slip) or a single-stream `.gz` (e.g. `foo.csv.gz`). Extraction
+  is to a per-run temp directory, reclaimed by the OS on reboot (same
+  contract as `opendqi desktop`). Resolved at the single
+  `discover_emir_inputs` chokepoint, so EMIR and SFTR are covered
+  together; the previous "archives are not yet supported" error is
+  removed. The last cross-cutting roadmap item from
+  `docs/positioning.md` — email being the other, already shipped.
+
 ## [0.2.0] - 2026-05-15
 
 Feature release — backwards-compatible additions on top of v0.1.0.

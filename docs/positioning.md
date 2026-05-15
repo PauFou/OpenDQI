@@ -84,11 +84,11 @@ Phase 6 — SFTR equivalent modules
 Phase 7 — Local web UI
 ```
 
-Email notifications and ZIP/GZIP archive ingestion are cross-cutting
-concerns scheduled after the main layered roadmap. The web UI
-(`opendqi desktop`) is deliberately last so that the CLI, parsers,
-report generators, and history store are stable before any
-graphical layer is added.
+Email notifications and ZIP/GZIP archive ingestion were cross-cutting
+concerns delivered after the main layered roadmap; both are now
+shipped. The web UI (`opendqi desktop`) is deliberately last so that
+the CLI, parsers, report generators, and history store are stable
+before any graphical layer is added.
 
 ## What OpenDQI is not
 

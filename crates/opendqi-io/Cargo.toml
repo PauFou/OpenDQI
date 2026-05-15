@@ -23,3 +23,5 @@ walkdir.workspace = true
 arrow-array.workspace = true
 arrow-schema.workspace = true
 parquet.workspace = true
+zip.workspace = true
+flate2.workspace = true

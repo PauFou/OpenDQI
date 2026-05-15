@@ -38,6 +38,8 @@ rusqlite = { version = "0.31", features = ["bundled", "chrono"] }
 arrow-array = "53"
 arrow-schema = "53"
 parquet = { version = "53", default-features = false, features = ["arrow", "snap"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+flate2 = "1"
 axum = { version = "0.7", features = ["multipart"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "fs"] }
 tower = "0.5"
