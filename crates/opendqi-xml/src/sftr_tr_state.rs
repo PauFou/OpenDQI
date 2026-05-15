@@ -1,7 +1,39 @@
 //! SFTR Trade State Report (TSR) ingestion — ISO 20022 `auth.079`.
-//! Streaming `NsReader` adapter, plausible synthetic structure;
-//! adapt the leaf table below once the official SWIFT-licensed XSD
-//! is available.
+//!
+//! Element paths are aligned with the real ESMA SFTR usage guideline
+//! `auth.079.001.02_ESMAUG_SFTTRS_1.1.0`
+//! (`SecuritiesFinancingReportingTransactionStateReportV02`). The
+//! SWIFT-licensed XSD is **not** redistributed; only the schema *shape*
+//! (element names, nesting, cardinalities) is encoded here. Coverage is
+//! intentionally a documented subset — see
+//! `docs/auth-messages/sftr-auth079.md`.
+//!
+//! Real envelope:
+//! ```text
+//! Document
+//! └─ SctiesFincgRptgTxStatRpt    (SecuritiesFinancingReportingTransactionStateReportV02)
+//!    └─ TradData  (choice)
+//!       ├─ DataSetActn = "NOTX"  (empty / no-activity report)
+//!       └─ Stat  (1..n)          (TradeStateReport16)
+//!          ├─ TechRcrdId
+//!          ├─ CtrPtySpcfcData
+//!          │  ├─ RptgDtTm                       (per-record "state as of")
+//!          │  └─ CtrPty/RptgCtrPty/Id/LEI , CtrPty/OthrCtrPty/Id/Lgl/LEI
+//!          ├─ LnData  (4-way choice — wrapper = SFT type)
+//!          │  ├─ RpTrad|BuySellBck : UnqTradIdr, EvtDt, ValDt,
+//!          │  │      Term/Fxd/MtrtyDt, TermntnDt, PrncplAmt/ValDtAmt(@Ccy)
+//!          │  ├─ SctiesLndg        : … LnVal(@Ccy)
+//!          │  └─ MrgnLndg          : … OutsdngMrgnLnAmt(@Ccy)
+//!          ├─ CollData  (4-way choice; Security52/55 components)
+//!          │  └─ …/MktVal/Amt(@Ccy) , …/HrcutOrMrgn , …/Id=ISIN ,
+//!          │     …/AvlblForCollReuse
+//!          └─ CtrctMod/ActnTp
+//! ```
+//! `auth.079` has no header and no per-trade status element: a record
+//! present in a Trade State Report *is* outstanding, so `status` is
+//! `None` (the checks treat `None` as outstanding). SFT type is derived
+//! from the `TransactionLoanData31Choice` wrapper. The single mapping
+//! point is `commit_leaf`.
 
 use std::path::Path;
 use std::str::FromStr;
@@ -21,12 +53,13 @@ use crate::wellformed::check_wellformedness;
 pub struct SftrTrStateXmlReadOutcome {
     /// Records extracted from the file.
     pub records: Vec<SftrTrStateRecord>,
-    /// File-level data-quality issues (format / namespace).
+    /// File-level data-quality / parse issues (format / namespace).
     pub issues: Vec<DqIssue>,
 }
 
-const ISO20022_AUTH_079_NS: &[u8] = b"urn:iso:std:iso:20022:tech:xsd:auth.079.001.01";
-const SFT_STAT_BLOCK: &str = "SftStat";
+const ISO20022_AUTH_079_NS: &[u8] = b"urn:iso:std:iso:20022:tech:xsd:auth.079.001.02";
+/// The repeating per-trade record element under `TradData`.
+const STAT_BLOCK: &str = "Stat";
 
 /// Read an SFTR `auth.079` Trade State Report file.
 pub fn read_sftr_tr_state_xml(path: &Path) -> anyhow::Result<SftrTrStateXmlReadOutcome> {
@@ -35,19 +68,12 @@ pub fn read_sftr_tr_state_xml(path: &Path) -> anyhow::Result<SftrTrStateXmlReadO
     if let Err(err) = check_wellformedness(path) {
         return Ok(SftrTrStateXmlReadOutcome {
             records: vec![],
-            issues: vec![DqIssue {
-                check_id: "SFTR.FMT.XML_NOT_WELLFORMED".into(),
-                regime: Regime::Sftr,
-                severity: Severity::Critical,
-                dimension: DqDimension::Validity,
-                record_id: None,
-                uti: None,
-                field: None,
-                value: None,
-                message: format!("XML is not well-formed: {}", err.message),
-                source_file: Some(source_label),
-                evidence: Vec::new(),
-            }],
+            issues: vec![fmt_issue(
+                "SFTR.FMT.XML_NOT_WELLFORMED",
+                Severity::Critical,
+                format!("XML is not well-formed: {}", err.message),
+                source_label,
+            )],
         });
     }
 
@@ -60,23 +86,32 @@ pub fn read_sftr_tr_state_xml(path: &Path) -> anyhow::Result<SftrTrStateXmlReadO
                 .unwrap_or_else(|| "(none)".into());
             Ok(SftrTrStateXmlReadOutcome {
                 records: vec![],
-                issues: vec![DqIssue {
-                    check_id: "SFTR.FMT.XML_UNSUPPORTED_NAMESPACE".into(),
-                    regime: Regime::Sftr,
-                    severity: Severity::Warning,
-                    dimension: DqDimension::Validity,
-                    record_id: None,
-                    uti: None,
-                    field: None,
-                    value: None,
-                    message: format!(
-                        "Root namespace is '{actual}', expected 'urn:iso:std:iso:20022:tech:xsd:auth.079.001.01'."
+                issues: vec![fmt_issue(
+                    "SFTR.FMT.XML_UNSUPPORTED_NAMESPACE",
+                    Severity::Warning,
+                    format!(
+                        "Root namespace is '{actual}', expected 'urn:iso:std:iso:20022:tech:xsd:auth.079.001.02'."
                     ),
-                    source_file: Some(source_label),
-                    evidence: Vec::new(),
-                }],
+                    source_label,
+                )],
             })
         }
+    }
+}
+
+fn fmt_issue(check_id: &str, severity: Severity, message: String, source_file: String) -> DqIssue {
+    DqIssue {
+        check_id: check_id.into(),
+        regime: Regime::Sftr,
+        severity,
+        dimension: DqDimension::Validity,
+        record_id: None,
+        uti: None,
+        field: None,
+        value: None,
+        message,
+        source_file: Some(source_file),
+        evidence: Vec::new(),
     }
 }
 
@@ -110,11 +145,11 @@ fn parse(path: &Path) -> anyhow::Result<SftrTrStateXmlReadOutcome> {
     let mut text_buf = String::new();
     let mut attrs_buf: Vec<(String, String)> = Vec::new();
 
-    let mut header_state_as_of: Option<DateTime<Utc>> = None;
     let mut current: Option<SftrTrStateRecord> = None;
     let mut rec_depth: Option<usize> = None;
     let mut records: Vec<SftrTrStateRecord> = Vec::new();
     let mut rec_index: u32 = 0;
+    let mut saw_dataset_actn = false;
 
     loop {
         match reader.read_resolved_event_into(&mut buf)? {
@@ -124,13 +159,15 @@ fn parse(path: &Path) -> anyhow::Result<SftrTrStateXmlReadOutcome> {
                 text_buf.clear();
                 attrs_buf = collect_attrs(&e);
 
-                if current.is_none() && pile.last().map(String::as_str) == Some(SFT_STAT_BLOCK) {
+                if current.is_none()
+                    && pile.last().map(String::as_str) == Some(STAT_BLOCK)
+                    && pile.iter().any(|s| s == "TradData")
+                {
                     rec_index += 1;
                     current = Some(SftrTrStateRecord {
                         source_file: Some(source_label.clone()),
-                        record_id: Some(format!("{source_label}#sftstat-{rec_index}")),
+                        record_id: Some(format!("{source_label}#stat-{rec_index}")),
                         regime: Regime::Sftr,
-                        state_as_of: header_state_as_of,
                         ..Default::default()
                     });
                     rec_depth = Some(pile.len());
@@ -158,12 +195,9 @@ fn parse(path: &Path) -> anyhow::Result<SftrTrStateXmlReadOutcome> {
                 if leaf_now {
                     let trimmed = text_buf.trim();
                     if current.is_none()
-                        && pile.ends_with(&["Hdr".into(), "StateAsOf".into()])
-                        && !trimmed.is_empty()
+                        && pile.ends_with(&["TradData".into(), "DataSetActn".into()])
                     {
-                        if let Ok(dt) = DateTime::parse_from_rfc3339(trimmed) {
-                            header_state_as_of = Some(dt.with_timezone(&Utc));
-                        }
+                        saw_dataset_actn = true;
                     }
                     if let (Some(rec), Some(rdepth)) = (current.as_mut(), rec_depth) {
                         if pile.len() > rdepth {
@@ -174,10 +208,7 @@ fn parse(path: &Path) -> anyhow::Result<SftrTrStateXmlReadOutcome> {
 
                 if let Some(rdepth) = rec_depth {
                     if pile.len() == rdepth {
-                        if let Some(mut rec) = current.take() {
-                            if rec.state_as_of.is_none() {
-                                rec.state_as_of = header_state_as_of;
-                            }
+                        if let Some(rec) = current.take() {
                             records.push(rec);
                         }
                         rec_depth = None;
@@ -194,12 +225,39 @@ fn parse(path: &Path) -> anyhow::Result<SftrTrStateXmlReadOutcome> {
         buf.clear();
     }
 
-    Ok(SftrTrStateXmlReadOutcome {
-        records,
-        issues: Vec::new(),
-    })
+    let mut issues = Vec::new();
+    if records.is_empty() && saw_dataset_actn {
+        issues.push(fmt_issue(
+            "SFTR.FMT.SFTR_TSR_NO_RECORDS",
+            Severity::Info,
+            "SFTR Trade State Report carries TradData/DataSetActn \
+             (no-activity report); zero state records to evaluate."
+                .to_string(),
+            source_label,
+        ));
+    }
+
+    Ok(SftrTrStateXmlReadOutcome { records, issues })
 }
 
+/// True when `rel` ends with `suffix` (element-name tail match).
+fn tail(rel: &[String], suffix: &[&str]) -> bool {
+    rel.len() >= suffix.len()
+        && rel[rel.len() - suffix.len()..]
+            .iter()
+            .zip(suffix)
+            .all(|(a, b)| a == *b)
+}
+
+/// True when `seg` appears anywhere in `rel` (ancestor disambiguation).
+fn has(rel: &[String], seg: &str) -> bool {
+    rel.iter().any(|s| s == seg)
+}
+
+/// Map one leaf (path relative to the `Stat` record) onto the canonical
+/// `SftrTrStateRecord`. Real `auth.079.001.02` element paths; every
+/// other branch is intentionally not extracted (documented in
+/// `docs/auth-messages/sftr-auth079.md`).
 fn commit_leaf(
     rec: &mut SftrTrStateRecord,
     rel: &[String],
@@ -209,48 +267,108 @@ fn commit_leaf(
     if value.is_empty() && attrs.is_empty() {
         return;
     }
-    let path: Vec<&str> = rel.iter().map(String::as_str).collect();
     let record_id = rec.record_id.clone().unwrap_or_default();
-    match path.as_slice() {
-        ["UnqTxIdr"] => rec.uti = Some(value.to_owned()),
-        ["RptgCtrPty", "LEI"] => rec.reporting_counterparty = Some(value.to_owned()),
-        ["OthrCtrPty", "LEI"] => rec.other_counterparty = Some(value.to_owned()),
-        ["Sts"] => rec.status = Some(value.to_owned()),
-        ["SftTp"] => rec.sft_type = Some(value.to_owned()),
-        ["LoanAmt"] => {
-            set_decimal(&mut rec.loan_value, value, "LoanAmt", &record_id);
-            if let Some(ccy) = attr_of(attrs, "Ccy") {
-                rec.loan_currency = Some(ccy.to_owned());
-            }
+
+    // SFT type from the TransactionLoanData31Choice / collateral
+    // wrapper (no free SftTp element in auth.079).
+    if rec.sft_type.is_none() {
+        if has(rel, "RpTrad") {
+            rec.sft_type = Some("REPO".to_owned());
+        } else if has(rel, "BuySellBck") {
+            rec.sft_type = Some("BSBC".to_owned());
+        } else if has(rel, "SctiesLndg") {
+            rec.sft_type = Some("SLEB".to_owned());
+        } else if has(rel, "MrgnLndg") {
+            rec.sft_type = Some("MGLD".to_owned());
         }
-        ["CollVal"] => {
-            set_decimal(&mut rec.collateral_value, value, "CollVal", &record_id);
-            if let Some(ccy) = attr_of(attrs, "Ccy") {
-                rec.collateral_currency = Some(ccy.to_owned());
-            }
+    }
+
+    if tail(rel, &["UnqTradIdr"]) {
+        if rec.uti.is_none() && !value.is_empty() {
+            rec.uti = Some(value.to_owned());
         }
-        ["Hrcut"] => set_decimal(&mut rec.haircut, value, "Hrcut", &record_id),
-        ["RuseInd"] => {
+        return;
+    }
+    if tail(rel, &["LEI"]) && has(rel, "RptgCtrPty") {
+        rec.reporting_counterparty = Some(value.to_owned());
+        return;
+    }
+    if tail(rel, &["LEI"]) && has(rel, "OthrCtrPty") {
+        rec.other_counterparty = Some(value.to_owned());
+        return;
+    }
+    if rel.last().map(String::as_str) == Some("RptgDtTm") && has(rel, "CtrPtySpcfcData") {
+        let mut tmp = None;
+        set_dt(&mut tmp, value, "RptgDtTm", &record_id);
+        if tmp.is_some() {
+            rec.state_as_of = tmp;
+        }
+        return;
+    }
+    // Loan principal: PrncplAmt/ValDtAmt (repo/BSB) | LnVal (SecLn) |
+    // OutsdngMrgnLnAmt (MgnLn). Each carries a required @Ccy.
+    if tail(rel, &["PrncplAmt", "ValDtAmt"])
+        || tail(rel, &["LnVal"])
+        || tail(rel, &["OutsdngMrgnLnAmt"])
+    {
+        set_decimal(&mut rec.loan_value, value, "loan_value", &record_id);
+        if let Some(ccy) = attr_of(attrs, "Ccy") {
+            rec.loan_currency = Some(ccy.to_owned());
+        }
+        return;
+    }
+    if rel.last().map(String::as_str) == Some("EvtDt") {
+        set_date(&mut rec.effective_date, value, "EvtDt", &record_id);
+        return;
+    }
+    if rel.last().map(String::as_str) == Some("ValDt") {
+        set_date(&mut rec.settlement_date, value, "ValDt", &record_id);
+        return;
+    }
+    if tail(rel, &["Term", "Fxd", "MtrtyDt"]) {
+        set_date(&mut rec.maturity_date, value, "MtrtyDt", &record_id);
+        return;
+    }
+    if rel.last().map(String::as_str) == Some("TermntnDt") {
+        set_date(&mut rec.termination_date, value, "TermntnDt", &record_id);
+        return;
+    }
+    // Collateral component (Security52 for repo/BSB, Security55 for
+    // MrgnLndg): first/representative component only.
+    if tail(rel, &["MktVal", "Amt"]) && has(rel, "CollData") {
+        set_decimal(&mut rec.collateral_value, value, "MktVal/Amt", &record_id);
+        if let Some(ccy) = attr_of(attrs, "Ccy") {
+            rec.collateral_currency = Some(ccy.to_owned());
+        }
+        return;
+    }
+    if rel.last().map(String::as_str) == Some("HrcutOrMrgn") {
+        set_decimal(&mut rec.haircut, value, "HrcutOrMrgn", &record_id);
+        return;
+    }
+    if rel.last().map(String::as_str) == Some("Id") && has(rel, "CollData") {
+        if rec.collateral_isin.is_none() {
+            rec.collateral_isin = Some(value.to_owned());
+        }
+        return;
+    }
+    if rel.last().map(String::as_str) == Some("AvlblForCollReuse") {
+        if rec.reuse_indicator.is_none() {
             rec.reuse_indicator = match value.to_ascii_lowercase().as_str() {
                 "true" | "1" | "y" | "yes" => Some(true),
                 "false" | "0" | "n" | "no" => Some(false),
-                _ => rec.reuse_indicator,
+                _ => None,
             };
         }
-        ["EvntDt"] => set_date(&mut rec.effective_date, value, "EvntDt", &record_id),
-        ["MtrtyDt"] => set_date(&mut rec.maturity_date, value, "MtrtyDt", &record_id),
-        ["TermntnDt"] => set_date(&mut rec.termination_date, value, "TermntnDt", &record_id),
-        ["SttlmDt"] => set_date(&mut rec.settlement_date, value, "SttlmDt", &record_id),
-        ["PrtflCd"] => rec.collateral_portfolio_code = Some(value.to_owned()),
-        ["ISIN"] | ["Sctys", "ISIN"] | ["Sctys", "Id"] => {
-            rec.collateral_isin = Some(value.to_owned())
-        }
-        _ => {
-            let key = rel.join("/");
-            if !value.is_empty() {
-                rec.raw_fields.insert(key, value.to_owned());
-            }
-        }
+        return;
+    }
+    // collateral_portfolio_code: auth.079 carries no SFT collateral
+    // portfolio code at record level (the only PrtflCd is
+    // clearing-specific) → left None. CtrctMod/ActnTp, TechRcrdId,
+    // RcncltnFlg, MtrtyDtAmt, second leg, cash/commodity collateral and
+    // everything else are preserved verbatim.
+    if !value.is_empty() {
+        rec.raw_fields.insert(rel.join("/"), value.to_owned());
     }
 }
 
@@ -312,6 +430,16 @@ fn set_date(dst: &mut Option<NaiveDate>, s: &str, field: &str, record: &str) {
     }
 }
 
+fn set_dt(dst: &mut Option<DateTime<Utc>>, s: &str, field: &str, record: &str) {
+    if s.is_empty() {
+        return;
+    }
+    match DateTime::parse_from_rfc3339(s) {
+        Ok(d) => *dst = Some(d.with_timezone(&Utc)),
+        Err(e) => warn!(record = %record, field, value = s, error = %e, "could not parse datetime"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -325,39 +453,100 @@ mod tests {
         p
     }
 
-    #[test]
-    fn parses_two_outstanding_sfts() {
-        let body = br#"<?xml version="1.0"?>
-<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.079.001.01">
-  <SftStateReport>
-    <Hdr><StateAsOf>2026-05-13T08:00:00Z</StateAsOf></Hdr>
-    <SftStat>
-      <UnqTxIdr>S1</UnqTxIdr>
-      <RptgCtrPty><LEI>RC-LEI</LEI></RptgCtrPty>
-      <OthrCtrPty><LEI>OC-LEI</LEI></OthrCtrPty>
-      <Sts>OUTSTANDING</Sts>
-      <SftTp>REPO</SftTp>
-      <LoanAmt Ccy="EUR">1000000</LoanAmt>
-      <CollVal Ccy="EUR">1100000</CollVal>
-      <Hrcut>0.05</Hrcut>
-      <MtrtyDt>2030-01-01</MtrtyDt>
-      <RuseInd>true</RuseInd>
-    </SftStat>
-    <SftStat>
-      <UnqTxIdr>S2</UnqTxIdr>
-      <Sts>OUTSTANDING</Sts>
-    </SftStat>
-  </SftStateReport>
+    const REAL_ENVELOPE: &[u8] = br#"<?xml version="1.0"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.079.001.02">
+  <SctiesFincgRptgTxStatRpt>
+    <TradData>
+      <Stat>
+        <TechRcrdId>REC-1</TechRcrdId>
+        <CtrPtySpcfcData>
+          <RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm>
+          <CtrPty>
+            <RptgCtrPty><Id><LEI>RPTGCPARTY0000000001</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Lgl><LEI>OTHRCPARTY0000000002</LEI></Lgl></Id></OthrCtrPty>
+          </CtrPty>
+        </CtrPtySpcfcData>
+        <LnData>
+          <RpTrad>
+            <UnqTradIdr>SFTR-TSR-S1</UnqTradIdr>
+            <EvtDt>2026-05-12</EvtDt>
+            <ValDt>2026-05-13</ValDt>
+            <Term><Fxd><MtrtyDt>2030-01-01</MtrtyDt></Fxd></Term>
+            <PrncplAmt><ValDtAmt Ccy="EUR">1000000.00</ValDtAmt></PrncplAmt>
+          </RpTrad>
+        </LnData>
+        <CollData>
+          <RpTrad><AsstTp><Scty>
+            <Id>DE0001135275</Id>
+            <MktVal><Amt Ccy="EUR">1050000.00</Amt></MktVal>
+            <HrcutOrMrgn>0.05</HrcutOrMrgn>
+            <AvlblForCollReuse>true</AvlblForCollReuse>
+          </Scty></AsstTp></RpTrad>
+        </CollData>
+        <CtrctMod><ActnTp>NEWT</ActnTp></CtrctMod>
+      </Stat>
+      <Stat>
+        <CtrPtySpcfcData><RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm></CtrPtySpcfcData>
+        <LnData><MrgnLndg>
+          <UnqTradIdr>SFTR-TSR-S2</UnqTradIdr>
+          <OutsdngMrgnLnAmt Ccy="USD">500000.00</OutsdngMrgnLnAmt>
+        </MrgnLndg></LnData>
+      </Stat>
+    </TradData>
+  </SctiesFincgRptgTxStatRpt>
 </Document>"#;
-        let p = write_tmp("ok.xml", body);
+
+    #[test]
+    fn parses_real_auth079_envelope() {
+        let p = write_tmp("real.xml", REAL_ENVELOPE);
         let out = read_sftr_tr_state_xml(&p).unwrap();
         std::fs::remove_file(&p).unwrap();
+        assert!(out.issues.is_empty());
         assert_eq!(out.records.len(), 2);
-        assert_eq!(out.records[0].uti.as_deref(), Some("S1"));
-        assert_eq!(out.records[0].sft_type.as_deref(), Some("REPO"));
-        assert_eq!(out.records[0].loan_currency.as_deref(), Some("EUR"));
-        assert_eq!(out.records[0].reuse_indicator, Some(true));
-        assert!(out.records[0].state_as_of.is_some());
+        let r0 = &out.records[0];
+        assert_eq!(r0.uti.as_deref(), Some("SFTR-TSR-S1"));
+        assert_eq!(r0.sft_type.as_deref(), Some("REPO"));
+        assert_eq!(
+            r0.reporting_counterparty.as_deref(),
+            Some("RPTGCPARTY0000000001")
+        );
+        assert_eq!(
+            r0.other_counterparty.as_deref(),
+            Some("OTHRCPARTY0000000002")
+        );
+        assert_eq!(r0.loan_value.unwrap().to_string(), "1000000.00");
+        assert_eq!(r0.loan_currency.as_deref(), Some("EUR"));
+        assert_eq!(r0.collateral_value.unwrap().to_string(), "1050000.00");
+        assert_eq!(r0.collateral_currency.as_deref(), Some("EUR"));
+        assert_eq!(r0.haircut.unwrap().to_string(), "0.05");
+        assert_eq!(r0.collateral_isin.as_deref(), Some("DE0001135275"));
+        assert_eq!(r0.reuse_indicator, Some(true));
+        assert_eq!(r0.maturity_date.unwrap().to_string(), "2030-01-01");
+        assert!(r0.state_as_of.is_some(), "state_as_of from RptgDtTm");
+        assert!(r0.status.is_none(), "auth.079 has no status element");
+        assert!(r0.collateral_portfolio_code.is_none());
+
+        let r1 = &out.records[1];
+        assert_eq!(r1.sft_type.as_deref(), Some("MGLD"));
+        assert_eq!(r1.loan_value.unwrap().to_string(), "500000.00");
+        assert_eq!(r1.loan_currency.as_deref(), Some("USD"));
+    }
+
+    #[test]
+    fn empty_report_no_records_info() {
+        let body = br#"<?xml version="1.0"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.079.001.02">
+  <SctiesFincgRptgTxStatRpt>
+    <TradData><DataSetActn>NOTX</DataSetActn></TradData>
+  </SctiesFincgRptgTxStatRpt>
+</Document>"#;
+        let p = write_tmp("empty.xml", body);
+        let out = read_sftr_tr_state_xml(&p).unwrap();
+        std::fs::remove_file(&p).unwrap();
+        assert!(out.records.is_empty());
+        assert_eq!(out.issues.len(), 1);
+        assert_eq!(out.issues[0].check_id, "SFTR.FMT.SFTR_TSR_NO_RECORDS");
+        assert_eq!(out.issues[0].severity, Severity::Info);
     }
 
     #[test]

@@ -1,140 +1,202 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Synthetic SFTR Trade State Report (auth.079.001.01) for OpenDQI tests.
-  Hand-authored — not derived from any ESMA or SWIFT example.
-  Each SftStat exercises one of the 6 SFTR.TST.* checks, plus a clean
-  outstanding baseline so SFTR.TST.OUTSTANDING_SUMMARY emits a row.
+  Synthetic ISO 20022 auth.079 SFTR Trade State Report fixture.
+  Hand-authored — NOT derived from, and does not redistribute, any
+  ESMA or SWIFT example or schema.
+
+  Element paths follow the real ESMA SFTR usage guideline
+  auth.079.001.02_ESMAUG_SFTTRS_1.1.0
+  (SecuritiesFinancingReportingTransactionStateReportV02):
+  Document > SctiesFincgRptgTxStatRpt > TradData/{DataSetActn | Stat...}.
+  Schema-shaped, not a fully XSD-valid instance. See
+  docs/auth-messages/sftr-auth079.md.
+
+  auth.079 has no header and no per-trade status element (a record in a
+  TSR IS outstanding). SFT type is derived from the
+  TransactionLoanData31Choice wrapper (RpTrad->REPO, BuySellBck->BSBC,
+  SctiesLndg->SLEB, MrgnLndg->MGLD). collateral_portfolio_code is not
+  mappable from auth.079 (documented), so MGLD records with
+  AvlblForCollReuse=true fire SFTR.MSR.MGLD_REUSE_REQUIRES_PORTFOLIO.
+  Each <Stat> exercises a SFTR.TST.* / SFTR.MSR.MGLD_* check.
 -->
-<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.079.001.01">
-  <SftStateReport>
-    <Hdr><StateAsOf>2026-05-13T08:00:00Z</StateAsOf></Hdr>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.079.001.02">
+  <SctiesFincgRptgTxStatRpt>
+    <TradData>
 
-    <!-- 1. CLEAN outstanding REPO with valid haircut (baseline). -->
-    <SftStat>
-      <UnqTxIdr>OPENDQI-SFTR-TSR-CLEAN-0001</UnqTxIdr>
-      <RptgCtrPty><LEI>ABCDEFGHIJKLMNOPQR01</LEI></RptgCtrPty>
-      <OthrCtrPty><LEI>ABCDEFGHIJKLMNOPQR02</LEI></OthrCtrPty>
-      <Sts>OUTSTANDING</Sts>
-      <SftTp>REPO</SftTp>
-      <LoanAmt Ccy="EUR">1000000</LoanAmt>
-      <CollVal Ccy="EUR">1050000</CollVal>
-      <Hrcut>0.05</Hrcut>
-      <RuseInd>false</RuseInd>
-      <EvntDt>2026-05-12</EvntDt>
-      <MtrtyDt>2026-08-12</MtrtyDt>
-      <SttlmDt>2026-05-13</SttlmDt>
-      <Sctys><ISIN>DE0001135275</ISIN></Sctys>
-    </SftStat>
+      <!-- 1. REPO clean baseline -> OUTSTANDING_SUMMARY. -->
+      <Stat>
+        <TechRcrdId>REC-1</TechRcrdId>
+        <CtrPtySpcfcData>
+          <RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm>
+          <CtrPty>
+            <RptgCtrPty><Id><LEI>RPTGCPARTY0000000001</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Lgl><LEI>OTHRCPARTY0000000002</LEI></Lgl></Id></OthrCtrPty>
+          </CtrPty>
+        </CtrPtySpcfcData>
+        <LnData><RpTrad>
+          <UnqTradIdr>OPENDQI-SFTR-TSR-CLEAN-0001</UnqTradIdr>
+          <EvtDt>2026-05-12</EvtDt><ValDt>2026-05-13</ValDt>
+          <Term><Fxd><MtrtyDt>2030-01-01</MtrtyDt></Fxd></Term>
+          <PrncplAmt><ValDtAmt Ccy="EUR">1000000.00</ValDtAmt></PrncplAmt>
+        </RpTrad></LnData>
+        <CollData><RpTrad><AsstTp><Scty>
+          <Id>DE0001135275</Id>
+          <MktVal><Amt Ccy="EUR">1050000.00</Amt></MktVal>
+          <HrcutOrMrgn>0.05</HrcutOrMrgn>
+        </Scty></AsstTp></RpTrad></CollData>
+        <CtrctMod><ActnTp>NEWT</ActnTp></CtrctMod>
+      </Stat>
 
-    <!-- 2. MISSING_COLLATERAL: outstanding but CollVal absent. -->
-    <SftStat>
-      <UnqTxIdr>OPENDQI-SFTR-TSR-NOCOLL-0002</UnqTxIdr>
-      <RptgCtrPty><LEI>ABCDEFGHIJKLMNOPQR01</LEI></RptgCtrPty>
-      <OthrCtrPty><LEI>ABCDEFGHIJKLMNOPQR02</LEI></OthrCtrPty>
-      <Sts>OUTSTANDING</Sts>
-      <SftTp>REPO</SftTp>
-      <LoanAmt Ccy="EUR">500000</LoanAmt>
-      <MtrtyDt>2026-09-30</MtrtyDt>
-    </SftStat>
+      <!-- 2. REPO, no CollData -> MISSING_COLLATERAL. -->
+      <Stat>
+        <CtrPtySpcfcData><RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm></CtrPtySpcfcData>
+        <LnData><RpTrad>
+          <UnqTradIdr>OPENDQI-SFTR-TSR-NOCOLL-0002</UnqTradIdr>
+          <Term><Fxd><MtrtyDt>2030-01-01</MtrtyDt></Fxd></Term>
+          <PrncplAmt><ValDtAmt Ccy="EUR">1000000.00</ValDtAmt></PrncplAmt>
+        </RpTrad></LnData>
+      </Stat>
 
-    <!-- 3. ACTIVE_PAST_MATURITY: outstanding but maturity is in the past. -->
-    <SftStat>
-      <UnqTxIdr>OPENDQI-SFTR-TSR-PASTMAT-0003</UnqTxIdr>
-      <RptgCtrPty><LEI>ABCDEFGHIJKLMNOPQR01</LEI></RptgCtrPty>
-      <OthrCtrPty><LEI>ABCDEFGHIJKLMNOPQR02</LEI></OthrCtrPty>
-      <Sts>OUTSTANDING</Sts>
-      <SftTp>BSB</SftTp>
-      <LoanAmt Ccy="EUR">750000</LoanAmt>
-      <CollVal Ccy="EUR">800000</CollVal>
-      <Hrcut>0.05</Hrcut>
-      <MtrtyDt>2024-12-31</MtrtyDt>
-    </SftStat>
+      <!-- 3. BuySellBck, past maturity, no termination -> ACTIVE_PAST_MATURITY. -->
+      <Stat>
+        <CtrPtySpcfcData><RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm></CtrPtySpcfcData>
+        <LnData><BuySellBck>
+          <UnqTradIdr>OPENDQI-SFTR-TSR-PASTMAT-0003</UnqTradIdr>
+          <Term><Fxd><MtrtyDt>2026-01-01</MtrtyDt></Fxd></Term>
+          <PrncplAmt><ValDtAmt Ccy="EUR">800000.00</ValDtAmt></PrncplAmt>
+        </BuySellBck></LnData>
+        <CollData><BuySellBck><AsstTp><Scty>
+          <Id>DE0001135275</Id>
+          <MktVal><Amt Ccy="EUR">820000.00</Amt></MktVal>
+        </Scty></AsstTp></BuySellBck></CollData>
+      </Stat>
 
-    <!-- 4. HAIRCUT_OUT_OF_RANGE: 1.5 is &gt; 1.0. -->
-    <SftStat>
-      <UnqTxIdr>OPENDQI-SFTR-TSR-HRCUT-0004</UnqTxIdr>
-      <RptgCtrPty><LEI>ABCDEFGHIJKLMNOPQR01</LEI></RptgCtrPty>
-      <OthrCtrPty><LEI>ABCDEFGHIJKLMNOPQR02</LEI></OthrCtrPty>
-      <Sts>OUTSTANDING</Sts>
-      <SftTp>REPO</SftTp>
-      <LoanAmt Ccy="USD">2000000</LoanAmt>
-      <CollVal Ccy="USD">2100000</CollVal>
-      <Hrcut>1.5</Hrcut>
-      <MtrtyDt>2027-02-15</MtrtyDt>
-    </SftStat>
+      <!-- 4. SctiesLndg, haircut 1.5 (>1) -> HAIRCUT_OUT_OF_RANGE_ON_OUTSTANDING. -->
+      <Stat>
+        <CtrPtySpcfcData><RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm></CtrPtySpcfcData>
+        <LnData><SctiesLndg>
+          <UnqTradIdr>OPENDQI-SFTR-TSR-HRCT-0004</UnqTradIdr>
+          <EvtDt>2026-05-12</EvtDt>
+          <LnVal Ccy="EUR">250000.00</LnVal>
+        </SctiesLndg></LnData>
+        <CollData><MrgnLndg>
+          <Id>DE0001135275</Id>
+          <MktVal><Amt Ccy="EUR">260000.00</Amt></MktVal>
+          <HrcutOrMrgn>1.5</HrcutOrMrgn>
+        </MrgnLndg></CollData>
+      </Stat>
 
-    <!-- 5. DUPLICATE_ACTIVE_UTI first occurrence. -->
-    <SftStat>
-      <UnqTxIdr>OPENDQI-SFTR-TSR-DUP-0005</UnqTxIdr>
-      <RptgCtrPty><LEI>ABCDEFGHIJKLMNOPQR01</LEI></RptgCtrPty>
-      <OthrCtrPty><LEI>ABCDEFGHIJKLMNOPQR02</LEI></OthrCtrPty>
-      <Sts>OUTSTANDING</Sts>
-      <SftTp>SLEB</SftTp>
-      <LoanAmt Ccy="EUR">300000</LoanAmt>
-      <CollVal Ccy="EUR">320000</CollVal>
-      <Hrcut>0.05</Hrcut>
-      <MtrtyDt>2027-04-30</MtrtyDt>
-    </SftStat>
+      <!-- 5+6. Duplicate active UTI -> DUPLICATE_ACTIVE_UTI. -->
+      <Stat>
+        <CtrPtySpcfcData><RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm></CtrPtySpcfcData>
+        <LnData><RpTrad>
+          <UnqTradIdr>OPENDQI-SFTR-TSR-DUP-0005</UnqTradIdr>
+          <PrncplAmt><ValDtAmt Ccy="EUR">100000.00</ValDtAmt></PrncplAmt>
+        </RpTrad></LnData>
+        <CollData><RpTrad><AsstTp><Scty>
+          <Id>DE0001135275</Id><MktVal><Amt Ccy="EUR">105000.00</Amt></MktVal>
+        </Scty></AsstTp></RpTrad></CollData>
+      </Stat>
+      <Stat>
+        <CtrPtySpcfcData><RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm></CtrPtySpcfcData>
+        <LnData><RpTrad>
+          <UnqTradIdr>OPENDQI-SFTR-TSR-DUP-0005</UnqTradIdr>
+          <PrncplAmt><ValDtAmt Ccy="EUR">100000.00</ValDtAmt></PrncplAmt>
+        </RpTrad></LnData>
+        <CollData><RpTrad><AsstTp><Scty>
+          <Id>DE0001135275</Id><MktVal><Amt Ccy="EUR">105000.00</Amt></MktVal>
+        </Scty></AsstTp></RpTrad></CollData>
+      </Stat>
 
-    <!-- 5bis. DUPLICATE_ACTIVE_UTI second occurrence (same UTI). -->
-    <SftStat>
-      <UnqTxIdr>OPENDQI-SFTR-TSR-DUP-0005</UnqTxIdr>
-      <RptgCtrPty><LEI>ABCDEFGHIJKLMNOPQR01</LEI></RptgCtrPty>
-      <OthrCtrPty><LEI>ABCDEFGHIJKLMNOPQR02</LEI></OthrCtrPty>
-      <Sts>OUTSTANDING</Sts>
-      <SftTp>SLEB</SftTp>
-      <LoanAmt Ccy="EUR">300000</LoanAmt>
-      <CollVal Ccy="EUR">320000</CollVal>
-      <Hrcut>0.05</Hrcut>
-      <MtrtyDt>2027-04-30</MtrtyDt>
-    </SftStat>
+      <!-- 7. REPO, old RptgDtTm -> STALE_VALUATION. -->
+      <Stat>
+        <CtrPtySpcfcData><RptgDtTm>2024-01-01T00:00:00Z</RptgDtTm></CtrPtySpcfcData>
+        <LnData><RpTrad>
+          <UnqTradIdr>OPENDQI-SFTR-TSR-STALE-0007</UnqTradIdr>
+          <PrncplAmt><ValDtAmt Ccy="EUR">300000.00</ValDtAmt></PrncplAmt>
+        </RpTrad></LnData>
+        <CollData><RpTrad><AsstTp><Scty>
+          <Id>DE0001135275</Id><MktVal><Amt Ccy="EUR">315000.00</Amt></MktVal>
+        </Scty></AsstTp></RpTrad></CollData>
+      </Stat>
 
-    <!-- 6. STALE_VALUATION: state_as_of is recent, but record-level
-         valuation_timestamp absent and CollVal is present with a far
-         maturity — covered by stale_valuation when state_as_of > threshold.
-         Here we add a TERMINATED SFT to ensure outstanding filter is sane. -->
-    <SftStat>
-      <UnqTxIdr>OPENDQI-SFTR-TSR-TERM-0006</UnqTxIdr>
-      <RptgCtrPty><LEI>ABCDEFGHIJKLMNOPQR01</LEI></RptgCtrPty>
-      <OthrCtrPty><LEI>ABCDEFGHIJKLMNOPQR02</LEI></OthrCtrPty>
-      <Sts>TERMINATED</Sts>
-      <SftTp>REPO</SftTp>
-      <LoanAmt Ccy="EUR">100000</LoanAmt>
-      <CollVal Ccy="EUR">102000</CollVal>
-      <Hrcut>0.05</Hrcut>
-      <MtrtyDt>2027-01-01</MtrtyDt>
-      <TermntnDt>2026-04-30</TermntnDt>
-    </SftStat>
+      <!-- 8. MGLD, no loan amount -> SFTR.MSR.MGLD_OUTSTANDING_NEEDS_LOAN. -->
+      <Stat>
+        <CtrPtySpcfcData><RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm></CtrPtySpcfcData>
+        <LnData><MrgnLndg>
+          <UnqTradIdr>OPENDQI-SFTR-TSR-MGLDNOLN-0008</UnqTradIdr>
+          <EvtDt>2026-05-12</EvtDt>
+        </MrgnLndg></LnData>
+      </Stat>
 
-    <!-- 7. MGLD outstanding under-collateralised
-              (SFTR.MSR.MGLD_COLLATERAL_UNDER_LOAN) + missing ISIN
-              (SFTR.MSR.MGLD_MISSING_ISIN). -->
-    <SftStat>
-      <UnqTxIdr>OPENDQI-SFTR-TSR-MGLD-0007</UnqTxIdr>
-      <RptgCtrPty><LEI>ABCDEFGHIJKLMNOPQR01</LEI></RptgCtrPty>
-      <OthrCtrPty><LEI>ABCDEFGHIJKLMNOPQR02</LEI></OthrCtrPty>
-      <Sts>OUTSTANDING</Sts>
-      <SftTp>MGLD</SftTp>
-      <LoanAmt Ccy="EUR">1000000</LoanAmt>
-      <CollVal Ccy="EUR">700000</CollVal>
-      <Hrcut>0.05</Hrcut>
-      <MtrtyDt>2027-09-30</MtrtyDt>
-    </SftStat>
+      <!-- 9. MGLD, haircut 1.5 -> SFTR.MSR.MGLD_HAIRCUT_OUT_OF_RANGE. -->
+      <Stat>
+        <CtrPtySpcfcData><RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm></CtrPtySpcfcData>
+        <LnData><MrgnLndg>
+          <UnqTradIdr>OPENDQI-SFTR-TSR-MGLDHR-0009</UnqTradIdr>
+          <OutsdngMrgnLnAmt Ccy="EUR">1000000.00</OutsdngMrgnLnAmt>
+        </MrgnLndg></LnData>
+        <CollData><MrgnLndg>
+          <Id>DE0001135275</Id>
+          <MktVal><Amt Ccy="EUR">1050000.00</Amt></MktVal>
+          <HrcutOrMrgn>1.5</HrcutOrMrgn>
+        </MrgnLndg></CollData>
+      </Stat>
 
-    <!-- 8. MGLD outstanding with no loan_value
-              (SFTR.MSR.MGLD_OUTSTANDING_NEEDS_LOAN) +
-              loan/coll currency mismatch and reuse without portfolio. -->
-    <SftStat>
-      <UnqTxIdr>OPENDQI-SFTR-TSR-MGLD-0008</UnqTxIdr>
-      <RptgCtrPty><LEI>ABCDEFGHIJKLMNOPQR01</LEI></RptgCtrPty>
-      <OthrCtrPty><LEI>ABCDEFGHIJKLMNOPQR02</LEI></OthrCtrPty>
-      <Sts>OUTSTANDING</Sts>
-      <SftTp>MGLD</SftTp>
-      <CollVal Ccy="USD">500000</CollVal>
-      <Hrcut>1.5</Hrcut>
-      <RuseInd>true</RuseInd>
-      <MtrtyDt>2027-12-31</MtrtyDt>
-    </SftStat>
+      <!-- 10. MGLD, collateral < loan*(1-haircut) -> MGLD_COLLATERAL_UNDER_LOAN. -->
+      <Stat>
+        <CtrPtySpcfcData><RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm></CtrPtySpcfcData>
+        <LnData><MrgnLndg>
+          <UnqTradIdr>OPENDQI-SFTR-TSR-MGLDUC-0010</UnqTradIdr>
+          <OutsdngMrgnLnAmt Ccy="EUR">1000000.00</OutsdngMrgnLnAmt>
+        </MrgnLndg></LnData>
+        <CollData><MrgnLndg>
+          <Id>DE0001135275</Id>
+          <MktVal><Amt Ccy="EUR">500000.00</Amt></MktVal>
+          <HrcutOrMrgn>0.10</HrcutOrMrgn>
+        </MrgnLndg></CollData>
+      </Stat>
 
-  </SftStateReport>
+      <!-- 11. MGLD, AvlblForCollReuse=true -> MGLD_REUSE_REQUIRES_PORTFOLIO
+           (collateral_portfolio_code unmappable from auth.079). -->
+      <Stat>
+        <CtrPtySpcfcData><RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm></CtrPtySpcfcData>
+        <LnData><MrgnLndg>
+          <UnqTradIdr>OPENDQI-SFTR-TSR-MGLDRU-0011</UnqTradIdr>
+          <OutsdngMrgnLnAmt Ccy="EUR">1000000.00</OutsdngMrgnLnAmt>
+        </MrgnLndg></LnData>
+        <CollData><MrgnLndg>
+          <Id>DE0001135275</Id>
+          <MktVal><Amt Ccy="EUR">1050000.00</Amt></MktVal>
+          <AvlblForCollReuse>true</AvlblForCollReuse>
+        </MrgnLndg></CollData>
+      </Stat>
+
+      <!-- 12. MGLD, loan EUR vs collateral USD -> MGLD_LOAN_COLL_CURRENCY_MISMATCH. -->
+      <Stat>
+        <CtrPtySpcfcData><RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm></CtrPtySpcfcData>
+        <LnData><MrgnLndg>
+          <UnqTradIdr>OPENDQI-SFTR-TSR-MGLDCM-0012</UnqTradIdr>
+          <OutsdngMrgnLnAmt Ccy="EUR">1000000.00</OutsdngMrgnLnAmt>
+        </MrgnLndg></LnData>
+        <CollData><MrgnLndg>
+          <Id>DE0001135275</Id>
+          <MktVal><Amt Ccy="USD">1050000.00</Amt></MktVal>
+        </MrgnLndg></CollData>
+      </Stat>
+
+      <!-- 13. MGLD, collateral value but no ISIN -> MGLD_MISSING_ISIN. -->
+      <Stat>
+        <CtrPtySpcfcData><RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm></CtrPtySpcfcData>
+        <LnData><MrgnLndg>
+          <UnqTradIdr>OPENDQI-SFTR-TSR-MGLDNI-0013</UnqTradIdr>
+          <OutsdngMrgnLnAmt Ccy="EUR">1000000.00</OutsdngMrgnLnAmt>
+        </MrgnLndg></LnData>
+        <CollData><MrgnLndg>
+          <MktVal><Amt Ccy="EUR">1050000.00</Amt></MktVal>
+        </MrgnLndg></CollData>
+      </Stat>
+
+    </TradData>
+  </SctiesFincgRptgTxStatRpt>
 </Document>

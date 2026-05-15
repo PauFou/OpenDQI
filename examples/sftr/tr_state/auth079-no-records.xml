@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic auth.079 SFTR TSR — no-activity variant. Real ESMA SFTR
+  envelope; TradData carries the DataSetActn "NOTX" choice instead of
+  any <Stat>. OpenDQI yields zero records plus one informational
+  SFTR.FMT.SFTR_TSR_NO_RECORDS note (no error).
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.079.001.02">
+  <SctiesFincgRptgTxStatRpt>
+    <TradData>
+      <DataSetActn>NOTX</DataSetActn>
+    </TradData>
+  </SctiesFincgRptgTxStatRpt>
+</Document>

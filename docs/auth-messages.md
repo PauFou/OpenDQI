@@ -48,7 +48,7 @@ parsers' leaf tables are designed to be edited in one place.
 |---|---|---|---|---|
 | `auth.052.001.02` | SFT Trade Report | firm → TR | verified | `opendqi sftr scan` via `crates/opendqi-xml/src/sftr/iso20022.rs`. Also re-used by `opendqi sftr tr-activity-scan` for TR replays. |
 | `auth.080.001.NN` | SFT Rejected / Missing / Inaccurate (feedback) | TR → firm | partial | `opendqi sftr feedback` (same shared adapter as `auth.092`). |
-| `auth.079.001.NN` | SFT Trade State Report (TSR) | TR → firm | **verified (synthetic schema)** | `opendqi sftr tr-state-scan` via `crates/opendqi-xml/src/sftr_tr_state.rs`; 6 `SFTR.TST.*` checks. |
+| `auth.079.001.02` | Securities Financing Transaction State Report (SFTR TSR) | TR → firm | **schema-verified (subset)** | `opendqi sftr tr-state-scan` via `crates/opendqi-xml/src/sftr_tr_state.rs`, aligned with `auth.079.001.02_ESMAUG_SFTTRS_1.1.0`; 6 `SFTR.TST.*` + 6 `SFTR.MSR.MGLD_*` checks. Extracted-subset map, the 4-way loan choice, ignored branches and documented limits in [`auth-messages/sftr-auth079.md`](auth-messages/sftr-auth079.md). |
 | `auth.083.001.NN` | (SFTR analog of `auth.106`) | TR → firm | **placeholder (matching-style)** | Same caveat as `auth.106`. |
 
 ## Naming caveat — `auth.106` and `auth.083`
