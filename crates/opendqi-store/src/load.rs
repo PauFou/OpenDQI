@@ -32,8 +32,11 @@ pub struct FeedbackRow {
     /// TR feedback type as stored: `rejected` / `missing` /
     /// `inaccurate` / `reconciliation_break`.
     pub feedback_type: String,
-    /// TR reason code (e.g. `VAL01`).
+    /// TR reason code (e.g. `VAL01`) — the first validation rule.
     pub reason_code: Option<String>,
+    /// All TR validation-rule codes (`auth.092` lists several per
+    /// rejected transaction). Empty for pre-`m0002` rows.
+    pub validation_rule_codes: Vec<String>,
     /// TR reason description.
     pub reason_description: Option<String>,
     /// For `inaccurate` feedback: which field was flagged.
@@ -974,7 +977,7 @@ impl Store {
         let mut sql = String::from(
             "SELECT feedback_id, regime, uti, feedback_type, reason_code, \
                 reason_description, reported_field, source_file, status, \
-                status_set_at, ingested_at \
+                status_set_at, ingested_at, validation_rule_codes_json \
              FROM feedbacks WHERE 1=1",
         );
         let mut bind: Vec<Value> = Vec::new();
@@ -1016,6 +1019,10 @@ impl Store {
                 status: row.get(8)?,
                 status_set_at: row.get(9)?,
                 ingested_at: row.get(10)?,
+                validation_rule_codes: row
+                    .get::<_, Option<String>>(11)?
+                    .map(|s| parse_string_array(&s))
+                    .unwrap_or_default(),
             })
         })?;
         let mut out = Vec::new();
@@ -1046,8 +1053,12 @@ impl Store {
         &self,
         regime: Option<Regime>,
     ) -> Result<Vec<(String, i64)>, StoreError> {
+        // Faithful per-rule fan-out: each feedback row may carry several
+        // validation-rule codes (auth.092). Aggregate in Rust over the
+        // JSON list, falling back to the scalar `reason_code` for rows
+        // with no list (pre-`m0002` rows and the SFTR single-code path).
         let mut sql = String::from(
-            "SELECT COALESCE(reason_code, '(none)') AS rc, COUNT(*) AS n \
+            "SELECT validation_rule_codes_json, COALESCE(reason_code, '(none)') \
              FROM feedbacks WHERE 1=1",
         );
         let mut bind: Vec<Value> = Vec::new();
@@ -1061,15 +1072,25 @@ impl Store {
                 .to_owned(),
             ));
         }
-        sql.push_str(" GROUP BY rc ORDER BY n DESC, rc ASC");
         let mut stmt = self.conn.prepare(&sql)?;
         let rows = stmt.query_map(params_from_iter(bind), |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            Ok((row.get::<_, Option<String>>(0)?, row.get::<_, String>(1)?))
         })?;
-        let mut out = Vec::new();
+        let mut counts: std::collections::BTreeMap<String, i64> = std::collections::BTreeMap::new();
         for r in rows {
-            out.push(r?);
+            let (json, reason): (Option<String>, String) = r?;
+            let rules = json.map(|s| parse_string_array(&s)).unwrap_or_default();
+            if rules.is_empty() {
+                *counts.entry(reason).or_insert(0) += 1;
+            } else {
+                for code in rules {
+                    *counts.entry(code).or_insert(0) += 1;
+                }
+            }
         }
+        let mut out: Vec<(String, i64)> = counts.into_iter().collect();
+        // Sort by count desc, then code asc — same contract as before.
+        out.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
         Ok(out)
     }
 
@@ -1123,4 +1144,51 @@ fn decimal_from(s: Option<String>) -> Result<Option<Decimal>, StoreError> {
         Some(s) => Ok(Some(Decimal::from_str(&s)?)),
         None => Ok(None),
     }
+}
+
+/// Inverse of `persist::serialize_string_array` — parses the local
+/// JSON-array-of-strings encoding (avoids a `serde_json` dependency,
+/// matching the store's existing convention). Best-effort: a malformed
+/// or non-array value yields an empty list.
+fn parse_string_array(s: &str) -> Vec<String> {
+    let t = s.trim();
+    let inner = match t.strip_prefix('[').and_then(|x| x.strip_suffix(']')) {
+        Some(i) => i,
+        None => return Vec::new(),
+    };
+    let mut out = Vec::new();
+    let mut chars = inner.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '"' {
+            // skip separators / whitespace until the next string opens
+            continue;
+        }
+        let mut cur = String::new();
+        loop {
+            match chars.next() {
+                None => return out, // unterminated — best effort
+                Some('"') => break,
+                Some('\\') => match chars.next() {
+                    Some('"') => cur.push('"'),
+                    Some('\\') => cur.push('\\'),
+                    Some('n') => cur.push('\n'),
+                    Some('r') => cur.push('\r'),
+                    Some('t') => cur.push('\t'),
+                    Some('u') => {
+                        let hex: String = (0..4).filter_map(|_| chars.next()).collect();
+                        if let Some(ch) =
+                            u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32)
+                        {
+                            cur.push(ch);
+                        }
+                    }
+                    Some(other) => cur.push(other),
+                    None => return out,
+                },
+                Some(ch) => cur.push(ch),
+            }
+        }
+        out.push(cur);
+    }
+    out
 }

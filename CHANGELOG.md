@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Faithful `auth.092` validation-rule list (end-to-end).** EMIR
+  rejection feedback (`auth.092`) lists several `DtldVldtnRule` codes
+  per rejected transaction; OpenDQI now keeps the **full list**
+  (`FeedbackRecord.validation_rule_codes`) instead of only the first.
+  The scalar `reason_code` is retained (= the first rule) for
+  backward compatibility. Rejection analytics and `rejection_profile.yml`
+  now count **each** validation rule (per-rule fan-out), and
+  `EMIR/SFTR.FBK.TR_REJECTED_UTI` surface the full list in the issue
+  message and as structured `evidence`. `rejections.csv` gains an
+  additive `validation_rule_codes` column. Backed by a
+  backward-compatible additive SQLite migration
+  (`m0002`, `feedbacks.validation_rule_codes_json`); pre-existing
+  stores upgrade transparently (old rows read as an empty list).
+  Check IDs, the `FeedbackType` enum, the `rejection_profile.yml`
+  schema and the `*.PSC.*` loop are unchanged.
+
 ## [0.3.0] - 2026-05-15
 
 Real TR Schema Hardening — the TR feedback/state parsers are now

@@ -29,11 +29,18 @@ pub(crate) struct Migration {
     pub sql: &'static str,
 }
 
-pub(crate) const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    name: "initial_schema",
-    sql: include_str!("migrations/m0001_initial.sql"),
-}];
+pub(crate) const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        name: "initial_schema",
+        sql: include_str!("migrations/m0001_initial.sql"),
+    },
+    Migration {
+        version: 2,
+        name: "feedback_validation_rules",
+        sql: include_str!("migrations/m0002_feedback_validation_rules.sql"),
+    },
+];
 
 pub(crate) fn migrate(conn: &Connection) -> Result<(), StoreError> {
     ensure_schema_version_table(conn)?;

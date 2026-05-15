@@ -26,9 +26,10 @@
 //!                ├─ Sts  (ACPT|RJCT|INCF|CRPT|NAUT)
 //!                └─ DtldVldtnRule (0..n) : Id [+ Desc]
 //! ```
-//! `auth.092` carries no "Missing"/"Inaccurate" branch, and the scalar
-//! `reason_code` holds only the **first** validation rule (the message
-//! lists several). `ACPT` rows are not feedback and are skipped.
+//! `auth.092` carries no "Missing"/"Inaccurate" branch. Every
+//! `DtldVldtnRule/Id` is captured into `validation_rule_codes`; the
+//! scalar `reason_code` is its first element (kept for compatibility).
+//! `ACPT` rows are not feedback and are skipped.
 //!
 //! ## SFTR `auth.080` — synthetic (caveat only)
 //!
@@ -332,8 +333,10 @@ fn commit_leaf_emir(rec: &mut FeedbackRecord, rel: &[String], value: &str, accep
         }
         return;
     }
-    // First validation rule only — the scalar model can't hold the list.
+    // Every DtldVldtnRule/Id (auth.092 lists several per transaction);
+    // the full faithful list, with `reason_code` = its first element.
     if tail(rel, &["DtldVldtnRule", "Id"]) {
+        rec.validation_rule_codes.push(value.to_owned());
         if rec.reason_code.is_none() {
             rec.reason_code = Some(value.to_owned());
         }
@@ -470,7 +473,10 @@ fn commit_leaf_sftr(rec: &mut FeedbackRecord, leaf: &str, value: &str) {
     }
     match leaf {
         "UnqTxIdr" => rec.uti = Some(value.to_owned()),
-        "RsnCd" => rec.reason_code = Some(value.to_owned()),
+        "RsnCd" => {
+            rec.validation_rule_codes.push(value.to_owned());
+            rec.reason_code = Some(value.to_owned());
+        }
         "RsnDesc" => rec.reason_description = Some(value.to_owned()),
         "FldNm" => rec.reported_field = Some(value.to_owned()),
         _ => {}
@@ -544,7 +550,8 @@ mod tests {
         let r = &out.records[0];
         assert_eq!(r.uti.as_deref(), Some("OPENDQI-FBK-RJCT-0001"));
         assert_eq!(r.feedback_type, FeedbackType::Rejected);
-        // First DtldVldtnRule only (lossy projection of the rule list).
+        // Faithful: every DtldVldtnRule/Id; reason_code = the first.
+        assert_eq!(r.validation_rule_codes, vec!["VR-0001", "VR-0009"]);
         assert_eq!(r.reason_code.as_deref(), Some("VR-0001"));
         assert_eq!(r.reason_description.as_deref(), Some("Notional missing"));
         assert!(r.feedback_timestamp.is_some());

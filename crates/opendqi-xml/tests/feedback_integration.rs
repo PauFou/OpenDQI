@@ -40,13 +40,16 @@ fn schema_shaped_fixture_fires_tr_rejected_uti() {
     let r0 = &outcome.records[0];
     assert_eq!(r0.uti.as_deref(), Some("OPENDQI-FBK-RJCT-0001"));
     assert_eq!(r0.feedback_type, FeedbackType::Rejected);
-    // First DtldVldtnRule only (lossy projection of the rule list).
+    // Faithful: the full DtldVldtnRule list; reason_code = the first.
+    assert_eq!(r0.validation_rule_codes, vec!["VR-0001", "VR-0042"]);
     assert_eq!(r0.reason_code.as_deref(), Some("VR-0001"));
     assert_eq!(
         r0.reason_description.as_deref(),
         Some("Notional amount missing")
     );
     assert!(r0.feedback_timestamp.is_some());
+    // The single-rule INCF record keeps a one-element list.
+    assert_eq!(outcome.records[1].validation_rule_codes, vec!["VR-0100"]);
 
     let ctx = CheckContext::now_with_defaults();
     let issues = run_all_feedback(&default_feedback_checks(), &outcome.records, &[], &ctx);

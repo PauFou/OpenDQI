@@ -126,7 +126,13 @@ fn fresh_open_records_schema_version() {
         .unwrap()
         .map(|r| r.unwrap())
         .collect();
-    assert_eq!(rows, vec![(1, "initial_schema".to_string())]);
+    assert_eq!(
+        rows,
+        vec![
+            (1, "initial_schema".to_string()),
+            (2, "feedback_validation_rules".to_string()),
+        ]
+    );
     let _ = std::fs::remove_file(&path);
 }
 
@@ -134,22 +140,30 @@ fn fresh_open_records_schema_version() {
 fn legacy_db_is_backfilled() {
     let path = tmp("legacy.db");
     let _ = std::fs::remove_file(&path);
-    // Simulate a database created by an older binary: it has the
-    // root `scans` table but no `schema_version`.
+    // Simulate a database created by an older binary: it carries the
+    // v1 schema (root `scans` table + `feedbacks` table) but has no
+    // `schema_version` table. `feedbacks` must exist so the v1 →
+    // legacy-backfill then `m0002` (`ALTER TABLE feedbacks`) path is
+    // exercised exactly as on a real upgraded store.
     {
         let conn = rusqlite::Connection::open(&path).unwrap();
-        conn.execute_batch("CREATE TABLE scans (scan_id INTEGER PRIMARY KEY);")
-            .unwrap();
+        conn.execute_batch(
+            "CREATE TABLE scans (scan_id INTEGER PRIMARY KEY);
+             CREATE TABLE feedbacks (feedback_id INTEGER PRIMARY KEY);",
+        )
+        .unwrap();
     }
-    // open_store must succeed and record v1 as a legacy backfill,
-    // without re-running the migration SQL (which would fail on the
-    // pre-existing scans table if the IF NOT EXISTS guard wasn't there).
+    // open_store must succeed: record v1 as a legacy backfill (no v1
+    // SQL re-run) and then apply m0002 onto the pre-existing feedbacks
+    // table.
     let _ = open_store(&path).unwrap();
     let conn = rusqlite::Connection::open(&path).unwrap();
     let (version, name): (i32, String) = conn
-        .query_row("SELECT version, name FROM schema_version", [], |row| {
-            Ok((row.get(0)?, row.get(1)?))
-        })
+        .query_row(
+            "SELECT version, name FROM schema_version WHERE version = 1",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
         .unwrap();
     assert_eq!(version, 1);
     assert!(name.contains("legacy"), "name was: {name}");
@@ -165,7 +179,10 @@ fn already_migrated_open_does_not_duplicate_rows() {
     let count: i64 = conn
         .query_row("SELECT COUNT(*) FROM schema_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(count, 1, "second open must not re-insert v1");
+    assert_eq!(
+        count, 2,
+        "second open must not re-insert v1/v2 (one row each)"
+    );
     let _ = std::fs::remove_file(&path);
 }
 
@@ -259,6 +276,80 @@ fn feedback_persist_list_resolve_workflow() {
     // Idempotent: re-resolving doesn't update.
     let updated = store.update_feedback_status("UTI-A", "resolved").unwrap();
     assert_eq!(updated, 0);
+
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn feedback_validation_rule_codes_roundtrip_and_fanout() {
+    let path = tmp("feedback-rules.db");
+    let batch = vec![
+        // Multi-rule rejection (auth.092 lists several).
+        FeedbackRecord {
+            regime: Regime::Emir,
+            feedback_type: FeedbackType::Rejected,
+            uti: Some("UTI-MULTI".into()),
+            reason_code: Some("VR-1".into()),
+            validation_rule_codes: vec!["VR-1".into(), "VR-2".into()],
+            ..Default::default()
+        },
+        // No list → falls back to the scalar reason_code in analytics.
+        FeedbackRecord {
+            regime: Regime::Emir,
+            feedback_type: FeedbackType::Rejected,
+            uti: Some("UTI-SCALAR".into()),
+            reason_code: Some("VR-9".into()),
+            ..Default::default()
+        },
+        // No list, no reason → "(none)".
+        FeedbackRecord {
+            regime: Regime::Emir,
+            feedback_type: FeedbackType::Rejected,
+            uti: Some("UTI-NONE".into()),
+            ..Default::default()
+        },
+    ];
+    {
+        let mut store = open_store(&path).unwrap();
+        assert_eq!(store.persist_feedback_batch(&batch).unwrap(), 3);
+
+        let rows = store
+            .list_feedbacks(Some(Regime::Emir), None, None)
+            .unwrap();
+        let multi = rows
+            .iter()
+            .find(|r| r.uti.as_deref() == Some("UTI-MULTI"))
+            .unwrap();
+        assert_eq!(multi.validation_rule_codes, vec!["VR-1", "VR-2"]);
+        let scalar = rows
+            .iter()
+            .find(|r| r.uti.as_deref() == Some("UTI-SCALAR"))
+            .unwrap();
+        assert!(scalar.validation_rule_codes.is_empty());
+
+        // Per-rule fan-out: VR-1 & VR-2 each counted once (from the
+        // multi row), VR-9 via scalar fallback, "(none)" for the bare row.
+        let by_reason = store.count_feedbacks_by_reason(Some(Regime::Emir)).unwrap();
+        let map: std::collections::HashMap<&str, i64> =
+            by_reason.iter().map(|(c, n)| (c.as_str(), *n)).collect();
+        assert_eq!(map.get("VR-1"), Some(&1));
+        assert_eq!(map.get("VR-2"), Some(&1));
+        assert_eq!(map.get("VR-9"), Some(&1));
+        assert_eq!(map.get("(none)"), Some(&1));
+    }
+    // Re-open the same DB: the v2 migration is idempotent and the
+    // persisted rule list survives.
+    {
+        let store = open_store(&path).unwrap();
+        let rows = store
+            .list_feedbacks(Some(Regime::Emir), None, None)
+            .unwrap();
+        let multi = rows
+            .iter()
+            .find(|r| r.uti.as_deref() == Some("UTI-MULTI"))
+            .unwrap();
+        assert_eq!(multi.validation_rule_codes, vec!["VR-1", "VR-2"]);
+    }
 
     let _ = std::fs::remove_file(&path);
 }

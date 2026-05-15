@@ -420,8 +420,14 @@ pub struct FeedbackRecord {
     pub feedback_type: FeedbackType,
     /// UTI of the submission the feedback refers to.
     pub uti: Option<String>,
-    /// Machine-readable reason code (e.g. `VAL01`).
+    /// Machine-readable reason code (e.g. `VAL01`). Kept for backward
+    /// compatibility — equals the **first** of `validation_rule_codes`.
     pub reason_code: Option<String>,
+    /// All TR validation-rule codes for this record. `auth.092` lists
+    /// several `DtldVldtnRule` per rejected transaction; this is the
+    /// faithful list (`reason_code` is its first element).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub validation_rule_codes: Vec<String>,
     /// Human-readable reason description provided by the TR.
     pub reason_description: Option<String>,
     /// For `Inaccurate` feedback: which field is flagged.
@@ -439,6 +445,7 @@ impl Default for FeedbackRecord {
             feedback_type: FeedbackType::default(),
             uti: None,
             reason_code: None,
+            validation_rule_codes: Vec::new(),
             reason_description: None,
             reported_field: None,
             feedback_timestamp: None,
@@ -961,5 +968,28 @@ mod tests {
         let json = r#"{"check_id":"X","regime":"emir","severity":"high","dimension":"completeness","record_id":null,"uti":null,"field":null,"value":null,"message":"m","source_file":null}"#;
         let issue: DqIssue = serde_json::from_str(json).unwrap();
         assert!(issue.evidence.is_empty());
+    }
+
+    #[test]
+    fn feedback_validation_rules_serde() {
+        // Empty list ⇒ key omitted (skip_serializing_if): existing
+        // golden outputs stay byte-identical.
+        let empty = FeedbackRecord::default();
+        let j = serde_json::to_string(&empty).unwrap();
+        assert!(!j.contains("validation_rule_codes"));
+
+        // Legacy JSON without the field ⇒ deserialises to an empty vec.
+        let legacy = r#"{"source_file":null,"record_id":null,"regime":"emir","feedback_type":"rejected","uti":"U1","reason_code":"VR-1","reason_description":null,"reported_field":null,"feedback_timestamp":null}"#;
+        let r: FeedbackRecord = serde_json::from_str(legacy).unwrap();
+        assert!(r.validation_rule_codes.is_empty());
+
+        // Populated list round-trips.
+        let full = FeedbackRecord {
+            validation_rule_codes: vec!["VR-1".into(), "VR-2".into()],
+            ..Default::default()
+        };
+        let back: FeedbackRecord =
+            serde_json::from_str(&serde_json::to_string(&full).unwrap()).unwrap();
+        assert_eq!(back.validation_rule_codes, vec!["VR-1", "VR-2"]);
     }
 }

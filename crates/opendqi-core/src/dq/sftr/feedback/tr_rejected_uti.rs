@@ -3,7 +3,7 @@
 use super::SftrFeedbackCheck;
 use crate::dq::CheckContext;
 use crate::model::{
-    DqDimension, DqIssue, FeedbackRecord, FeedbackType, Regime, Severity, SftrRecord,
+    DqDimension, DqIssue, EvidenceItem, FeedbackRecord, FeedbackType, Regime, Severity, SftrRecord,
 };
 
 /// Check implementation.
@@ -43,6 +43,18 @@ impl SftrFeedbackCheck for SftrTrRejectedUti {
                     .as_deref()
                     .unwrap_or("(no description)");
                 let uti = f.uti.as_deref().unwrap_or("(unknown UTI)");
+                let mut message = format!("TR rejected report for UTI {uti}: {reason}{desc}");
+                let mut evidence = Vec::new();
+                if f.validation_rule_codes.len() > 1 {
+                    let joined = f.validation_rule_codes.join(", ");
+                    message.push_str(&format!(" (validation rules: {joined})"));
+                    evidence.push(EvidenceItem {
+                        field: "validation_rules".into(),
+                        before: None,
+                        after: Some(joined),
+                        source_line: None,
+                    });
+                }
                 DqIssue {
                     check_id: CHECK_ID.into(),
                     regime: Regime::Sftr,
@@ -52,9 +64,9 @@ impl SftrFeedbackCheck for SftrTrRejectedUti {
                     uti: f.uti.clone(),
                     field: None,
                     value: f.reason_code.clone(),
-                    message: format!("TR rejected report for UTI {uti}: {reason}{desc}"),
+                    message,
                     source_file: f.source_file.clone(),
-                    evidence: Vec::new(),
+                    evidence,
                 }
             })
             .collect()

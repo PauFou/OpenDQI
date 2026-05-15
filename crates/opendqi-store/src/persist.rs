@@ -271,17 +271,22 @@ fn insert_feedback(
         FeedbackType::Inaccurate => "inaccurate",
         FeedbackType::ReconciliationBreak => "reconciliation_break",
     };
+    let validation_rule_codes_json = if r.validation_rule_codes.is_empty() {
+        None
+    } else {
+        Some(serialize_string_array(&r.validation_rule_codes))
+    };
     tx.execute(
         "INSERT INTO feedbacks (
             scan_id, regime, uti, feedback_type,
             reason_code, reason_description, reported_field,
-            source_file, feedback_timestamp,
+            source_file, feedback_timestamp, validation_rule_codes_json,
             status, status_set_at, ingested_at
         ) VALUES (
             NULL, ?1, ?2, ?3,
             ?4, ?5, ?6,
-            ?7, ?8,
-            'open', ?9, ?9
+            ?7, ?8, ?9,
+            'open', ?10, ?10
         )",
         params![
             regime,
@@ -292,6 +297,7 @@ fn insert_feedback(
             r.reported_field,
             r.source_file,
             ts_opt(r.feedback_timestamp),
+            validation_rule_codes_json,
             ingested_at,
         ],
     )?;

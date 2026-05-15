@@ -290,6 +290,7 @@ fn run_analytics(
         "uti",
         "feedback_type",
         "reason_code",
+        "validation_rule_codes",
         "reason_description",
         "reported_field",
         "status",
@@ -303,12 +304,14 @@ fn run_analytics(
             Regime::Emir => "EMIR",
             Regime::Sftr => "SFTR",
         };
+        let rules = r.validation_rule_codes.join(";");
         writer.write_record([
             r.feedback_id.to_string().as_str(),
             regime_str,
             r.uti.as_deref().unwrap_or(""),
             r.feedback_type.as_str(),
             r.reason_code.as_deref().unwrap_or(""),
+            rules.as_str(),
             r.reason_description.as_deref().unwrap_or(""),
             r.reported_field.as_deref().unwrap_or(""),
             r.status.as_str(),
