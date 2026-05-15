@@ -41,10 +41,12 @@ three-layer product model.
 
 ## Semantics & reference clock
 
-Every TSR record carries a `state_as_of` field propagated from the
-report header (`<Hdr><StateAsOf>…</StateAsOf></Hdr>`). Time-based
-checks use `state_as_of` as their reference clock; when the header
-is missing, they fall back to `ctx.now` / `ctx.today` from
+Every TSR record carries a `state_as_of` field. `auth.107` has **no**
+report-header state-as-of, so it is sourced per record from the real
+reporting timestamp (`CtrPtySpcfcData/RptgTmStmp` — see
+[`auth-messages/emir-auth107.md`](auth-messages/emir-auth107.md)).
+Time-based checks use `state_as_of` as their reference clock; when a
+record omits it, they fall back to `ctx.now` / `ctx.today` from
 [`CheckContext`].
 
 This makes the checks deterministic and reproducible: re-scanning the

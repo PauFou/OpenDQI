@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic ISO 20022 auth.107 EMIR Trade State Report — no-activity
+  variant. Real ESMA EMIR REFIT envelope; TradData carries the
+  DataSetActn "NOTX" choice (ReportPeriodActivity1Code) instead of any
+  <Stat> record. OpenDQI yields zero state records plus one
+  informational EMIR.FMT.TSR_NO_RECORDS note (no error).
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.107.001.01">
+  <DerivsTradStatRpt>
+    <RptHdr>
+      <NbRcrds>0</NbRcrds>
+    </RptHdr>
+    <TradData>
+      <DataSetActn>NOTX</DataSetActn>
+    </TradData>
+  </DerivsTradStatRpt>
+</Document>

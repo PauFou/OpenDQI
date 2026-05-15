@@ -1,122 +1,209 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
   Synthetic ISO 20022 auth.107 EMIR Trade State Report fixture.
-  Hand-authored — not derived from any ESMA or SWIFT example.
+  Hand-authored — NOT derived from, and does not redistribute, any
+  ESMA or SWIFT example or schema.
 
-  StateAsOf 2026-05-13 is chosen so that the stale-valuation
-  threshold (1 business day ≈ 2 calendar days) makes most
-  valuations stale unless explicitly dated 2026-05-12 or later.
+  Element paths follow the real ESMA EMIR REFIT usage guideline
+  auth.107.001.01_ESMAUG_DATTSR_1.1.0 (DerivativesTradeStateReportV01):
+  Document > DerivsTradStatRpt > {RptHdr/NbRcrds, TradData/Stat...}.
+  Only the subset OpenDQI extracts is populated; the rest of the
+  TradeTransaction49 tree is intentionally omitted (see
+  docs/auth-messages/emir-auth107.md). This is "schema-shaped", not a
+  fully XSD-valid instance.
 
-  Each <TradStat> below exercises one of the seven EMIR TSR checks
-  (or contributes to the outstanding-summary table).
+  Per-record RptgTmStmp 2026-05-13T08:00:00Z is the "state as of"
+  reference (auth.107 has no header StateAsOf). auth.107 carries no
+  per-trade status element: presence in a Trade State Report IS the
+  outstanding state.
+
+  Each <Stat> exercises one of the seven EMIR.TST.* checks.
 -->
 <Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.107.001.01">
-  <TradeStateReport>
-    <Hdr>
-      <RptgPty><LEI>12345678901234567890</LEI></RptgPty>
-      <StateAsOf>2026-05-13T08:00:00Z</StateAsOf>
-    </Hdr>
+  <DerivsTradStatRpt>
+    <RptHdr>
+      <NbRcrds>8</NbRcrds>
+    </RptHdr>
+    <TradData>
 
-    <!-- 1. Clean outstanding baseline: fresh valuation, future
-         maturity, no termination. Only triggers OUTSTANDING_SUMMARY. -->
-    <TradStat>
-      <UnqTxIdr>OPENDQI-TSR-CLEAN-0001</UnqTxIdr>
-      <RptgCtrPty><LEI>12345678901234567890</LEI></RptgCtrPty>
-      <OthrCtrPty><LEI>09876543210987654321</LEI></OthrCtrPty>
-      <Sts>OUTSTANDING</Sts>
-      <NotionalAmt Ccy="EUR">1000000.00</NotionalAmt>
-      <ValuationAmt Ccy="EUR">150.50</ValuationAmt>
-      <ValuationDtTm>2026-05-13T07:00:00Z</ValuationDtTm>
-      <MtrtyDt>2031-04-02</MtrtyDt>
-      <PrtflCd>PORT-001</PrtflCd>
-    </TradStat>
+      <!-- 1. Clean outstanding baseline: fresh valuation, future
+           maturity, no termination. Only OUTSTANDING_SUMMARY. -->
+      <Stat>
+        <CtrPtySpcfcData>
+          <CtrPty>
+            <RptgCtrPty><Id><Lgl><Id><LEI>12345678901234567890</LEI></Id></Lgl></Id></RptgCtrPty>
+            <OthrCtrPty><IdTp><Lgl><Id><LEI>09876543210987654321</LEI></Id></Lgl></IdTp></OthrCtrPty>
+          </CtrPty>
+          <Valtn>
+            <CtrctVal><Amt Ccy="EUR">150.50</Amt></CtrctVal>
+            <TmStmp>2026-05-13T07:00:00Z</TmStmp>
+          </Valtn>
+          <RptgTmStmp>2026-05-13T08:00:00Z</RptgTmStmp>
+        </CtrPtySpcfcData>
+        <CmonTradData>
+          <TxData>
+            <TxId><UnqTxIdr>OPENDQI-TSR-CLEAN-0001</UnqTxIdr></TxId>
+            <NtnlAmt><FrstLeg><Amt><Amt Ccy="EUR">1000000.00</Amt></Amt></FrstLeg></NtnlAmt>
+            <FctvDt>2024-01-02</FctvDt>
+            <XprtnDt>2031-04-02</XprtnDt>
+            <CollPrtflCd><Prtfl><Cd>PORT-001</Cd></Prtfl></CollPrtflCd>
+          </TxData>
+        </CmonTradData>
+      </Stat>
 
-    <!-- 2. Stale valuation: same fresh-baseline shape but valuation
-         dated 2026-01-01 → STALE_VALUATION. -->
-    <TradStat>
-      <UnqTxIdr>OPENDQI-TSR-STALE-0002</UnqTxIdr>
-      <RptgCtrPty><LEI>12345678901234567890</LEI></RptgCtrPty>
-      <OthrCtrPty><LEI>09876543210987654321</LEI></OthrCtrPty>
-      <Sts>OUTSTANDING</Sts>
-      <NotionalAmt Ccy="EUR">1000000.00</NotionalAmt>
-      <ValuationAmt Ccy="EUR">150.50</ValuationAmt>
-      <ValuationDtTm>2026-01-01T12:00:00Z</ValuationDtTm>
-      <MtrtyDt>2031-04-02</MtrtyDt>
-    </TradStat>
+      <!-- 2. Stale valuation: valuation dated 2026-01-01 → STALE_VALUATION. -->
+      <Stat>
+        <CtrPtySpcfcData>
+          <CtrPty>
+            <RptgCtrPty><Id><Lgl><Id><LEI>12345678901234567890</LEI></Id></Lgl></Id></RptgCtrPty>
+            <OthrCtrPty><IdTp><Lgl><Id><LEI>09876543210987654321</LEI></Id></Lgl></IdTp></OthrCtrPty>
+          </CtrPty>
+          <Valtn>
+            <CtrctVal><Amt Ccy="EUR">150.50</Amt></CtrctVal>
+            <TmStmp>2026-01-01T12:00:00Z</TmStmp>
+          </Valtn>
+          <RptgTmStmp>2026-05-13T08:00:00Z</RptgTmStmp>
+        </CtrPtySpcfcData>
+        <CmonTradData>
+          <TxData>
+            <TxId><UnqTxIdr>OPENDQI-TSR-STALE-0002</UnqTxIdr></TxId>
+            <NtnlAmt><FrstLeg><Amt><Amt Ccy="EUR">1000000.00</Amt></Amt></FrstLeg></NtnlAmt>
+            <XprtnDt>2031-04-02</XprtnDt>
+          </TxData>
+        </CmonTradData>
+      </Stat>
 
-    <!-- 3. Missing valuation: no <ValuationAmt> → MISSING_VALUATION. -->
-    <TradStat>
-      <UnqTxIdr>OPENDQI-TSR-NOVAL-0003</UnqTxIdr>
-      <RptgCtrPty><LEI>12345678901234567890</LEI></RptgCtrPty>
-      <OthrCtrPty><LEI>09876543210987654321</LEI></OthrCtrPty>
-      <Sts>OUTSTANDING</Sts>
-      <NotionalAmt Ccy="EUR">1000000.00</NotionalAmt>
-      <MtrtyDt>2031-04-02</MtrtyDt>
-    </TradStat>
+      <!-- 3. Missing valuation: no <Valtn> block → MISSING_VALUATION. -->
+      <Stat>
+        <CtrPtySpcfcData>
+          <CtrPty>
+            <RptgCtrPty><Id><Lgl><Id><LEI>12345678901234567890</LEI></Id></Lgl></Id></RptgCtrPty>
+            <OthrCtrPty><IdTp><Lgl><Id><LEI>09876543210987654321</LEI></Id></Lgl></IdTp></OthrCtrPty>
+          </CtrPty>
+          <RptgTmStmp>2026-05-13T08:00:00Z</RptgTmStmp>
+        </CtrPtySpcfcData>
+        <CmonTradData>
+          <TxData>
+            <TxId><UnqTxIdr>OPENDQI-TSR-NOVAL-0003</UnqTxIdr></TxId>
+            <NtnlAmt><FrstLeg><Amt><Amt Ccy="EUR">1000000.00</Amt></Amt></FrstLeg></NtnlAmt>
+            <XprtnDt>2031-04-02</XprtnDt>
+          </TxData>
+        </CmonTradData>
+      </Stat>
 
-    <!-- 4. Active past maturity: outstanding but maturity already
-         in the past, no termination → ACTIVE_PAST_MATURITY. -->
-    <TradStat>
-      <UnqTxIdr>OPENDQI-TSR-PASTMAT-0004</UnqTxIdr>
-      <RptgCtrPty><LEI>12345678901234567890</LEI></RptgCtrPty>
-      <OthrCtrPty><LEI>09876543210987654321</LEI></OthrCtrPty>
-      <Sts>OUTSTANDING</Sts>
-      <NotionalAmt Ccy="EUR">500000.00</NotionalAmt>
-      <ValuationAmt Ccy="EUR">100.00</ValuationAmt>
-      <ValuationDtTm>2026-05-12T15:00:00Z</ValuationDtTm>
-      <MtrtyDt>2026-01-01</MtrtyDt>
-    </TradStat>
+      <!-- 4. Active past maturity: expiration already past, no early
+           termination → ACTIVE_PAST_MATURITY. -->
+      <Stat>
+        <CtrPtySpcfcData>
+          <CtrPty>
+            <RptgCtrPty><Id><Lgl><Id><LEI>12345678901234567890</LEI></Id></Lgl></Id></RptgCtrPty>
+            <OthrCtrPty><IdTp><Lgl><Id><LEI>09876543210987654321</LEI></Id></Lgl></IdTp></OthrCtrPty>
+          </CtrPty>
+          <Valtn>
+            <CtrctVal><Amt Ccy="EUR">100.00</Amt></CtrctVal>
+            <TmStmp>2026-05-12T15:00:00Z</TmStmp>
+          </Valtn>
+          <RptgTmStmp>2026-05-13T08:00:00Z</RptgTmStmp>
+        </CtrPtySpcfcData>
+        <CmonTradData>
+          <TxData>
+            <TxId><UnqTxIdr>OPENDQI-TSR-PASTMAT-0004</UnqTxIdr></TxId>
+            <NtnlAmt><FrstLeg><Amt><Amt Ccy="EUR">500000.00</Amt></Amt></FrstLeg></NtnlAmt>
+            <XprtnDt>2026-01-01</XprtnDt>
+          </TxData>
+        </CmonTradData>
+      </Stat>
 
-    <!-- 5. Placeholder maturity: 9999-12-31 → PLACEHOLDER_MATURITY.
-         (Note: with maturity=9999-12-31 the ACTIVE_PAST_MATURITY
-         check does NOT fire, since 9999-12-31 > today.) -->
-    <TradStat>
-      <UnqTxIdr>OPENDQI-TSR-PLACEMAT-0005</UnqTxIdr>
-      <RptgCtrPty><LEI>12345678901234567890</LEI></RptgCtrPty>
-      <OthrCtrPty><LEI>09876543210987654321</LEI></OthrCtrPty>
-      <Sts>OUTSTANDING</Sts>
-      <NotionalAmt Ccy="EUR">250000.00</NotionalAmt>
-      <ValuationAmt Ccy="EUR">25.00</ValuationAmt>
-      <ValuationDtTm>2026-05-12T15:00:00Z</ValuationDtTm>
-      <MtrtyDt>9999-12-31</MtrtyDt>
-    </TradStat>
+      <!-- 5. Placeholder maturity: 9999-12-31 → PLACEHOLDER_MATURITY
+           (9999-12-31 > today so ACTIVE_PAST_MATURITY does not fire). -->
+      <Stat>
+        <CtrPtySpcfcData>
+          <CtrPty>
+            <RptgCtrPty><Id><Lgl><Id><LEI>12345678901234567890</LEI></Id></Lgl></Id></RptgCtrPty>
+            <OthrCtrPty><IdTp><Lgl><Id><LEI>09876543210987654321</LEI></Id></Lgl></IdTp></OthrCtrPty>
+          </CtrPty>
+          <Valtn>
+            <CtrctVal><Amt Ccy="EUR">25.00</Amt></CtrctVal>
+            <TmStmp>2026-05-12T15:00:00Z</TmStmp>
+          </Valtn>
+          <RptgTmStmp>2026-05-13T08:00:00Z</RptgTmStmp>
+        </CtrPtySpcfcData>
+        <CmonTradData>
+          <TxData>
+            <TxId><UnqTxIdr>OPENDQI-TSR-PLACEMAT-0005</UnqTxIdr></TxId>
+            <NtnlAmt><FrstLeg><Amt><Amt Ccy="EUR">250000.00</Amt></Amt></FrstLeg></NtnlAmt>
+            <XprtnDt>9999-12-31</XprtnDt>
+          </TxData>
+        </CmonTradData>
+      </Stat>
 
-    <!-- 6+7. Duplicate active UTI: two outstanding rows for the same
-         UTI → DUPLICATE_ACTIVE_UTI fires twice. -->
-    <TradStat>
-      <UnqTxIdr>OPENDQI-TSR-DUP-0006</UnqTxIdr>
-      <RptgCtrPty><LEI>12345678901234567890</LEI></RptgCtrPty>
-      <OthrCtrPty><LEI>09876543210987654321</LEI></OthrCtrPty>
-      <Sts>OUTSTANDING</Sts>
-      <NotionalAmt Ccy="EUR">100000.00</NotionalAmt>
-      <ValuationAmt Ccy="EUR">10.00</ValuationAmt>
-      <ValuationDtTm>2026-05-12T15:00:00Z</ValuationDtTm>
-      <MtrtyDt>2031-04-02</MtrtyDt>
-    </TradStat>
-    <TradStat>
-      <UnqTxIdr>OPENDQI-TSR-DUP-0006</UnqTxIdr>
-      <RptgCtrPty><LEI>12345678901234567890</LEI></RptgCtrPty>
-      <OthrCtrPty><LEI>09876543210987654321</LEI></OthrCtrPty>
-      <Sts>OUTSTANDING</Sts>
-      <NotionalAmt Ccy="EUR">100000.00</NotionalAmt>
-      <ValuationAmt Ccy="EUR">10.00</ValuationAmt>
-      <ValuationDtTm>2026-05-12T15:00:00Z</ValuationDtTm>
-      <MtrtyDt>2031-04-02</MtrtyDt>
-    </TradStat>
+      <!-- 6+7. Duplicate active UTI: two records, same UTI →
+           DUPLICATE_ACTIVE_UTI. -->
+      <Stat>
+        <CtrPtySpcfcData>
+          <CtrPty>
+            <RptgCtrPty><Id><Lgl><Id><LEI>12345678901234567890</LEI></Id></Lgl></Id></RptgCtrPty>
+            <OthrCtrPty><IdTp><Lgl><Id><LEI>09876543210987654321</LEI></Id></Lgl></IdTp></OthrCtrPty>
+          </CtrPty>
+          <Valtn>
+            <CtrctVal><Amt Ccy="EUR">10.00</Amt></CtrctVal>
+            <TmStmp>2026-05-12T15:00:00Z</TmStmp>
+          </Valtn>
+          <RptgTmStmp>2026-05-13T08:00:00Z</RptgTmStmp>
+        </CtrPtySpcfcData>
+        <CmonTradData>
+          <TxData>
+            <TxId><UnqTxIdr>OPENDQI-TSR-DUP-0006</UnqTxIdr></TxId>
+            <NtnlAmt><FrstLeg><Amt><Amt Ccy="EUR">100000.00</Amt></Amt></FrstLeg></NtnlAmt>
+            <XprtnDt>2031-04-02</XprtnDt>
+          </TxData>
+        </CmonTradData>
+      </Stat>
+      <Stat>
+        <CtrPtySpcfcData>
+          <CtrPty>
+            <RptgCtrPty><Id><Lgl><Id><LEI>12345678901234567890</LEI></Id></Lgl></Id></RptgCtrPty>
+            <OthrCtrPty><IdTp><Lgl><Id><LEI>09876543210987654321</LEI></Id></Lgl></IdTp></OthrCtrPty>
+          </CtrPty>
+          <Valtn>
+            <CtrctVal><Amt Ccy="EUR">10.00</Amt></CtrctVal>
+            <TmStmp>2026-05-12T15:00:00Z</TmStmp>
+          </Valtn>
+          <RptgTmStmp>2026-05-13T08:00:00Z</RptgTmStmp>
+        </CtrPtySpcfcData>
+        <CmonTradData>
+          <TxData>
+            <TxId><UnqTxIdr>OPENDQI-TSR-DUP-0006</UnqTxIdr></TxId>
+            <NtnlAmt><FrstLeg><Amt><Amt Ccy="EUR">100000.00</Amt></Amt></FrstLeg></NtnlAmt>
+            <XprtnDt>2031-04-02</XprtnDt>
+          </TxData>
+        </CmonTradData>
+      </Stat>
 
-    <!-- 8. Valuation after termination: terminated 2026-04-01 but
-         valuation timestamp 2026-04-15 → VALUATION_AFTER_TERMINATION. -->
-    <TradStat>
-      <UnqTxIdr>OPENDQI-TSR-VATERM-0007</UnqTxIdr>
-      <RptgCtrPty><LEI>12345678901234567890</LEI></RptgCtrPty>
-      <OthrCtrPty><LEI>09876543210987654321</LEI></OthrCtrPty>
-      <Sts>TERMINATED</Sts>
-      <NotionalAmt Ccy="EUR">200000.00</NotionalAmt>
-      <ValuationAmt Ccy="EUR">5.00</ValuationAmt>
-      <ValuationDtTm>2026-04-15T12:00:00Z</ValuationDtTm>
-      <TermntnDt>2026-04-01</TermntnDt>
-      <MtrtyDt>2031-04-02</MtrtyDt>
-    </TradStat>
+      <!-- 8. Valuation after termination: EarlyTermntnDt 2026-04-01,
+           valuation timestamp 2026-04-15 → VALUATION_AFTER_TERMINATION. -->
+      <Stat>
+        <CtrPtySpcfcData>
+          <CtrPty>
+            <RptgCtrPty><Id><Lgl><Id><LEI>12345678901234567890</LEI></Id></Lgl></Id></RptgCtrPty>
+            <OthrCtrPty><IdTp><Lgl><Id><LEI>09876543210987654321</LEI></Id></Lgl></IdTp></OthrCtrPty>
+          </CtrPty>
+          <Valtn>
+            <CtrctVal><Amt Ccy="EUR">5.00</Amt></CtrctVal>
+            <TmStmp>2026-04-15T12:00:00Z</TmStmp>
+          </Valtn>
+          <RptgTmStmp>2026-05-13T08:00:00Z</RptgTmStmp>
+        </CtrPtySpcfcData>
+        <CmonTradData>
+          <TxData>
+            <TxId><UnqTxIdr>OPENDQI-TSR-VATERM-0007</UnqTxIdr></TxId>
+            <NtnlAmt><FrstLeg><Amt><Amt Ccy="EUR">200000.00</Amt></Amt></FrstLeg></NtnlAmt>
+            <XprtnDt>2031-04-02</XprtnDt>
+            <EarlyTermntnDt>2026-04-01</EarlyTermntnDt>
+          </TxData>
+        </CmonTradData>
+      </Stat>
 
-  </TradeStateReport>
+    </TradData>
+  </DerivsTradStatRpt>
 </Document>

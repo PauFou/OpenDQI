@@ -15,6 +15,13 @@ parsers' leaf tables are designed to be edited in one place.
 - **verified** — we parse a structure that matches the public ISO 20022
   catalog conventions for this message, and the parser is used in
   production by an OpenDQI CLI command with synthetic fixtures.
+- **schema-verified (subset)** — the parser's element paths have been
+  aligned with the **real ESMA usage-guideline XSD** (read locally,
+  never redistributed) and verified by tests against a schema-shaped
+  fixture. Only the documented field subset OpenDQI consumes is
+  extracted; full XSD instance validity (every mandatory branch of the
+  message tree) is explicitly out of scope and the limits are written
+  down in the per-message note.
 - **partial** — we parse a plausible structure but have not yet
   validated against the official XSD. The leaf table is documented and
   intended to be adapted when the firm has access to the real schema.
@@ -29,7 +36,7 @@ parsers' leaf tables are designed to be edited in one place.
 |---|---|---|---|---|
 | `auth.030.001.03` | Derivatives Trade Report (TAR) | firm → TR (and TR → firm replays) | verified | Dual-use: `opendqi emir scan` for firm submissions, `opendqi emir tr-activity-scan` for TR replays. Same adapter `crates/opendqi-xml/src/emir/iso20022.rs`. |
 | `auth.092.001.NN` | Trade Reports Rejected / Missing / Inaccurate (feedback) | TR → firm | partial | `opendqi emir feedback` via `crates/opendqi-xml/src/feedback.rs`. Phase 3 will deepen analytics (top causes, ageing, rejected → accepted). |
-| `auth.107.001.NN` | Trade State Report (TSR) | TR → firm | **verified (synthetic schema)** | `opendqi emir tr-state-scan` via `crates/opendqi-xml/src/tr_state.rs`. Leaf table documented in [`tr-state-checks.md`](tr-state-checks.md); designed to be edited when the real XSD is available. |
+| `auth.107.001.01` | Derivatives Trade State Report (TSR) | TR → firm | **schema-verified (subset)** | `opendqi emir tr-state-scan` via `crates/opendqi-xml/src/tr_state.rs`, aligned with `auth.107.001.01_ESMAUG_DATTSR_1.1.0`. Extracted-subset map, ignored branches and verification procedure in [`auth-messages/emir-auth107.md`](auth-messages/emir-auth107.md). Checks: [`tr-state-checks.md`](tr-state-checks.md). |
 | `auth.108.001.NN` | Margin Activity Report (MAR) | TR → firm | **verified (synthetic schema)** | `opendqi emir mar-scan` via `crates/opendqi-xml/src/emir_mar.rs`; 8 `EMIR.MAR.*` checks. See [`emir-mar-msr.md`](emir-mar-msr.md). |
 | `auth.109.001.NN` | Margin State Report (MSR) | TR → firm | **verified (synthetic schema)** | `opendqi emir msr-scan` via `crates/opendqi-xml/src/emir_msr.rs`; 8 `EMIR.MSR.*` checks. See [`emir-mar-msr.md`](emir-mar-msr.md). |
 | `auth.091.001.NN` | Reconciliation Statistics | TR → firm | **verified (synthetic schema)** | `opendqi emir recon-stats` via `crates/opendqi-xml/src/emir_recon_stats.rs`; 4 `EMIR.RST.*` checks. See [`emir-recon-stats.md`](emir-recon-stats.md). |

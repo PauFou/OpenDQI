@@ -29,7 +29,7 @@ enum TopLevel {
         #[command(subcommand)]
         action: emir::EmirAction,
     },
-    /// SFTR-related commands (planned).
+    /// SFTR-related commands.
     Sftr {
         #[command(subcommand)]
         action: sftr::SftrAction,
@@ -39,7 +39,7 @@ enum TopLevel {
         #[command(subcommand)]
         action: feedback::FeedbackAction,
     },
-    /// Start the local web UI (planned for milestone 0.2).
+    /// Start the local web UI.
     Desktop(desktop::DesktopArgs),
     /// Validate an SMTP configuration YAML by sending a test email.
     /// Use `--dry-run` to check the config + env var without sending.

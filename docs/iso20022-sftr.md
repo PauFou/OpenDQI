@@ -20,10 +20,9 @@ SWIFT-licensed component. Get it from:
 - SWIFT MyStandards (free account required).
 
 Use a locally-downloaded XSD with the existing
-[`xsd-validation.md`](xsd-validation.md) infrastructure (planned
-`opendqi sftr scan --xsd <path>` — currently the `--xsd` flag is
-implemented for `emir scan`; SFTR validation via xmllint will land in
-a follow-up).
+[`xsd-validation.md`](xsd-validation.md) infrastructure:
+`opendqi sftr scan --xsd <path>` validates every XML input against the
+schema and adds one `SFTR.FMT.XSD_VIOLATION` issue per error line.
 
 ## Action-type mapping
 
