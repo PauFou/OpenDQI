@@ -177,6 +177,10 @@ pub enum EmirAction {
         /// Directory where reports are written.
         #[arg(long)]
         out: PathBuf,
+        /// Optional SMTP configuration YAML — emails the reconciliation
+        /// report after writing it. See `docs/email-notifications.md`.
+        #[arg(long, value_name = "PATH")]
+        email_config: Option<PathBuf>,
     },
     /// Consolidated TR audit. Ingests a TAR (`auth.030`), a TSR
     /// (`auth.107`), and a feedback file (`auth.092`) together,
@@ -226,6 +230,10 @@ pub enum EmirAction {
         /// Directory where reports are written.
         #[arg(long)]
         out: PathBuf,
+        /// Optional SMTP configuration YAML — emails the book-vs-TSR
+        /// report. See `docs/email-notifications.md`.
+        #[arg(long, value_name = "PATH")]
+        email_config: Option<PathBuf>,
     },
     /// Ingest an EMIR Margin Activity Report (ISO 20022 `auth.108`)
     /// and produce `EMIR.MAR.*` issues: action-type enum, negative
@@ -242,6 +250,10 @@ pub enum EmirAction {
         /// Directory where reports are written.
         #[arg(long)]
         out: PathBuf,
+        /// Optional SMTP configuration YAML — emails the MAR report.
+        /// See `docs/email-notifications.md`.
+        #[arg(long, value_name = "PATH")]
+        email_config: Option<PathBuf>,
     },
     /// Ingest an EMIR Margin State Report (ISO 20022 `auth.109`)
     /// and produce `EMIR.MSR.*` issues over the TR's margin snapshot:
@@ -258,6 +270,10 @@ pub enum EmirAction {
         /// Directory where reports are written.
         #[arg(long)]
         out: PathBuf,
+        /// Optional SMTP configuration YAML — emails the MSR report.
+        /// See `docs/email-notifications.md`.
+        #[arg(long, value_name = "PATH")]
+        email_config: Option<PathBuf>,
     },
     /// Ingest an EMIR Reconciliation Statistics report (ISO 20022
     /// `auth.091`) and produce `EMIR.RST.*` issues: low pairing /
@@ -334,8 +350,13 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
             run_feedback(&input, &store, &out, email_config.as_deref())?;
             Ok(ExitCode::SUCCESS)
         }
-        EmirAction::Reconcile { input, store, out } => {
-            run_reconcile(&input, &store, &out)?;
+        EmirAction::Reconcile {
+            input,
+            store,
+            out,
+            email_config,
+        } => {
+            run_reconcile(&input, &store, &out, email_config.as_deref())?;
             Ok(ExitCode::SUCCESS)
         }
         EmirAction::TrStateScan {
@@ -386,16 +407,27 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
             tsr,
             mapping,
             out,
+            email_config,
         } => {
-            run_book_reconcile(&book, &tsr, &mapping, &out)?;
+            run_book_reconcile(&book, &tsr, &mapping, &out, email_config.as_deref())?;
             Ok(ExitCode::SUCCESS)
         }
-        EmirAction::MarScan { input, store, out } => {
-            run_mar_scan(&input, store.as_deref(), &out)?;
+        EmirAction::MarScan {
+            input,
+            store,
+            out,
+            email_config,
+        } => {
+            run_mar_scan(&input, store.as_deref(), &out, email_config.as_deref())?;
             Ok(ExitCode::SUCCESS)
         }
-        EmirAction::MsrScan { input, store, out } => {
-            run_msr_scan(&input, store.as_deref(), &out)?;
+        EmirAction::MsrScan {
+            input,
+            store,
+            out,
+            email_config,
+        } => {
+            run_msr_scan(&input, store.as_deref(), &out, email_config.as_deref())?;
             Ok(ExitCode::SUCCESS)
         }
         EmirAction::ReconStats {
@@ -990,7 +1022,12 @@ fn run_recon_stats(
     Ok(())
 }
 
-fn run_reconcile(input: &Path, store_path: &Path, out: &Path) -> Result<()> {
+fn run_reconcile(
+    input: &Path,
+    store_path: &Path,
+    out: &Path,
+    email_config_path: Option<&Path>,
+) -> Result<()> {
     let started_at = Utc::now();
     let outcome = read_emir_reconciliation_xml(input)
         .with_context(|| format!("reading reconciliation file {}", input.display()))?;
@@ -1057,6 +1094,22 @@ fn run_reconcile(input: &Path, store_path: &Path, out: &Path) -> Result<()> {
     write_summary_json(&out.join("summary.json"), &summary)?;
     write_issues_csv(&out.join("issues.csv"), &issues)?;
     write_report_html(&out.join("report.html"), &summary, &issues, &sources)?;
+
+    if let Some(path) = email_config_path {
+        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
+        let sent = opendqi_report::send_report_email(
+            &cfg,
+            &summary,
+            &out.join("report.html"),
+            &out.join("summary.json"),
+            &out.join("issues.csv"),
+        )?;
+        if sent {
+            info!(to = ?cfg.to, "reconciliation report emailed");
+        } else {
+            info!("email config is disabled — skipped send");
+        }
+    }
 
     let critical = summary
         .issues_by_severity
@@ -1203,7 +1256,12 @@ fn run_tr_state_scan(
     Ok(())
 }
 
-fn run_mar_scan(input: &Path, store_path: Option<&Path>, out: &Path) -> Result<()> {
+fn run_mar_scan(
+    input: &Path,
+    store_path: Option<&Path>,
+    out: &Path,
+    email_config_path: Option<&Path>,
+) -> Result<()> {
     let started_at = Utc::now();
     let outcome = read_emir_mar_xml(input)
         .with_context(|| format!("reading MAR file {}", input.display()))?;
@@ -1274,6 +1332,22 @@ fn run_mar_scan(input: &Path, store_path: Option<&Path>, out: &Path) -> Result<(
     write_issues_csv(&out.join("mar_issues.csv"), &issues)?;
     write_report_html(&out.join("mar_report.html"), &summary, &issues, &sources)?;
 
+    if let Some(path) = email_config_path {
+        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
+        let sent = opendqi_report::send_report_email(
+            &cfg,
+            &summary,
+            &out.join("mar_report.html"),
+            &out.join("summary.json"),
+            &out.join("mar_issues.csv"),
+        )?;
+        if sent {
+            info!(to = ?cfg.to, "MAR report emailed");
+        } else {
+            info!("email config is disabled — skipped send");
+        }
+    }
+
     let critical = summary
         .issues_by_severity
         .get(&Severity::Critical)
@@ -1292,7 +1366,12 @@ fn run_mar_scan(input: &Path, store_path: Option<&Path>, out: &Path) -> Result<(
     Ok(())
 }
 
-fn run_msr_scan(input: &Path, store_path: Option<&Path>, out: &Path) -> Result<()> {
+fn run_msr_scan(
+    input: &Path,
+    store_path: Option<&Path>,
+    out: &Path,
+    email_config_path: Option<&Path>,
+) -> Result<()> {
     let started_at = Utc::now();
     let outcome = read_emir_msr_xml(input)
         .with_context(|| format!("reading MSR file {}", input.display()))?;
@@ -1376,6 +1455,22 @@ fn run_msr_scan(input: &Path, store_path: Option<&Path>, out: &Path) -> Result<(
     write_summary_json(&out.join("summary.json"), &summary)?;
     write_issues_csv(&out.join("msr_issues.csv"), &issues)?;
     write_report_html(&out.join("msr_report.html"), &summary, &issues, &sources)?;
+
+    if let Some(path) = email_config_path {
+        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
+        let sent = opendqi_report::send_report_email(
+            &cfg,
+            &summary,
+            &out.join("msr_report.html"),
+            &out.join("summary.json"),
+            &out.join("msr_issues.csv"),
+        )?;
+        if sent {
+            info!(to = ?cfg.to, "MSR report emailed");
+        } else {
+            info!("email config is disabled — skipped send");
+        }
+    }
 
     let critical = summary
         .issues_by_severity
@@ -1846,6 +1941,7 @@ fn run_book_reconcile(
     tsr_path: &Path,
     mapping_path: &Path,
     out: &Path,
+    email_config_path: Option<&Path>,
 ) -> Result<()> {
     let started_at = Utc::now();
 
@@ -1883,6 +1979,22 @@ fn run_book_reconcile(
         &issues,
         &sources,
     )?;
+
+    if let Some(path) = email_config_path {
+        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
+        let sent = opendqi_report::send_report_email(
+            &cfg,
+            &summary,
+            &out.join("book_vs_tsr_report.html"),
+            &out.join("summary.json"),
+            &out.join("book_vs_tsr_issues.csv"),
+        )?;
+        if sent {
+            info!(to = ?cfg.to, "book-vs-TSR report emailed");
+        } else {
+            info!("email config is disabled — skipped send");
+        }
+    }
 
     let critical = summary
         .issues_by_severity

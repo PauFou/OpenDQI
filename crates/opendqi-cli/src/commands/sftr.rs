@@ -119,6 +119,10 @@ pub enum SftrAction {
         /// Directory where reports are written.
         #[arg(long)]
         out: PathBuf,
+        /// Optional SMTP configuration YAML — emails the SFTR
+        /// reconciliation report. See `docs/email-notifications.md`.
+        #[arg(long, value_name = "PATH")]
+        email_config: Option<PathBuf>,
     },
     /// Ingest an SFTR Trade State Report (ISO 20022 `auth.079`) and
     /// produce `SFTR.TST.*` issues over the TR's snapshot:
@@ -161,6 +165,10 @@ pub enum SftrAction {
         /// Directory where reports are written.
         #[arg(long)]
         out: PathBuf,
+        /// Optional SMTP configuration YAML — emails the SFTR TAR
+        /// report. See `docs/email-notifications.md`.
+        #[arg(long, value_name = "PATH")]
+        email_config: Option<PathBuf>,
     },
     /// Consolidated SFTR TR audit. Ingests a TAR (`auth.052`), a TSR
     /// (`auth.079`), and a feedback file (`auth.080`) together,
@@ -183,6 +191,10 @@ pub enum SftrAction {
         /// Directory where reports are written.
         #[arg(long)]
         out: PathBuf,
+        /// Optional SMTP configuration YAML — emails the consolidated
+        /// SFTR TR audit report. See `docs/email-notifications.md`.
+        #[arg(long, value_name = "PATH")]
+        email_config: Option<PathBuf>,
     },
     /// Reconcile a firm's internal SFT book export (CSV) against a
     /// TR SFTR Trade State Report (`auth.079`). Produces
@@ -203,6 +215,10 @@ pub enum SftrAction {
         /// Directory where reports are written.
         #[arg(long)]
         out: PathBuf,
+        /// Optional SMTP configuration YAML — emails the SFTR
+        /// book-vs-TSR report. See `docs/email-notifications.md`.
+        #[arg(long, value_name = "PATH")]
+        email_config: Option<PathBuf>,
     },
     /// Normalize SFTR XML/CSV input into a canonical Parquet file
     /// (Snappy-compressed). Schema is stable and analytics-friendly.
@@ -254,8 +270,13 @@ pub fn run(action: SftrAction) -> Result<ExitCode> {
             run_feedback(&input, &store, &out, email_config.as_deref())?;
             Ok(ExitCode::SUCCESS)
         }
-        SftrAction::Reconcile { input, store, out } => {
-            run_reconcile(&input, &store, &out)?;
+        SftrAction::Reconcile {
+            input,
+            store,
+            out,
+            email_config,
+        } => {
+            run_reconcile(&input, &store, &out, email_config.as_deref())?;
             Ok(ExitCode::SUCCESS)
         }
         SftrAction::TrStateScan {
@@ -272,8 +293,15 @@ pub fn run(action: SftrAction) -> Result<ExitCode> {
             store,
             tsr,
             out,
+            email_config,
         } => {
-            run_tr_activity_scan(&input, store.as_deref(), tsr.as_deref(), &out)?;
+            run_tr_activity_scan(
+                &input,
+                store.as_deref(),
+                tsr.as_deref(),
+                &out,
+                email_config.as_deref(),
+            )?;
             Ok(ExitCode::SUCCESS)
         }
         SftrAction::TrAudit {
@@ -282,8 +310,16 @@ pub fn run(action: SftrAction) -> Result<ExitCode> {
             feedback,
             store,
             out,
+            email_config,
         } => {
-            run_tr_audit(&tar, &tsr, &feedback, store.as_deref(), &out)?;
+            run_tr_audit(
+                &tar,
+                &tsr,
+                &feedback,
+                store.as_deref(),
+                &out,
+                email_config.as_deref(),
+            )?;
             Ok(ExitCode::SUCCESS)
         }
         SftrAction::BookReconcile {
@@ -291,8 +327,9 @@ pub fn run(action: SftrAction) -> Result<ExitCode> {
             tsr,
             mapping,
             out,
+            email_config,
         } => {
-            run_book_reconcile(&book, &tsr, &mapping, &out)?;
+            run_book_reconcile(&book, &tsr, &mapping, &out, email_config.as_deref())?;
             Ok(ExitCode::SUCCESS)
         }
         SftrAction::Normalize {
@@ -774,7 +811,12 @@ fn build_feedback_summary(
     }
 }
 
-fn run_reconcile(input: &Path, store_path: &Path, out: &Path) -> Result<()> {
+fn run_reconcile(
+    input: &Path,
+    store_path: &Path,
+    out: &Path,
+    email_config_path: Option<&Path>,
+) -> Result<()> {
     let started_at = Utc::now();
     let outcome = read_sftr_reconciliation_xml(input)
         .with_context(|| format!("reading reconciliation file {}", input.display()))?;
@@ -841,6 +883,22 @@ fn run_reconcile(input: &Path, store_path: &Path, out: &Path) -> Result<()> {
     write_summary_json(&out.join("summary.json"), &summary)?;
     write_issues_csv(&out.join("issues.csv"), &issues)?;
     write_report_html(&out.join("report.html"), &summary, &issues, &sources)?;
+
+    if let Some(path) = email_config_path {
+        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
+        let sent = opendqi_report::send_report_email(
+            &cfg,
+            &summary,
+            &out.join("report.html"),
+            &out.join("summary.json"),
+            &out.join("issues.csv"),
+        )?;
+        if sent {
+            info!(to = ?cfg.to, "SFTR reconciliation report emailed");
+        } else {
+            info!("email config is disabled — skipped send");
+        }
+    }
 
     let critical = summary
         .issues_by_severity
@@ -996,11 +1054,13 @@ fn run_tr_state_scan(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_tr_activity_scan(
     input: &Path,
     store_path: Option<&Path>,
     tsr_path: Option<&Path>,
     out: &Path,
+    email_config_path: Option<&Path>,
 ) -> Result<()> {
     let started_at = Utc::now();
     let inputs = discover_emir_inputs(input)?;
@@ -1110,6 +1170,22 @@ fn run_tr_activity_scan(
         &sources,
     )?;
 
+    if let Some(path) = email_config_path {
+        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
+        let sent = opendqi_report::send_report_email(
+            &cfg,
+            &summary,
+            &out.join("tr_activity_report.html"),
+            &out.join("summary.json"),
+            &out.join("tr_activity_issues.csv"),
+        )?;
+        if sent {
+            info!(to = ?cfg.to, "SFTR TAR report emailed");
+        } else {
+            info!("email config is disabled — skipped send");
+        }
+    }
+
     let critical = summary
         .issues_by_severity
         .get(&Severity::Critical)
@@ -1128,12 +1204,14 @@ fn run_tr_activity_scan(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_tr_audit(
     tar_path: &Path,
     tsr_path: &Path,
     feedback_path: &Path,
     store_path: Option<&Path>,
     out: &Path,
+    email_config_path: Option<&Path>,
 ) -> Result<()> {
     use std::collections::HashSet;
 
@@ -1372,6 +1450,22 @@ fn run_tr_audit(
         &sources,
     )?;
 
+    if let Some(path) = email_config_path {
+        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
+        let sent = opendqi_report::send_report_email(
+            &cfg,
+            &summary,
+            &out.join("tr_audit_report.html"),
+            &out.join("summary.json"),
+            &out.join("tr_audit_issues.csv"),
+        )?;
+        if sent {
+            info!(to = ?cfg.to, "SFTR TR audit report emailed");
+        } else {
+            info!("email config is disabled — skipped send");
+        }
+    }
+
     let critical = summary
         .issues_by_severity
         .get(&Severity::Critical)
@@ -1405,6 +1499,7 @@ fn run_book_reconcile(
     tsr_path: &Path,
     mapping_path: &Path,
     out: &Path,
+    email_config_path: Option<&Path>,
 ) -> Result<()> {
     let started_at = Utc::now();
 
@@ -1442,6 +1537,22 @@ fn run_book_reconcile(
         &issues,
         &sources,
     )?;
+
+    if let Some(path) = email_config_path {
+        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
+        let sent = opendqi_report::send_report_email(
+            &cfg,
+            &summary,
+            &out.join("book_vs_tsr_report.html"),
+            &out.join("summary.json"),
+            &out.join("book_vs_tsr_issues.csv"),
+        )?;
+        if sent {
+            info!(to = ?cfg.to, "SFTR book-vs-TSR report emailed");
+        } else {
+            info!("email config is disabled — skipped send");
+        }
+    }
 
     let critical = summary
         .issues_by_severity
