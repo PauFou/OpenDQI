@@ -55,15 +55,27 @@ recon_stats:
 opendqi emir recon-stats auth091.xml --config thresholds.yml --out report/
 ```
 
-## Synthetic schema
+## Schema alignment & derived rates
 
-The official ESMA XSD is not redistributed. The parser
-(`crates/opendqi-xml/src/emir_recon_stats.rs`) recognises a
-plausible structure: a `<RcncltnSttstcsRpt>` root containing one
-`<Hdr>` and N `<ReconStat>` leaves carrying `<RptgDt>`,
-`<CtrPty><LEI>`, `<PairgRate>`, `<RcncltnRate>`,
-`<OutsdngPaired>`, `<OutsdngUnpaired>`. When the real schema is
-available, edit the leaf table in `commit_leaf` to align.
+The parser (`crates/opendqi-xml/src/emir_recon_stats.rs`) is aligned
+with the real ESMA EMIR REFIT usage guideline
+`auth.091.001.02_ESMAUG_DATREC_1.0.0`
+(`DerivativesTradeReconciliationStatisticalReportV02`):
+`Document > DerivsTradRcncltnSttstclRpt > RcncltnSttstcs/Rpt`, one
+`Rpt` per reference-date × reconciliation-category cohort
+(`RcncltnCtgrs/RptgRqrmnt` carrying `Pairg` ∈ PARD/UNPR and `Rcncltn`
+∈ RECO/NREC), each with per-counterparty `TxDtls/TtlNbOfTxs` counts.
+
+`auth.091` carries **no explicit pairing/recon rate** and **no
+outstanding-paired/unpaired count**. OpenDQI accumulates the per-pair
+`TxDtls/TtlNbOfTxs` by the cohort's `Pairg`/`Rcncltn` and **derives**
+one rate per counterparty LEI (`pairing_rate = paired/(paired+
+unpaired)`, `recon_rate = reconciled/(reconciled+unreconciled)`).
+`outstanding_paired`/`outstanding_unpaired` have no real-schema source
+and stay `None`, so `EMIR.RST.OUTSTANDING_UNPAIRED_HIGH` is
+unreachable from real `auth.091`. The SWIFT-licensed XSD is not
+redistributed; only element names/cardinalities are used. Full detail:
+[`auth-messages/emir-auth091.md`](auth-messages/emir-auth091.md).
 
 The bundled fixture lives in
 [`examples/emir/recon_stats/auth091-sample.xml`](../examples/emir/recon_stats/auth091-sample.xml)

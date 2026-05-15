@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic auth.091 prior-batch fixture for the cross-batch
+  EMIR.RST.PAIRING_RATE_TREND_DOWN check. Real ESMA envelope.
+  LEI-A here: PARD 95 / UNPR 5 -> pairing 0.95. Against the
+  auth091-sample.xml LEI-A pairing 0.70 that is a 25pp drop
+  (>= the 5pp threshold) -> the trend check fires for LEI-A.
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.091.001.02">
+  <DerivsTradRcncltnSttstclRpt>
+    <RcncltnSttstcs>
+      <Rpt>
+        <RefDt>2026-04-13</RefDt>
+        <RcncltnCtgrs><RptgRqrmnt>
+          <RptgTp>BOTH</RptgTp><Pairg>PARD</Pairg><Rcncltn>RECO</Rcncltn>
+          <ValtnRcncltn>RECO</ValtnRcncltn><Rvvd>false</Rvvd><FrthrMod>false</FrthrMod>
+        </RptgRqrmnt></RcncltnCtgrs>
+        <TtlNbOfTxs>95</TtlNbOfTxs>
+        <TxDtls>
+          <CtrPtyId><RptgCtrPty><LEI>LEIA0000000000000001</LEI></RptgCtrPty></CtrPtyId>
+          <TtlNbOfTxs>95</TtlNbOfTxs>
+          <RcncltnRpt><TxId><UnqIdr><UnqTxIdr>P-A-1</UnqTxIdr></UnqIdr></TxId></RcncltnRpt>
+        </TxDtls>
+      </Rpt>
+      <Rpt>
+        <RefDt>2026-04-13</RefDt>
+        <RcncltnCtgrs><RptgRqrmnt>
+          <RptgTp>BOTH</RptgTp><Pairg>UNPR</Pairg><Rcncltn>NREC</Rcncltn>
+          <ValtnRcncltn>NREC</ValtnRcncltn><Rvvd>false</Rvvd><FrthrMod>false</FrthrMod>
+        </RptgRqrmnt></RcncltnCtgrs>
+        <TtlNbOfTxs>5</TtlNbOfTxs>
+        <TxDtls>
+          <CtrPtyId><RptgCtrPty><LEI>LEIA0000000000000001</LEI></RptgCtrPty></CtrPtyId>
+          <TtlNbOfTxs>5</TtlNbOfTxs>
+          <RcncltnRpt><TxId><UnqIdr><UnqTxIdr>P-A-2</UnqTxIdr></UnqIdr></TxId></RcncltnRpt>
+        </TxDtls>
+      </Rpt>
+    </RcncltnSttstcs>
+  </DerivsTradRcncltnSttstclRpt>
+</Document>

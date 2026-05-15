@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic auth.091 EMIR reconciliation-statistics report — no-activity
+  variant. Real ESMA envelope; RcncltnSttstcs carries the DataSetActn
+  "NOTX" choice instead of any Rpt. OpenDQI yields zero records plus one
+  informational EMIR.FMT.RST_NO_RECORDS note (no error).
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.091.001.02">
+  <DerivsTradRcncltnSttstclRpt>
+    <RcncltnSttstcs>
+      <DataSetActn>NOTX</DataSetActn>
+    </RcncltnSttstcs>
+  </DerivsTradRcncltnSttstclRpt>
+</Document>

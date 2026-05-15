@@ -1,50 +1,106 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Synthetic auth.091 (EMIR Reconciliation Statistics) sample.
-  Schema follows the conventions documented in
-  docs/emir-recon-stats.md until the official ESMA XSD is integrated.
-  Four counterparties illustrate every EMIR.RST.* check:
-    - LEI-COUNTERPARTY-001: healthy (pairing 0.95 / recon 0.85).
-    - LEI-COUNTERPARTY-002: pairing rate below threshold (0.70).
-    - LEI-COUNTERPARTY-003: reconciliation rate below threshold (0.55).
-    - LEI-COUNTERPARTY-004: outstanding unpaired count breach (1500).
+  Synthetic ISO 20022 auth.091 EMIR Derivatives Trade Reconciliation
+  Statistical Report fixture. Hand-authored — NOT derived from, and
+  does not redistribute, any ESMA or SWIFT example or schema.
+
+  Element paths follow the real ESMA EMIR REFIT usage guideline
+  auth.091.001.02_ESMAUG_DATREC_1.0.0
+  (DerivativesTradeReconciliationStatisticalReportV02):
+  Document > DerivsTradRcncltnSttstclRpt > RcncltnSttstcs/Rpt
+  (one per RefDt × reconciliation-category cohort). Schema-shaped, not
+  a fully XSD-valid instance. See docs/auth-messages/emir-auth091.md.
+
+  auth.091 has no explicit pairing/recon rate; OpenDQI accumulates each
+  TxDtls/TtlNbOfTxs by the cohort's Pairg/Rcncltn and DERIVES one rate
+  per counterparty LEI. outstanding_* has no source -> EMIR.RST.
+  OUTSTANDING_UNPAIRED_HIGH is unreachable from real auth.091.
+
+  LEI-A: PARD/RECO 40, PARD/NREC 30, UNPR/RECO 10, UNPR/NREC 20
+         -> pairing 70/100 = 0.70 (< 0.85 -> PAIRING_RATE_LOW),
+            recon  50/100 = 0.50 (< 0.70 -> RECON_RATE_LOW).
+  LEI-B: PARD/RECO 100 -> pairing 1.00, recon 1.00 (clean).
+  LEI-C: under a NoRptgRqrmnt cohort -> no Pairg/Rcncltn, rates None
+         (proves NoRptgRqrmnt cohorts are excluded).
 -->
-<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.091.001.01">
-  <RcncltnSttstcsRpt>
-    <Hdr>
-      <RptgDt>2026-05-13</RptgDt>
-    </Hdr>
-    <ReconStat>
-      <RptgDt>2026-05-13</RptgDt>
-      <CtrPty><LEI>LEI-COUNTERPARTY-001</LEI></CtrPty>
-      <PairgRate>0.9500</PairgRate>
-      <RcncltnRate>0.8500</RcncltnRate>
-      <OutsdngPaired>10000</OutsdngPaired>
-      <OutsdngUnpaired>500</OutsdngUnpaired>
-    </ReconStat>
-    <ReconStat>
-      <RptgDt>2026-05-13</RptgDt>
-      <CtrPty><LEI>LEI-COUNTERPARTY-002</LEI></CtrPty>
-      <PairgRate>0.7000</PairgRate>
-      <RcncltnRate>0.8000</RcncltnRate>
-      <OutsdngPaired>7000</OutsdngPaired>
-      <OutsdngUnpaired>200</OutsdngUnpaired>
-    </ReconStat>
-    <ReconStat>
-      <RptgDt>2026-05-13</RptgDt>
-      <CtrPty><LEI>LEI-COUNTERPARTY-003</LEI></CtrPty>
-      <PairgRate>0.8800</PairgRate>
-      <RcncltnRate>0.5500</RcncltnRate>
-      <OutsdngPaired>8800</OutsdngPaired>
-      <OutsdngUnpaired>120</OutsdngUnpaired>
-    </ReconStat>
-    <ReconStat>
-      <RptgDt>2026-05-13</RptgDt>
-      <CtrPty><LEI>LEI-COUNTERPARTY-004</LEI></CtrPty>
-      <PairgRate>0.9100</PairgRate>
-      <RcncltnRate>0.8200</RcncltnRate>
-      <OutsdngPaired>15000</OutsdngPaired>
-      <OutsdngUnpaired>1500</OutsdngUnpaired>
-    </ReconStat>
-  </RcncltnSttstcsRpt>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.091.001.02">
+  <DerivsTradRcncltnSttstclRpt>
+    <RcncltnSttstcs>
+
+      <Rpt>
+        <RefDt>2026-05-13</RefDt>
+        <RcncltnCtgrs><RptgRqrmnt>
+          <RptgTp>BOTH</RptgTp><Pairg>PARD</Pairg><Rcncltn>RECO</Rcncltn>
+          <ValtnRcncltn>RECO</ValtnRcncltn><Rvvd>false</Rvvd><FrthrMod>false</FrthrMod>
+        </RptgRqrmnt></RcncltnCtgrs>
+        <TtlNbOfTxs>140</TtlNbOfTxs>
+        <TxDtls>
+          <CtrPtyId><RptgCtrPty><LEI>LEIA0000000000000001</LEI></RptgCtrPty></CtrPtyId>
+          <TtlNbOfTxs>40</TtlNbOfTxs>
+          <RcncltnRpt><TxId><UnqIdr><UnqTxIdr>U-A-1</UnqTxIdr></UnqIdr></TxId></RcncltnRpt>
+        </TxDtls>
+        <TxDtls>
+          <CtrPtyId><RptgCtrPty><LEI>LEIB0000000000000002</LEI></RptgCtrPty></CtrPtyId>
+          <TtlNbOfTxs>100</TtlNbOfTxs>
+          <RcncltnRpt><TxId><UnqIdr><UnqTxIdr>U-B-1</UnqTxIdr></UnqIdr></TxId></RcncltnRpt>
+        </TxDtls>
+      </Rpt>
+
+      <Rpt>
+        <RefDt>2026-05-13</RefDt>
+        <RcncltnCtgrs><RptgRqrmnt>
+          <RptgTp>BOTH</RptgTp><Pairg>PARD</Pairg><Rcncltn>NREC</Rcncltn>
+          <ValtnRcncltn>NREC</ValtnRcncltn><Rvvd>false</Rvvd><FrthrMod>false</FrthrMod>
+        </RptgRqrmnt></RcncltnCtgrs>
+        <TtlNbOfTxs>30</TtlNbOfTxs>
+        <TxDtls>
+          <CtrPtyId><RptgCtrPty><LEI>LEIA0000000000000001</LEI></RptgCtrPty></CtrPtyId>
+          <TtlNbOfTxs>30</TtlNbOfTxs>
+          <RcncltnRpt><TxId><UnqIdr><UnqTxIdr>U-A-2</UnqTxIdr></UnqIdr></TxId></RcncltnRpt>
+        </TxDtls>
+      </Rpt>
+
+      <Rpt>
+        <RefDt>2026-05-13</RefDt>
+        <RcncltnCtgrs><RptgRqrmnt>
+          <RptgTp>BOTH</RptgTp><Pairg>UNPR</Pairg><Rcncltn>RECO</Rcncltn>
+          <ValtnRcncltn>RECO</ValtnRcncltn><Rvvd>false</Rvvd><FrthrMod>false</FrthrMod>
+        </RptgRqrmnt></RcncltnCtgrs>
+        <TtlNbOfTxs>10</TtlNbOfTxs>
+        <TxDtls>
+          <CtrPtyId><RptgCtrPty><LEI>LEIA0000000000000001</LEI></RptgCtrPty></CtrPtyId>
+          <TtlNbOfTxs>10</TtlNbOfTxs>
+          <RcncltnRpt><TxId><UnqIdr><UnqTxIdr>U-A-3</UnqTxIdr></UnqIdr></TxId></RcncltnRpt>
+        </TxDtls>
+      </Rpt>
+
+      <Rpt>
+        <RefDt>2026-05-13</RefDt>
+        <RcncltnCtgrs><RptgRqrmnt>
+          <RptgTp>BOTH</RptgTp><Pairg>UNPR</Pairg><Rcncltn>NREC</Rcncltn>
+          <ValtnRcncltn>NREC</ValtnRcncltn><Rvvd>false</Rvvd><FrthrMod>false</FrthrMod>
+        </RptgRqrmnt></RcncltnCtgrs>
+        <TtlNbOfTxs>20</TtlNbOfTxs>
+        <TxDtls>
+          <CtrPtyId><RptgCtrPty><LEI>LEIA0000000000000001</LEI></RptgCtrPty></CtrPtyId>
+          <TtlNbOfTxs>20</TtlNbOfTxs>
+          <RcncltnRpt><TxId><UnqIdr><UnqTxIdr>U-A-4</UnqTxIdr></UnqIdr></TxId></RcncltnRpt>
+        </TxDtls>
+      </Rpt>
+
+      <Rpt>
+        <RefDt>2026-05-13</RefDt>
+        <RcncltnCtgrs><NoRptgRqrmnt>
+          <Rvvd>false</Rvvd><FrthrMod>false</FrthrMod>
+        </NoRptgRqrmnt></RcncltnCtgrs>
+        <TtlNbOfTxs>50</TtlNbOfTxs>
+        <TxDtls>
+          <CtrPtyId><RptgCtrPty><LEI>LEIC0000000000000003</LEI></RptgCtrPty></CtrPtyId>
+          <TtlNbOfTxs>50</TtlNbOfTxs>
+          <RcncltnRpt><TxId><UnqIdr><UnqTxIdr>U-C-1</UnqTxIdr></UnqIdr></TxId></RcncltnRpt>
+        </TxDtls>
+      </Rpt>
+
+    </RcncltnSttstcs>
+  </DerivsTradRcncltnSttstclRpt>
 </Document>
