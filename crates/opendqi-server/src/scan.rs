@@ -77,6 +77,9 @@ pub enum UiOperation {
     /// XML well-formedness validation (regime-agnostic). v1 doesn't
     /// expose an XSD picker; the schema validation remains CLI-only.
     Validate,
+    /// Book-vs-TSR reconciliation. Multi-file: `file_book` (CSV),
+    /// `file_tsr` (auth.107/auth.079 XML), `file_mapping` (YAML).
+    BookReconcile,
 }
 
 impl UiOperation {
@@ -90,6 +93,7 @@ impl UiOperation {
             "mar-scan" | "mar_scan" => Some(Self::MarScan),
             "msr-scan" | "msr_scan" => Some(Self::MsrScan),
             "validate" => Some(Self::Validate),
+            "book-reconcile" | "book_reconcile" => Some(Self::BookReconcile),
             _ => None,
         }
     }
@@ -104,6 +108,7 @@ impl UiOperation {
             Self::MarScan => "mar-scan",
             Self::MsrScan => "msr-scan",
             Self::Validate => "validate",
+            Self::BookReconcile => "book-reconcile",
         }
     }
 }
@@ -162,7 +167,137 @@ pub fn run_server_operation(
             )),
         },
         UiOperation::Validate => run_validate_server(input, regime, out_dir),
+        UiOperation::BookReconcile => Err(anyhow!(
+            "book-reconcile is multi-file; route via run_server_dispatch"
+        )),
     }
+}
+
+/// Multi-file aware entry point. `saved` maps each multipart field
+/// name to the file path it was written to in `out_dir`. Single-file
+/// operations consume the `file` entry; `BookReconcile` consumes
+/// `file_book` / `file_tsr` / `file_mapping`.
+pub fn run_server_dispatch(
+    saved: &std::collections::BTreeMap<String, PathBuf>,
+    regime: UiRegime,
+    operation: UiOperation,
+    out_dir: &Path,
+) -> Result<ScanArtifacts> {
+    match operation {
+        UiOperation::BookReconcile => {
+            let book = saved
+                .get("file_book")
+                .ok_or_else(|| anyhow!("book-reconcile requires a `file_book` (CSV) upload"))?;
+            let tsr = saved
+                .get("file_tsr")
+                .ok_or_else(|| anyhow!("book-reconcile requires a `file_tsr` (XML) upload"))?;
+            let mapping = saved
+                .get("file_mapping")
+                .ok_or_else(|| anyhow!("book-reconcile requires a `file_mapping` (YAML) upload"))?;
+            match regime {
+                UiRegime::Emir => run_emir_book_reconcile_server(book, tsr, mapping, out_dir),
+                UiRegime::Sftr => run_sftr_book_reconcile_server(book, tsr, mapping, out_dir),
+            }
+        }
+        _ => {
+            // Single-file operations: take the `file` part (fall back
+            // to the sole uploaded file if the field was named
+            // differently).
+            let input = saved
+                .get("file")
+                .or_else(|| saved.values().next())
+                .ok_or_else(|| anyhow!("no input file uploaded"))?;
+            run_server_operation(input, regime, operation, out_dir)
+        }
+    }
+}
+
+fn run_emir_book_reconcile_server(
+    book: &Path,
+    tsr: &Path,
+    mapping: &Path,
+    out_dir: &Path,
+) -> Result<ScanArtifacts> {
+    use opendqi_core::dq::compute_book_reconcile_issues;
+    use opendqi_io::{read_emir_csv, CsvMapping};
+    use opendqi_xml::read_emir_tr_state_xml;
+
+    let started_at = Utc::now();
+    let map = CsvMapping::from_path(mapping)
+        .with_context(|| format!("loading mapping {}", mapping.display()))?;
+    let book_records = read_emir_csv(book, &map)
+        .with_context(|| format!("reading book CSV {}", book.display()))?;
+    let tsr_outcome =
+        read_emir_tr_state_xml(tsr).with_context(|| format!("reading TSR {}", tsr.display()))?;
+
+    let mut issues = tsr_outcome.issues;
+    issues.extend(compute_book_reconcile_issues(
+        &book_records,
+        &tsr_outcome.records,
+    ));
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: Utc::now().date_naive(),
+        now: Utc::now(),
+    };
+    finalize_issues(&mut issues, &ctx);
+    finalize_artifacts(
+        out_dir,
+        Regime::Emir,
+        UiRegime::Emir,
+        book_records.len() as u32,
+        &issues,
+        &[
+            book.to_string_lossy().into_owned(),
+            tsr.to_string_lossy().into_owned(),
+        ],
+        started_at,
+        Utc::now(),
+    )
+}
+
+fn run_sftr_book_reconcile_server(
+    book: &Path,
+    tsr: &Path,
+    mapping: &Path,
+    out_dir: &Path,
+) -> Result<ScanArtifacts> {
+    use opendqi_core::dq::compute_sftr_book_reconcile_issues;
+    use opendqi_io::{read_sftr_csv, CsvMapping};
+    use opendqi_xml::read_sftr_tr_state_xml;
+
+    let started_at = Utc::now();
+    let map = CsvMapping::from_path(mapping)
+        .with_context(|| format!("loading mapping {}", mapping.display()))?;
+    let book_records = read_sftr_csv(book, &map)
+        .with_context(|| format!("reading SFT book CSV {}", book.display()))?;
+    let tsr_outcome = read_sftr_tr_state_xml(tsr)
+        .with_context(|| format!("reading SFTR TSR {}", tsr.display()))?;
+
+    let mut issues = tsr_outcome.issues;
+    issues.extend(compute_sftr_book_reconcile_issues(
+        &book_records,
+        &tsr_outcome.records,
+    ));
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: Utc::now().date_naive(),
+        now: Utc::now(),
+    };
+    finalize_issues(&mut issues, &ctx);
+    finalize_artifacts(
+        out_dir,
+        Regime::Sftr,
+        UiRegime::Sftr,
+        book_records.len() as u32,
+        &issues,
+        &[
+            book.to_string_lossy().into_owned(),
+            tsr.to_string_lossy().into_owned(),
+        ],
+        started_at,
+        Utc::now(),
+    )
 }
 
 /// Run a scan over the uploaded `input` file and write the report

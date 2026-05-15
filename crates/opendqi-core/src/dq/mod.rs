@@ -1208,6 +1208,15 @@ pub fn run_all_pre_submission(
     issues
 }
 
+// ---- Book vs TSR reconciliation (shared CLI + web UI) ----------
+
+mod book_reconcile;
+
+pub use book_reconcile::{
+    compute_book_reconcile_issues, compute_sftr_book_reconcile_issues, valuation_within_tolerance,
+    value_within_tolerance, BOOK_VALUATION_TOLERANCE_PCT, SFTR_BOOK_VALUE_TOLERANCE_PCT,
+};
+
 // ---- SFTR pre-submission checks (rejection-profile driven) ------
 
 pub use sftr::pre_submission::{

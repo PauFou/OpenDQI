@@ -14,6 +14,7 @@
       <option value="mar-scan">Margin Activity Report (auth.108 — EMIR only)</option>
       <option value="msr-scan">Margin State Report (auth.109 — EMIR only)</option>
       <option value="validate">Validate (XML well-formedness only — XSD via CLI)</option>
+      <option value="book-reconcile">Book vs TSR reconciliation (multi-file)</option>
     </select>
 
     <label for="regime">Regime</label>
@@ -22,16 +23,26 @@
       <option value="sftr">SFTR</option>
     </select>
 
-    <label for="file">File</label>
-    <input id="file" name="file" type="file" accept=".xml,.parquet" required>
+    <label for="file">File <span style="color:var(--muted);font-weight:400;">(single-file operations)</span></label>
+    <input id="file" name="file" type="file" accept=".xml,.parquet">
 
-    <button type="submit">Run</button>
+    <fieldset style="margin-top:1rem;border:1px solid #e5e7eb;border-radius:0.4rem;padding:0.75rem;">
+      <legend style="font-size:0.8rem;color:var(--muted);">Book vs TSR reconciliation only</legend>
+      <label for="file_book">Book export (CSV)</label>
+      <input id="file_book" name="file_book" type="file" accept=".csv">
+      <label for="file_tsr">TSR (auth.107 EMIR / auth.079 SFTR XML)</label>
+      <input id="file_tsr" name="file_tsr" type="file" accept=".xml">
+      <label for="file_mapping">CSV mapping (YAML)</label>
+      <input id="file_mapping" name="file_mapping" type="file" accept=".yml,.yaml">
+    </fieldset>
+
+    <button type="submit" style="margin-top:1rem;">Run</button>
   </form>
   <p style="margin-top:1.5rem;font-size:0.9rem;color:var(--muted);">
-    The TR-state-scan and recon-stats operations always expect an XML
-    file. Other CLI flows (CSV scans with YAML mapping, feedback,
-    tr-audit, book-reconcile) remain CLI-only for now — see
-    <code>opendqi emir --help</code>.
+    Single-file operations use the <strong>File</strong> picker.
+    <strong>Book vs TSR reconciliation</strong> uses the three fields
+    in the box (book CSV + TSR XML + mapping YAML). <code>tr-audit</code>
+    remains CLI-only — see <code>opendqi emir --help</code>.
   </p>
 </section>
 {% endblock %}

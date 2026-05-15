@@ -10,7 +10,7 @@ use minijinja::context;
 use serde_json::json;
 
 use crate::scan::{
-    new_scan_dir, run_server_operation, sanitize_upload_filename, UiOperation, UiRegime,
+    new_scan_dir, run_server_dispatch, sanitize_upload_filename, UiOperation, UiRegime,
 };
 use crate::state::AppState;
 
@@ -30,10 +30,14 @@ pub async fn scan(
     State(state): State<Arc<AppState>>,
     mut multipart: Multipart,
 ) -> Result<Response, AppError> {
+    use std::collections::BTreeMap;
+
     let mut regime: Option<UiRegime> = None;
     let mut operation: UiOperation = UiOperation::Scan;
-    let mut upload_name: Option<String> = None;
-    let mut upload_bytes: Option<Vec<u8>> = None;
+    // Every file part, keyed by its form field name (`file`,
+    // `file_book`, `file_tsr`, `file_mapping`, `file_tar`,
+    // `file_feedback`). Value = (sanitized filename, bytes).
+    let mut files: BTreeMap<String, (String, Vec<u8>)> = BTreeMap::new();
 
     while let Some(field) = multipart
         .next_field()
@@ -57,13 +61,18 @@ pub async fn scan(
                 operation = UiOperation::parse(&v)
                     .ok_or_else(|| AppError::bad_request(format!("invalid operation '{v}'")))?;
             }
-            "file" => {
-                upload_name = field.file_name().map(sanitize_upload_filename);
+            n if n == "file" || n.starts_with("file_") => {
+                let fname = field
+                    .file_name()
+                    .map(sanitize_upload_filename)
+                    .unwrap_or_else(|| "upload.bin".to_string());
                 let bytes = field
                     .bytes()
                     .await
-                    .map_err(|e| AppError::bad_request(format!("reading file: {e}")))?;
-                upload_bytes = Some(bytes.to_vec());
+                    .map_err(|e| AppError::bad_request(format!("reading {n}: {e}")))?;
+                if !bytes.is_empty() {
+                    files.insert(n.to_string(), (fname, bytes.to_vec()));
+                }
             }
             _ => {
                 // Drain unknown fields silently.
@@ -73,17 +82,22 @@ pub async fn scan(
     }
 
     let regime = regime.ok_or_else(|| AppError::bad_request("missing or invalid regime"))?;
-    let upload_name = upload_name.ok_or_else(|| AppError::bad_request("missing file upload"))?;
-    let upload_bytes = upload_bytes.ok_or_else(|| AppError::bad_request("missing file payload"))?;
-    if upload_bytes.is_empty() {
-        return Err(AppError::bad_request("uploaded file is empty"));
+    if files.is_empty() {
+        return Err(AppError::bad_request("no file uploaded"));
     }
 
     let (scan_id, scan_dir) =
         new_scan_dir(&state.temp_root).map_err(|e| AppError::server_error(e.to_string()))?;
-    let input_path = scan_dir.join(&upload_name);
-    std::fs::write(&input_path, &upload_bytes)
-        .map_err(|e| AppError::server_error(format!("saving upload: {e}")))?;
+
+    // Persist every uploaded part into the scan dir, building a
+    // field-name -> saved-path map.
+    let mut saved: BTreeMap<String, std::path::PathBuf> = BTreeMap::new();
+    for (field_name, (fname, bytes)) in &files {
+        let dest = scan_dir.join(fname);
+        std::fs::write(&dest, bytes)
+            .map_err(|e| AppError::server_error(format!("saving {field_name}: {e}")))?;
+        saved.insert(field_name.clone(), dest);
+    }
 
     // Run the scan synchronously. We hand off blocking work to a
     // tokio task-blocking thread so the runtime stays responsive.
@@ -91,7 +105,7 @@ pub async fn scan(
     let regime_copy = regime;
     let op_copy = operation;
     let artifacts = tokio::task::spawn_blocking(move || {
-        run_server_operation(&input_path, regime_copy, op_copy, &dir_for_task)
+        run_server_dispatch(&saved, regime_copy, op_copy, &dir_for_task)
     })
     .await
     .map_err(|e| AppError::server_error(format!("scan task panicked: {e}")))?
@@ -109,7 +123,7 @@ pub async fn scan(
         "issues_high": artifacts.issues_high,
         "quality_score": artifacts.quality_score,
         "artifacts": artifacts.artifact_files,
-        "upload_name": upload_name,
+        "upload_name": files.keys().cloned().collect::<Vec<_>>().join(", "),
     });
     std::fs::write(
         &sidecar,

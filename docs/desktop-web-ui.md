@@ -24,7 +24,13 @@ The browser opens to a minimal upload form:
   - *Margin State Report* — auth.109 (EMIR only).
   - *Validate* — XML well-formedness only. XSD schema validation
     remains CLI-only (`opendqi {emir,sftr} validate --xsd <path>`).
+  - *Book vs TSR reconciliation* — **multi-file**: book CSV +
+    TSR XML (auth.107 EMIR / auth.079 SFTR) + CSV mapping YAML,
+    uploaded via the three fields in the dedicated form box.
 - **Regime** — EMIR or SFTR.
+- **File / multi-file** — single-file operations use the `File`
+  picker; book-reconcile uses the three fields in its box. `tr-audit`
+  (3 files + optional store) stays CLI-only.
 - **File** — drop or pick an `.xml` or `.parquet` file.
 - **Run** — submits to `POST /api/scan` carrying the chosen operation
   in the multipart form.

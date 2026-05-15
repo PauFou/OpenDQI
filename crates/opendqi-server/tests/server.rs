@@ -383,3 +383,61 @@ async fn post_scan_with_recon_stats_emir_succeeds() {
     let resp = app.oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::SEE_OTHER);
 }
+
+#[tokio::test]
+async fn post_scan_with_book_reconcile_emir_succeeds() {
+    let app = build_router();
+    let book =
+        std::fs::read("../../examples/emir/book_reconcile/book.csv").expect("book.csv fixture");
+    let mapping = std::fs::read("../../examples/emir/book_reconcile/book_mapping.yml")
+        .expect("book_mapping.yml fixture");
+    let tsr =
+        std::fs::read("../../examples/emir/tr_state/auth107-sample.xml").expect("auth107 fixture");
+    let boundary = "------OpenDqiTestBoundary";
+    let mut body = Vec::new();
+    let part = |b: &mut Vec<u8>, field: &str, filename: &str, ctype: &str, data: &[u8]| {
+        b.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+        b.extend_from_slice(
+            format!(
+                "Content-Disposition: form-data; name=\"{field}\"; filename=\"{filename}\"\r\nContent-Type: {ctype}\r\n\r\n"
+            )
+            .as_bytes(),
+        );
+        b.extend_from_slice(data);
+        b.extend_from_slice(b"\r\n");
+    };
+    body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+    body.extend_from_slice(
+        b"Content-Disposition: form-data; name=\"operation\"\r\n\r\nbook-reconcile\r\n",
+    );
+    body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+    body.extend_from_slice(b"Content-Disposition: form-data; name=\"regime\"\r\n\r\nemir\r\n");
+    part(&mut body, "file_book", "book.csv", "text/csv", &book);
+    part(
+        &mut body,
+        "file_tsr",
+        "auth107.xml",
+        "application/xml",
+        &tsr,
+    );
+    part(
+        &mut body,
+        "file_mapping",
+        "book_mapping.yml",
+        "text/yaml",
+        &mapping,
+    );
+    body.extend_from_slice(format!("--{boundary}--\r\n").as_bytes());
+
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri("/api/scan")
+        .header(
+            header::CONTENT_TYPE,
+            format!("multipart/form-data; boundary={boundary}"),
+        )
+        .body(Body::from(body))
+        .unwrap();
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+}
