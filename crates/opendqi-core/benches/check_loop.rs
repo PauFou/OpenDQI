@@ -1,5 +1,5 @@
-//! Benchmarks the check loop (`run_all` / `run_all_sftr`) at 1k and
-//! 10k synthetic records. Run with:
+//! Benchmarks the check loop (`run_all` / `run_all_sftr`) at 1k, 10k,
+//! and 100k synthetic records. Run with:
 //!
 //! ```text
 //! cargo bench -p opendqi-core --bench check_loop
@@ -58,6 +58,16 @@ fn gen_synthetic_emir(n: usize) -> Vec<EmirRecord> {
             nature: Some(if i % 3 == 0 { "FC" } else { "NFC" }.into()),
             master_agreement_type: Some("ISDA".into()),
             master_agreement_version: Some("2002".into()),
+            price: Some(Decimal::new(10_025, 2)),
+            price_currency: Some("EUR".into()),
+            collateralisation_category: Some("FCOL".into()),
+            collateral_portfolio_code: Some(format!("PF-{:04}", i % 50)),
+            initial_margin_posted: Some(notional / Decimal::from(20)),
+            initial_margin_collected: Some(notional / Decimal::from(20)),
+            variation_margin_posted: Some(notional / Decimal::from(50)),
+            variation_margin_collected: Some(notional / Decimal::from(50)),
+            trading_capacity: Some(if i % 2 == 0 { "PRIN" } else { "AGEN" }.into()),
+            intragroup_indicator: Some(i % 7 == 0),
             ..Default::default()
         });
     }
@@ -94,6 +104,10 @@ fn gen_synthetic_sftr(n: usize) -> Vec<SftrRecord> {
             settlement_date: NaiveDate::from_ymd_opt(2026, 1, 16),
             master_agreement_type: Some("GMRA".into()),
             master_agreement_version: Some("2011".into()),
+            collateral_portfolio_code: Some(format!("SFTPF-{:04}", i % 50)),
+            reuse_indicator: Some(i % 4 == 0),
+            rebate_rate: Some(Decimal::new(15, 4)),
+            lending_fee: Some(Decimal::new(25, 4)),
             ..Default::default()
         });
     }
@@ -104,7 +118,7 @@ fn bench_emir(c: &mut Criterion) {
     let checks = default_checks();
     let ctx = ctx();
     let mut group = c.benchmark_group("run_all_emir");
-    for &n in &[1_000usize, 10_000] {
+    for &n in &[1_000usize, 10_000, 100_000] {
         group.throughput(Throughput::Elements(n as u64));
         group.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, &n| {
             let records = gen_synthetic_emir(n);
@@ -118,7 +132,7 @@ fn bench_sftr(c: &mut Criterion) {
     let checks = default_sftr_checks();
     let ctx = ctx();
     let mut group = c.benchmark_group("run_all_sftr");
-    for &n in &[1_000usize, 10_000] {
+    for &n in &[1_000usize, 10_000, 100_000] {
         group.throughput(Throughput::Elements(n as u64));
         group.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, &n| {
             let records = gen_synthetic_sftr(n);
