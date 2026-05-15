@@ -48,3 +48,34 @@ jobs:
 
       - name: Test
         run: cargo test --workspace --verbose
+
+  msrv:
+    name: MSRV (1.87.0)
+    runs-on: ubuntu-latest
+    env:
+      # MSRV is a *compilation* guarantee, not a lint guarantee —
+      # older rustc may emit different warnings. Override the
+      # workflow-global `-D warnings` for this job only.
+      RUSTFLAGS: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MSRV toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          # MUST stay in sync with `rust-version` in Cargo.toml.
+          toolchain: "1.87.0"
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-msrv-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-msrv-
+
+      - name: cargo check on MSRV
+        run: cargo check --workspace --all-targets --locked

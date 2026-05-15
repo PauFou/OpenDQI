@@ -123,6 +123,8 @@ Public summary; see [`docs/positioning.md`](docs/positioning.md) for context.
 **v0.2.0.** EMIR coverage spans submissions, TSR (`auth.107`), TAR (`auth.030`), feedback (`auth.092`), reconciliation (`auth.106`), MAR (`auth.108`), MSR (`auth.109`), and reconciliation statistics (`auth.091`). SFTR coverage spans submissions (`auth.052`), TSR (`auth.079`), TAR replay, feedback (`auth.080`), reconciliation (`auth.083`), and book-vs-TSR. Margin lending (MGLD) integrated into TAR/TSR layers. 199 data-quality checks, 634 tests, the post-TR → pre-TR rejection-profile loop, email notifications on every report-producing command, structured evidence rendered in the HTML report, a **10-operation local web UI** (full CLI parity), and shell completions / man page.
 
 - **CI** — `cargo fmt --check`, `cargo clippy -D warnings`, `cargo build`, `cargo test --workspace` on Ubuntu + macOS for every push and PR to `main`.
+- **MSRV** — verified in CI: the workspace builds on Rust **1.87.0** (`cargo check --all-targets --locked`), kept in sync with `rust-version` in `Cargo.toml`.
+- **Coverage** — `cargo-llvm-cov` reports line coverage on every push/PR; surfaced on the run summary (informational, non-gating).
 - **Security audit** — `cargo-deny` runs `check advisories bans licenses sources` daily and on every push/PR.
 - **Run the same checks locally before pushing**: `./scripts/preflight.sh` (one-shot setup: `cargo install cargo-deny --locked`).
 - **Auto-run on every push**: `./scripts/install-hooks.sh` installs the pre-push git hook.

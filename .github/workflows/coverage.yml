@@ -1,0 +1,51 @@
+name: coverage
+
+# Informational only: surfaces the line-coverage percentage on the
+# run summary. NOT a gate — a hard threshold on a 199-check /
+# 634-test codebase would red-light PRs on coverage noise unrelated
+# to the change. Add `--fail-under <n>` here if a soft floor is ever
+# wanted.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  coverage:
+    name: cargo llvm-cov
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cov-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cov-
+
+      - name: Coverage summary
+        run: |
+          {
+            echo '## Coverage'
+            echo '```'
+            cargo llvm-cov --workspace --summary-only
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
