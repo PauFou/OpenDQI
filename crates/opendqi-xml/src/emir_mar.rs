@@ -1,12 +1,41 @@
 //! EMIR Margin Activity Report (MAR) ingestion — ISO 20022 `auth.108`.
-//! Streaming `NsReader` adapter; synthetic plausible structure.
-//! Adapt the leaf table below once the official SWIFT-licensed XSD is
-//! available.
+//!
+//! Element paths are aligned with the real ESMA EMIR REFIT usage
+//! guideline `auth.108.001.01_ESMAUG_DATMDA_1.1.0`
+//! (`DerivativesTradeMarginDataReportV01`). The SWIFT-licensed XSD is
+//! **not** redistributed; only the schema *shape* (element names,
+//! nesting, cardinalities) is encoded here. Coverage is intentionally
+//! a documented subset — see `docs/auth-messages/emir-auth108.md`.
+//!
+//! Real envelope:
+//! ```text
+//! Document
+//! └─ DerivsTradMrgnDataRpt          (DerivativesTradeMarginDataReportV01)
+//!    ├─ RptHdr/NbRcrds
+//!    └─ TradData  (choice)
+//!       ├─ DataSetActn = "NOTX"     (empty / no-activity report)
+//!       └─ Rpt  (1..500000)         (TradeReport31Choice)
+//!          └─ MrgnUpd | Crrctn      (MarginReportData7 — wrapper = action)
+//!             ├─ RptgTmStmp , EvtDt
+//!             ├─ CtrPtyId/RptgCtrPty/Id/Lgl/Id/LEI
+//!             ├─ CtrPtyId/OthrCtrPty/IdTp/Lgl/Id/LEI
+//!             ├─ TxId/UnqTxIdr
+//!             ├─ Coll/CollPrtflCd/Prtfl/Cd , Coll/CollstnCtgy
+//!             ├─ PstdMrgnOrColl/{InitlMrgnPstdPstHrcut,
+//!             │                  VartnMrgnPstdPstHrcut, XcssCollPstd}(@Ccy)
+//!             └─ RcvdMrgnOrColl/{InitlMrgnRcvdPstHrcut,
+//!                                VartnMrgnRcvdPstHrcut, XcssCollRcvd}(@Ccy)
+//! ```
+//! "Collected" maps to the schema's *received* side; the post-haircut
+//! amounts are taken as the canonical economic values (pre-haircut →
+//! `raw_fields`). `auth.108` carries no haircut percentage and no
+//! event datetime (only an `EvtDt` date, normalised to `T00:00:00Z`).
+//! The single mapping point is `commit_leaf`.
 
 use std::path::Path;
 use std::str::FromStr;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use opendqi_core::{DqDimension, DqIssue, MarginActivityRecord, Regime, Severity};
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::name::ResolveResult;
@@ -21,12 +50,13 @@ use crate::wellformed::check_wellformedness;
 pub struct MarXmlReadOutcome {
     /// Records extracted from the file.
     pub records: Vec<MarginActivityRecord>,
-    /// File-level data-quality issues (format / namespace).
+    /// File-level data-quality / parse issues (format / namespace).
     pub issues: Vec<DqIssue>,
 }
 
 const ISO20022_AUTH_108_NS: &[u8] = b"urn:iso:std:iso:20022:tech:xsd:auth.108.001.01";
-const MARGIN_BLOCK: &str = "MrgnEvt";
+/// The repeating per-trade record element under `TradData`.
+const RPT_BLOCK: &str = "Rpt";
 
 /// Read an EMIR `auth.108` Margin Activity Report file.
 pub fn read_emir_mar_xml(path: &Path) -> anyhow::Result<MarXmlReadOutcome> {
@@ -35,19 +65,12 @@ pub fn read_emir_mar_xml(path: &Path) -> anyhow::Result<MarXmlReadOutcome> {
     if let Err(err) = check_wellformedness(path) {
         return Ok(MarXmlReadOutcome {
             records: vec![],
-            issues: vec![DqIssue {
-                check_id: "EMIR.FMT.XML_NOT_WELLFORMED".into(),
-                regime: Regime::Emir,
-                severity: Severity::Critical,
-                dimension: DqDimension::Validity,
-                record_id: None,
-                uti: None,
-                field: None,
-                value: None,
-                message: format!("XML is not well-formed: {}", err.message),
-                source_file: Some(source_label),
-                evidence: Vec::new(),
-            }],
+            issues: vec![fmt_issue(
+                "EMIR.FMT.XML_NOT_WELLFORMED",
+                Severity::Critical,
+                format!("XML is not well-formed: {}", err.message),
+                source_label,
+            )],
         });
     }
 
@@ -60,23 +83,32 @@ pub fn read_emir_mar_xml(path: &Path) -> anyhow::Result<MarXmlReadOutcome> {
                 .unwrap_or_else(|| "(none)".into());
             Ok(MarXmlReadOutcome {
                 records: vec![],
-                issues: vec![DqIssue {
-                    check_id: "EMIR.FMT.XML_UNSUPPORTED_NAMESPACE".into(),
-                    regime: Regime::Emir,
-                    severity: Severity::Warning,
-                    dimension: DqDimension::Validity,
-                    record_id: None,
-                    uti: None,
-                    field: None,
-                    value: None,
-                    message: format!(
+                issues: vec![fmt_issue(
+                    "EMIR.FMT.XML_UNSUPPORTED_NAMESPACE",
+                    Severity::Warning,
+                    format!(
                         "Root namespace is '{actual}', expected 'urn:iso:std:iso:20022:tech:xsd:auth.108.001.01'."
                     ),
-                    source_file: Some(source_label),
-                    evidence: Vec::new(),
-                }],
+                    source_label,
+                )],
             })
         }
+    }
+}
+
+fn fmt_issue(check_id: &str, severity: Severity, message: String, source_file: String) -> DqIssue {
+    DqIssue {
+        check_id: check_id.into(),
+        regime: Regime::Emir,
+        severity,
+        dimension: DqDimension::Validity,
+        record_id: None,
+        uti: None,
+        field: None,
+        value: None,
+        message,
+        source_file: Some(source_file),
+        evidence: Vec::new(),
     }
 }
 
@@ -114,6 +146,7 @@ fn parse(path: &Path) -> anyhow::Result<MarXmlReadOutcome> {
     let mut rec_depth: Option<usize> = None;
     let mut records: Vec<MarginActivityRecord> = Vec::new();
     let mut rec_index: u32 = 0;
+    let mut saw_dataset_actn = false;
 
     loop {
         match reader.read_resolved_event_into(&mut buf)? {
@@ -123,11 +156,14 @@ fn parse(path: &Path) -> anyhow::Result<MarXmlReadOutcome> {
                 text_buf.clear();
                 attrs_buf = collect_attrs(&e);
 
-                if current.is_none() && pile.last().map(String::as_str) == Some(MARGIN_BLOCK) {
+                if current.is_none()
+                    && pile.last().map(String::as_str) == Some(RPT_BLOCK)
+                    && pile.iter().any(|s| s == "TradData")
+                {
                     rec_index += 1;
                     current = Some(MarginActivityRecord {
                         source_file: Some(source_label.clone()),
-                        record_id: Some(format!("{source_label}#mrgnevt-{rec_index}")),
+                        record_id: Some(format!("{source_label}#rpt-{rec_index}")),
                         regime: Regime::Emir,
                         ..Default::default()
                     });
@@ -155,6 +191,11 @@ fn parse(path: &Path) -> anyhow::Result<MarXmlReadOutcome> {
                 let leaf_now = is_leaf.last().copied().unwrap_or(false);
                 if leaf_now {
                     let trimmed = text_buf.trim();
+                    if current.is_none()
+                        && pile.ends_with(&["TradData".into(), "DataSetActn".into()])
+                    {
+                        saw_dataset_actn = true;
+                    }
                     if let (Some(rec), Some(rdepth)) = (current.as_mut(), rec_depth) {
                         if pile.len() > rdepth {
                             commit_leaf(rec, &pile[rdepth..], trimmed, &attrs_buf);
@@ -181,12 +222,39 @@ fn parse(path: &Path) -> anyhow::Result<MarXmlReadOutcome> {
         buf.clear();
     }
 
-    Ok(MarXmlReadOutcome {
-        records,
-        issues: Vec::new(),
-    })
+    let mut issues = Vec::new();
+    if records.is_empty() && saw_dataset_actn {
+        issues.push(fmt_issue(
+            "EMIR.FMT.MAR_NO_RECORDS",
+            Severity::Info,
+            "Margin Activity Report carries TradData/DataSetActn \
+             (no-activity report); zero margin records to evaluate."
+                .to_string(),
+            source_label,
+        ));
+    }
+
+    Ok(MarXmlReadOutcome { records, issues })
 }
 
+/// True when `rel` ends with `suffix` (element-name tail match).
+fn tail(rel: &[String], suffix: &[&str]) -> bool {
+    rel.len() >= suffix.len()
+        && rel[rel.len() - suffix.len()..]
+            .iter()
+            .zip(suffix)
+            .all(|(a, b)| a == *b)
+}
+
+/// True when `seg` appears anywhere in `rel` (ancestor disambiguation).
+fn has(rel: &[String], seg: &str) -> bool {
+    rel.iter().any(|s| s == seg)
+}
+
+/// Map one leaf (path relative to the `Rpt` record) onto the canonical
+/// `MarginActivityRecord`. Real `auth.108.001.01` element paths; every
+/// other branch is intentionally not extracted (documented in
+/// `docs/auth-messages/emir-auth108.md`).
 fn commit_leaf(
     rec: &mut MarginActivityRecord,
     rel: &[String],
@@ -196,63 +264,111 @@ fn commit_leaf(
     if value.is_empty() && attrs.is_empty() {
         return;
     }
-    let path: Vec<&str> = rel.iter().map(String::as_str).collect();
     let record_id = rec.record_id.clone().unwrap_or_default();
-    match path.as_slice() {
-        ["UnqTxIdr"] => rec.uti = Some(value.to_owned()),
-        ["CtrPty1", "LEI"] => rec.counterparty_1 = Some(value.to_owned()),
-        ["CtrPty2", "LEI"] => rec.counterparty_2 = Some(value.to_owned()),
-        ["ActnTp"] => rec.action_type = Some(value.to_owned()),
-        ["EvntTp"] => rec.event_type = Some(value.to_owned()),
-        ["PrtflCd"] => rec.collateral_portfolio_code = Some(value.to_owned()),
-        ["IMPstd"] => {
-            set_decimal(&mut rec.initial_margin_posted, value, "IMPstd", &record_id);
-            if let Some(ccy) = attr_of(attrs, "Ccy") {
-                rec.margin_currency = Some(ccy.to_owned());
-            }
+
+    // Action type from the TradeReport31Choice wrapper (no free ActnTp
+    // element in auth.108): Crrctn → CORR, MrgnUpd → MRGN.
+    if rec.action_type.is_none() {
+        if has(rel, "Crrctn") {
+            rec.action_type = Some("CORR".to_owned());
+        } else if has(rel, "MrgnUpd") {
+            rec.action_type = Some("MRGN".to_owned());
         }
-        ["IMColl"] => {
-            set_decimal(
-                &mut rec.initial_margin_collected,
-                value,
-                "IMColl",
-                &record_id,
-            );
-            if let Some(ccy) = attr_of(attrs, "Ccy") {
-                rec.margin_currency = Some(ccy.to_owned());
-            }
+    }
+
+    if tail(rel, &["TxId", "UnqTxIdr"]) || tail(rel, &["TxId", "Prtry", "Id"]) {
+        if rec.uti.is_none() && !value.is_empty() {
+            rec.uti = Some(value.to_owned());
         }
-        ["VMPstd"] => {
-            set_decimal(
-                &mut rec.variation_margin_posted,
-                value,
-                "VMPstd",
-                &record_id,
-            );
-            if let Some(ccy) = attr_of(attrs, "Ccy") {
-                rec.margin_currency = Some(ccy.to_owned());
-            }
-        }
-        ["VMColl"] => {
-            set_decimal(
-                &mut rec.variation_margin_collected,
-                value,
-                "VMColl",
-                &record_id,
-            );
-            if let Some(ccy) = attr_of(attrs, "Ccy") {
-                rec.margin_currency = Some(ccy.to_owned());
-            }
-        }
-        ["XcssColl"] => set_decimal(&mut rec.excess_collateral, value, "XcssColl", &record_id),
-        ["Hrcut"] => set_decimal(&mut rec.collateral_haircut, value, "Hrcut", &record_id),
-        ["EvntDtTm"] => set_datetime(&mut rec.event_timestamp, value, "EvntDtTm", &record_id),
-        ["RptgDtTm"] => set_datetime(&mut rec.reporting_timestamp, value, "RptgDtTm", &record_id),
-        _ => {
-            let key = rel.join("/");
-            if !value.is_empty() {
-                rec.raw_fields.insert(key, value.to_owned());
-            }
+        return;
+    }
+    if tail(rel, &["LEI"]) && has(rel, "RptgCtrPty") {
+        rec.counterparty_1 = Some(value.to_owned());
+        return;
+    }
+    if tail(rel, &["LEI"]) && has(rel, "OthrCtrPty") {
+        rec.counterparty_2 = Some(value.to_owned());
+        return;
+    }
+    if rel.last().map(String::as_str) == Some("RptgTmStmp") {
+        set_dt(
+            &mut rec.reporting_timestamp,
+            value,
+            "RptgTmStmp",
+            &record_id,
+        );
+        return;
+    }
+    if rel.last().map(String::as_str) == Some("EvtDt") {
+        // auth.108 carries an event *date*, not a datetime; normalise
+        // to midnight UTC so EMIR.MAR.TIMELINESS stays functional.
+        set_date_as_dt(&mut rec.event_timestamp, value, "EvtDt", &record_id);
+        return;
+    }
+    if tail(rel, &["CollPrtflCd", "Prtfl", "Cd"]) {
+        rec.collateral_portfolio_code = Some(value.to_owned());
+        return;
+    }
+    if tail(rel, &["CollPrtflCd", "Prtfl", "NoPrtfl"]) {
+        return;
+    }
+    if tail(rel, &["InitlMrgnPstdPstHrcut"]) {
+        set_decimal(
+            &mut rec.initial_margin_posted,
+            value,
+            "InitlMrgnPstdPstHrcut",
+            &record_id,
+        );
+        set_ccy(&mut rec.margin_currency, attrs);
+        return;
+    }
+    if tail(rel, &["InitlMrgnRcvdPstHrcut"]) {
+        set_decimal(
+            &mut rec.initial_margin_collected,
+            value,
+            "InitlMrgnRcvdPstHrcut",
+            &record_id,
+        );
+        set_ccy(&mut rec.margin_currency, attrs);
+        return;
+    }
+    if tail(rel, &["VartnMrgnPstdPstHrcut"]) {
+        set_decimal(
+            &mut rec.variation_margin_posted,
+            value,
+            "VartnMrgnPstdPstHrcut",
+            &record_id,
+        );
+        set_ccy(&mut rec.margin_currency, attrs);
+        return;
+    }
+    if tail(rel, &["VartnMrgnRcvdPstHrcut"]) {
+        set_decimal(
+            &mut rec.variation_margin_collected,
+            value,
+            "VartnMrgnRcvdPstHrcut",
+            &record_id,
+        );
+        set_ccy(&mut rec.margin_currency, attrs);
+        return;
+    }
+    if tail(rel, &["XcssCollPstd"]) || tail(rel, &["XcssCollRcvd"]) {
+        set_decimal(&mut rec.excess_collateral, value, "XcssColl", &record_id);
+        set_ccy(&mut rec.margin_currency, attrs);
+        return;
+    }
+    // collateral_haircut: auth.108 has no haircut % (only pre/post
+    // haircut amounts) → never set. Pre-haircut amounts, CollstnCtgy,
+    // Coll/TmStmp and everything else are preserved verbatim.
+    if !value.is_empty() {
+        rec.raw_fields.insert(rel.join("/"), value.to_owned());
+    }
+}
+
+fn set_ccy(dst: &mut Option<String>, attrs: &[(String, String)]) {
+    if dst.is_none() {
+        if let Some(ccy) = attr_of(attrs, "Ccy") {
+            *dst = Some(ccy.to_owned());
         }
     }
 }
@@ -305,13 +421,28 @@ fn set_decimal(dst: &mut Option<Decimal>, s: &str, field: &str, record: &str) {
     }
 }
 
-fn set_datetime(dst: &mut Option<DateTime<Utc>>, s: &str, field: &str, record: &str) {
+fn set_dt(dst: &mut Option<DateTime<Utc>>, s: &str, field: &str, record: &str) {
     if s.is_empty() {
         return;
     }
     match DateTime::parse_from_rfc3339(s) {
         Ok(d) => *dst = Some(d.with_timezone(&Utc)),
         Err(e) => warn!(record = %record, field, value = s, error = %e, "could not parse datetime"),
+    }
+}
+
+/// Parse an ISO date (`YYYY-MM-DD`) and store it as midnight UTC.
+fn set_date_as_dt(dst: &mut Option<DateTime<Utc>>, s: &str, field: &str, record: &str) {
+    if s.is_empty() {
+        return;
+    }
+    match NaiveDate::parse_from_str(s, "%Y-%m-%d")
+        .ok()
+        .and_then(|d| d.and_hms_opt(0, 0, 0))
+        .map(|ndt| DateTime::<Utc>::from_naive_utc_and_offset(ndt, Utc))
+    {
+        Some(dt) => *dst = Some(dt),
+        None => warn!(record = %record, field, value = s, "could not parse date"),
     }
 }
 
@@ -325,41 +456,94 @@ mod tests {
         p
     }
 
-    #[test]
-    fn parses_two_margin_events() {
-        let body = br#"<?xml version="1.0"?>
+    const REAL_ENVELOPE: &[u8] = br#"<?xml version="1.0"?>
 <Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.108.001.01">
-  <MrgnActvtyRpt>
-    <MrgnEvt>
-      <UnqTxIdr>U1</UnqTxIdr>
-      <CtrPty1><LEI>LEI-A</LEI></CtrPty1>
-      <CtrPty2><LEI>LEI-B</LEI></CtrPty2>
-      <ActnTp>MARU</ActnTp>
-      <PrtflCd>P1</PrtflCd>
-      <IMPstd Ccy="EUR">1000000</IMPstd>
-      <VMPstd Ccy="EUR">50000</VMPstd>
-      <EvntDtTm>2026-05-12T16:00:00Z</EvntDtTm>
-      <RptgDtTm>2026-05-13T08:30:00Z</RptgDtTm>
-    </MrgnEvt>
-    <MrgnEvt>
-      <UnqTxIdr>U2</UnqTxIdr>
-      <ActnTp>MARV</ActnTp>
-      <PrtflCd>P2</PrtflCd>
-      <VMColl Ccy="USD">25000</VMColl>
-    </MrgnEvt>
-  </MrgnActvtyRpt>
+  <DerivsTradMrgnDataRpt>
+    <RptHdr><NbRcrds>2</NbRcrds></RptHdr>
+    <TradData>
+      <Rpt>
+        <MrgnUpd>
+          <RptgTmStmp>2026-05-13T08:30:00Z</RptgTmStmp>
+          <CtrPtyId>
+            <RptgCtrPty><Id><Lgl><Id><LEI>RPTGCPARTY0000000001</LEI></Id></Lgl></Id></RptgCtrPty>
+            <OthrCtrPty><IdTp><Lgl><Id><LEI>OTHRCPARTY0000000002</LEI></Id></Lgl></IdTp></OthrCtrPty>
+          </CtrPtyId>
+          <EvtDt>2026-05-12</EvtDt>
+          <TxId><UnqTxIdr>MAR-U1</UnqTxIdr></TxId>
+          <Coll>
+            <CollPrtflCd><Prtfl><Cd>PF-1</Cd></Prtfl></CollPrtflCd>
+            <CollstnCtgy>FLCL</CollstnCtgy>
+          </Coll>
+          <PstdMrgnOrColl>
+            <InitlMrgnPstdPstHrcut Ccy="EUR">1000000.00</InitlMrgnPstdPstHrcut>
+            <VartnMrgnPstdPstHrcut Ccy="EUR">50000.00</VartnMrgnPstdPstHrcut>
+          </PstdMrgnOrColl>
+        </MrgnUpd>
+      </Rpt>
+      <Rpt>
+        <Crrctn>
+          <RptgTmStmp>2026-05-13T09:00:00Z</RptgTmStmp>
+          <TxId><UnqTxIdr>MAR-U2</UnqTxIdr></TxId>
+          <Coll><CollPrtflCd><Prtfl><Cd>PF-2</Cd></Prtfl></CollPrtflCd></Coll>
+          <RcvdMrgnOrColl>
+            <VartnMrgnRcvdPstHrcut Ccy="USD">25000.00</VartnMrgnRcvdPstHrcut>
+          </RcvdMrgnOrColl>
+        </Crrctn>
+      </Rpt>
+    </TradData>
+  </DerivsTradMrgnDataRpt>
 </Document>"#;
-        let p = write_tmp("ok.xml", body);
+
+    #[test]
+    fn parses_real_auth108_envelope() {
+        let p = write_tmp("real.xml", REAL_ENVELOPE);
         let out = read_emir_mar_xml(&p).unwrap();
         std::fs::remove_file(&p).unwrap();
+        assert!(out.issues.is_empty());
         assert_eq!(out.records.len(), 2);
-        assert_eq!(out.records[0].uti.as_deref(), Some("U1"));
-        assert_eq!(out.records[0].action_type.as_deref(), Some("MARU"));
-        assert_eq!(out.records[0].margin_currency.as_deref(), Some("EUR"));
-        assert!(out.records[0].initial_margin_posted.is_some());
-        assert!(out.records[0].event_timestamp.is_some());
-        assert_eq!(out.records[1].action_type.as_deref(), Some("MARV"));
-        assert_eq!(out.records[1].margin_currency.as_deref(), Some("USD"));
+        let r0 = &out.records[0];
+        assert_eq!(r0.uti.as_deref(), Some("MAR-U1"));
+        assert_eq!(r0.counterparty_1.as_deref(), Some("RPTGCPARTY0000000001"));
+        assert_eq!(r0.counterparty_2.as_deref(), Some("OTHRCPARTY0000000002"));
+        assert_eq!(r0.action_type.as_deref(), Some("MRGN"));
+        assert_eq!(r0.margin_currency.as_deref(), Some("EUR"));
+        assert_eq!(r0.initial_margin_posted.unwrap().to_string(), "1000000.00");
+        assert_eq!(r0.variation_margin_posted.unwrap().to_string(), "50000.00");
+        assert_eq!(r0.collateral_portfolio_code.as_deref(), Some("PF-1"));
+        assert!(r0.reporting_timestamp.is_some());
+        // EvtDt (date) normalised to midnight UTC.
+        assert_eq!(
+            r0.event_timestamp.unwrap().to_rfc3339(),
+            "2026-05-12T00:00:00+00:00"
+        );
+        // No haircut % in auth.108.
+        assert!(r0.collateral_haircut.is_none());
+
+        let r1 = &out.records[1];
+        assert_eq!(r1.action_type.as_deref(), Some("CORR"));
+        assert_eq!(
+            r1.variation_margin_collected.unwrap().to_string(),
+            "25000.00"
+        );
+        assert_eq!(r1.margin_currency.as_deref(), Some("USD"));
+    }
+
+    #[test]
+    fn empty_report_no_records_info() {
+        let body = br#"<?xml version="1.0"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.108.001.01">
+  <DerivsTradMrgnDataRpt>
+    <RptHdr><NbRcrds>0</NbRcrds></RptHdr>
+    <TradData><DataSetActn>NOTX</DataSetActn></TradData>
+  </DerivsTradMrgnDataRpt>
+</Document>"#;
+        let p = write_tmp("empty.xml", body);
+        let out = read_emir_mar_xml(&p).unwrap();
+        std::fs::remove_file(&p).unwrap();
+        assert!(out.records.is_empty());
+        assert_eq!(out.issues.len(), 1);
+        assert_eq!(out.issues[0].check_id, "EMIR.FMT.MAR_NO_RECORDS");
+        assert_eq!(out.issues[0].severity, Severity::Info);
     }
 
     #[test]

@@ -1,74 +1,76 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic ISO 20022 auth.109 EMIR Margin State Report fixture.
+  Hand-authored — NOT derived from, and does not redistribute, any
+  ESMA or SWIFT example or schema.
+
+  Element paths follow the real ESMA EMIR REFIT usage guideline
+  auth.109.001.01_ESMAUG_DATMDS_1.1.0
+  (DerivativesTradeMarginDataTransactionStateReportV01):
+  Document > DerivsTradMrgnDataTxStatRpt > {RptHdr/NbRcrds,
+  TradData/Stat...}. Schema-shaped, not a fully XSD-valid instance.
+  See docs/auth-messages/emir-auth109.md.
+
+  CollstnCtgy uses the real ESMA codes (FLCL/UNCL); the
+  EMIR.MSR.COLLATERALIZATION_CATEGORY_ENUM allowed set predates them
+  ({FCOL,PCOL,UCOL,OCOL}) so that check fires on every record with a
+  category (documented limitation). EMIR.MSR.HAIRCUT_OUT_OF_RANGE is
+  unreachable: auth.109 carries no haircut percentage (documented).
+  Each <Stat> exercises one of the seven reachable EMIR.MSR.* checks.
+-->
 <Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.109.001.01">
-  <MrgnStateRpt>
-    <Hdr><StateAsOf>2026-05-13T08:00:00Z</StateAsOf></Hdr>
-    <!-- Row 1: clean record. -->
-    <MrgnStat>
-      <UnqTxIdr>UTI-MSR-001</UnqTxIdr>
-      <CtrPty1><LEI>LEI111111111111111111</LEI></CtrPty1>
-      <CtrPty2><LEI>LEI222222222222222222</LEI></CtrPty2>
-      <PrtflCd>P-001</PrtflCd>
-      <IMPstdCurr Ccy="EUR">1000000</IMPstdCurr>
-      <IMCollCurr Ccy="EUR">1050000</IMCollCurr>
-      <VMPstdCurr Ccy="EUR">50000</VMPstdCurr>
-      <CollMktVal Ccy="EUR">1100000</CollMktVal>
-      <Hrcut>0.05</Hrcut>
-      <CollstnCtgy>FCOL</CollstnCtgy>
-    </MrgnStat>
-    <!-- Row 2: negative IM (INITIAL_MARGIN_NEGATIVE). -->
-    <MrgnStat>
-      <UnqTxIdr>UTI-MSR-002</UnqTxIdr>
-      <PrtflCd>P-002</PrtflCd>
-      <IMPstdCurr Ccy="EUR">-1000</IMPstdCurr>
-      <CollstnCtgy>FCOL</CollstnCtgy>
-    </MrgnStat>
-    <!-- Row 3: negative VM (VARIATION_MARGIN_NEGATIVE). -->
-    <MrgnStat>
-      <UnqTxIdr>UTI-MSR-003</UnqTxIdr>
-      <PrtflCd>P-003</PrtflCd>
-      <IMPstdCurr Ccy="EUR">100000</IMPstdCurr>
-      <VMCollCurr Ccy="EUR">-500</VMCollCurr>
-      <CollstnCtgy>FCOL</CollstnCtgy>
-    </MrgnStat>
-    <!-- Row 4: negative collateral market value
-                 (COLLATERAL_MARKET_VALUE_NEGATIVE). -->
-    <MrgnStat>
-      <UnqTxIdr>UTI-MSR-004</UnqTxIdr>
-      <PrtflCd>P-004</PrtflCd>
-      <IMPstdCurr Ccy="EUR">100000</IMPstdCurr>
-      <CollMktVal Ccy="EUR">-1</CollMktVal>
-      <CollstnCtgy>FCOL</CollstnCtgy>
-    </MrgnStat>
-    <!-- Row 5: outstanding with no margin (MARGIN_MISSING_FOR_OUTSTANDING). -->
-    <MrgnStat>
-      <UnqTxIdr>UTI-MSR-005</UnqTxIdr>
-      <PrtflCd>P-005</PrtflCd>
-      <CollstnCtgy>FCOL</CollstnCtgy>
-    </MrgnStat>
-    <!-- Row 6: haircut > 1 (HAIRCUT_OUT_OF_RANGE). -->
-    <MrgnStat>
-      <UnqTxIdr>UTI-MSR-006</UnqTxIdr>
-      <PrtflCd>P-006</PrtflCd>
-      <IMPstdCurr Ccy="EUR">100000</IMPstdCurr>
-      <Hrcut>1.5</Hrcut>
-      <CollstnCtgy>FCOL</CollstnCtgy>
-    </MrgnStat>
-    <!-- Row 7: invalid collateralisation category
-                 (COLLATERALIZATION_CATEGORY_ENUM). -->
-    <MrgnStat>
-      <UnqTxIdr>UTI-MSR-007</UnqTxIdr>
-      <PrtflCd>P-007</PrtflCd>
-      <IMPstdCurr Ccy="EUR">100000</IMPstdCurr>
-      <CollstnCtgy>XCOL</CollstnCtgy>
-    </MrgnStat>
-    <!-- Row 8: IM posted/collected imbalance > 10%
-                 (IM_POSTED_VS_COLLECTED_IMBALANCE). -->
-    <MrgnStat>
-      <UnqTxIdr>UTI-MSR-008</UnqTxIdr>
-      <PrtflCd>P-008</PrtflCd>
-      <IMPstdCurr Ccy="EUR">100000</IMPstdCurr>
-      <IMCollCurr Ccy="EUR">200000</IMCollCurr>
-      <CollstnCtgy>FCOL</CollstnCtgy>
-    </MrgnStat>
-  </MrgnStateRpt>
+  <DerivsTradMrgnDataTxStatRpt>
+    <RptHdr><NbRcrds>6</NbRcrds></RptHdr>
+    <TradData>
+
+      <!-- 1. Negative posted initial margin -> INITIAL_MARGIN_NEGATIVE. -->
+      <Stat>
+        <CtrPtyId>
+          <RptgCtrPty><Id><Lgl><Id><LEI>RPTGCPARTY0000000001</LEI></Id></Lgl></Id></RptgCtrPty>
+          <OthrCtrPty><IdTp><Lgl><Id><LEI>OTHRCPARTY0000000002</LEI></Id></Lgl></IdTp></OthrCtrPty>
+        </CtrPtyId>
+        <TxId><UnqTxIdr>OPENDQI-MSR-NEGIM-0001</UnqTxIdr></TxId>
+        <Coll><CollPrtflCd><Prtfl><Cd>PF-1</Cd></Prtfl></CollPrtflCd><CollstnCtgy>FLCL</CollstnCtgy></Coll>
+        <PstdMrgnOrColl><InitlMrgnPstdPstHrcut Ccy="EUR">-100000.00</InitlMrgnPstdPstHrcut></PstdMrgnOrColl>
+      </Stat>
+
+      <!-- 2. Negative posted variation margin -> VARIATION_MARGIN_NEGATIVE. -->
+      <Stat>
+        <TxId><UnqTxIdr>OPENDQI-MSR-NEGVM-0002</UnqTxIdr></TxId>
+        <Coll><CollPrtflCd><Prtfl><Cd>PF-2</Cd></Prtfl></CollPrtflCd><CollstnCtgy>UNCL</CollstnCtgy></Coll>
+        <PstdMrgnOrColl><VartnMrgnPstdPstHrcut Ccy="EUR">-50000.00</VartnMrgnPstdPstHrcut></PstdMrgnOrColl>
+      </Stat>
+
+      <!-- 3. Negative received excess collateral -> COLLATERAL_MARKET_VALUE_NEGATIVE. -->
+      <Stat>
+        <TxId><UnqTxIdr>OPENDQI-MSR-NEGCMV-0003</UnqTxIdr></TxId>
+        <Coll><CollPrtflCd><Prtfl><Cd>PF-3</Cd></Prtfl></CollPrtflCd><CollstnCtgy>FLCL</CollstnCtgy></Coll>
+        <RcvdMrgnOrColl><XcssCollRcvd Ccy="EUR">-10000.00</XcssCollRcvd></RcvdMrgnOrColl>
+      </Stat>
+
+      <!-- 4. Old per-record RptgTmStmp -> MARGIN_STALE. -->
+      <Stat>
+        <RptgTmStmp>2024-01-01T00:00:00Z</RptgTmStmp>
+        <TxId><UnqTxIdr>OPENDQI-MSR-STALE-0004</UnqTxIdr></TxId>
+        <Coll><CollPrtflCd><Prtfl><Cd>PF-4</Cd></Prtfl></CollPrtflCd><CollstnCtgy>FLCL</CollstnCtgy></Coll>
+        <PstdMrgnOrColl><InitlMrgnPstdPstHrcut Ccy="EUR">500000.00</InitlMrgnPstdPstHrcut></PstdMrgnOrColl>
+      </Stat>
+
+      <!-- 5. UTI present, no margin amounts -> MARGIN_MISSING_FOR_OUTSTANDING. -->
+      <Stat>
+        <TxId><UnqTxIdr>OPENDQI-MSR-NOMRGN-0005</UnqTxIdr></TxId>
+        <Coll><CollPrtflCd><Prtfl><Cd>PF-5</Cd></Prtfl></CollPrtflCd><CollstnCtgy>UNCL</CollstnCtgy></Coll>
+      </Stat>
+
+      <!-- 6. IM posted 1,000,000 vs received 100,000 (>10% gap) ->
+           IM_POSTED_VS_COLLECTED_IMBALANCE. -->
+      <Stat>
+        <TxId><UnqTxIdr>OPENDQI-MSR-IMBAL-0006</UnqTxIdr></TxId>
+        <Coll><CollPrtflCd><Prtfl><Cd>PF-6</Cd></Prtfl></CollPrtflCd><CollstnCtgy>FLCL</CollstnCtgy></Coll>
+        <PstdMrgnOrColl><InitlMrgnPstdPstHrcut Ccy="EUR">1000000.00</InitlMrgnPstdPstHrcut></PstdMrgnOrColl>
+        <RcvdMrgnOrColl><InitlMrgnRcvdPstHrcut Ccy="EUR">100000.00</InitlMrgnRcvdPstHrcut></RcvdMrgnOrColl>
+      </Stat>
+
+    </TradData>
+  </DerivsTradMrgnDataTxStatRpt>
 </Document>

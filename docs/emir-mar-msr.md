@@ -65,6 +65,9 @@ co-exist in the same `--out` directory:
   check + two unit tests (positive + negative).
 - The XML adapters are the canonical reference for the supported
   leaf table (`crates/opendqi-xml/src/emir_mar.rs`,
-  `emir_msr.rs`). They use the same plausible-synthetic strategy as
-  the other auth.* layers and will be adapted to ESMA's licensed
-  XSD as it becomes available.
+  `emir_msr.rs`). Their element paths are aligned with the real ESMA
+  EMIR REFIT usage guidelines `auth.108.001.01_ESMAUG_DATMDA_1.1.0`
+  and `auth.109.001.01_ESMAUG_DATMDS_1.1.0` — extracted-subset map,
+  ignored branches and documented limitations in
+  [`auth-messages/emir-auth108.md`](auth-messages/emir-auth108.md)
+  and [`auth-messages/emir-auth109.md`](auth-messages/emir-auth109.md).

@@ -1,7 +1,37 @@
 //! EMIR Margin State Report (MSR) ingestion — ISO 20022 `auth.109`.
-//! Streaming `NsReader` adapter; synthetic plausible structure.
-//! Adapt the leaf table below once the official SWIFT-licensed XSD is
-//! available.
+//!
+//! Element paths are aligned with the real ESMA EMIR REFIT usage
+//! guideline `auth.109.001.01_ESMAUG_DATMDS_1.1.0`
+//! (`DerivativesTradeMarginDataTransactionStateReportV01`). The
+//! SWIFT-licensed XSD is **not** redistributed; only the schema
+//! *shape* is encoded here. Coverage is intentionally a documented
+//! subset — see `docs/auth-messages/emir-auth109.md`.
+//!
+//! Real envelope:
+//! ```text
+//! Document
+//! └─ DerivsTradMrgnDataTxStatRpt   (…TradeMarginDataTransactionStateReportV01)
+//!    ├─ RptHdr/NbRcrds
+//!    └─ TradData  (choice)
+//!       ├─ DataSetActn = "NOTX"     (empty / no-activity report)
+//!       └─ Stat  (1..500000)        (MarginReportData8)
+//!          ├─ RptgTmStmp            (per-record "state as of"; optional)
+//!          ├─ CtrPtyId/RptgCtrPty/Id/Lgl/Id/LEI
+//!          ├─ CtrPtyId/OthrCtrPty/IdTp/Lgl/Id/LEI
+//!          ├─ TxId/UnqTxIdr
+//!          ├─ Coll/CollPrtflCd/Prtfl/Cd , Coll/CollstnCtgy
+//!          ├─ PstdMrgnOrColl/{InitlMrgnPstdPstHrcut,
+//!          │                  VartnMrgnPstdPstHrcut, XcssCollPstd}(@Ccy)
+//!          ├─ RcvdMrgnOrColl/{InitlMrgnRcvdPstHrcut,
+//!          │                  VartnMrgnRcvdPstHrcut, XcssCollRcvd}(@Ccy)
+//!          └─ CtrctMod/ActnTp
+//! ```
+//! Like `auth.107`, the header is only `NbRcrds` (no `StateAsOf`);
+//! `state_as_of` is sourced per record from `RptgTmStmp`. "Collected"
+//! maps to the schema's *received* side; post-haircut amounts are the
+//! canonical economic values. `auth.109` carries no haircut percentage
+//! (`haircut_applied` stays `None`). The single mapping point is
+//! `commit_leaf`.
 
 use std::path::Path;
 use std::str::FromStr;
@@ -21,12 +51,13 @@ use crate::wellformed::check_wellformedness;
 pub struct MsrXmlReadOutcome {
     /// Records extracted from the file.
     pub records: Vec<MarginStateRecord>,
-    /// File-level data-quality issues (format / namespace).
+    /// File-level data-quality / parse issues (format / namespace).
     pub issues: Vec<DqIssue>,
 }
 
 const ISO20022_AUTH_109_NS: &[u8] = b"urn:iso:std:iso:20022:tech:xsd:auth.109.001.01";
-const MARGIN_BLOCK: &str = "MrgnStat";
+/// The repeating per-trade record element under `TradData`.
+const STAT_BLOCK: &str = "Stat";
 
 /// Read an EMIR `auth.109` Margin State Report file.
 pub fn read_emir_msr_xml(path: &Path) -> anyhow::Result<MsrXmlReadOutcome> {
@@ -35,19 +66,12 @@ pub fn read_emir_msr_xml(path: &Path) -> anyhow::Result<MsrXmlReadOutcome> {
     if let Err(err) = check_wellformedness(path) {
         return Ok(MsrXmlReadOutcome {
             records: vec![],
-            issues: vec![DqIssue {
-                check_id: "EMIR.FMT.XML_NOT_WELLFORMED".into(),
-                regime: Regime::Emir,
-                severity: Severity::Critical,
-                dimension: DqDimension::Validity,
-                record_id: None,
-                uti: None,
-                field: None,
-                value: None,
-                message: format!("XML is not well-formed: {}", err.message),
-                source_file: Some(source_label),
-                evidence: Vec::new(),
-            }],
+            issues: vec![fmt_issue(
+                "EMIR.FMT.XML_NOT_WELLFORMED",
+                Severity::Critical,
+                format!("XML is not well-formed: {}", err.message),
+                source_label,
+            )],
         });
     }
 
@@ -60,23 +84,32 @@ pub fn read_emir_msr_xml(path: &Path) -> anyhow::Result<MsrXmlReadOutcome> {
                 .unwrap_or_else(|| "(none)".into());
             Ok(MsrXmlReadOutcome {
                 records: vec![],
-                issues: vec![DqIssue {
-                    check_id: "EMIR.FMT.XML_UNSUPPORTED_NAMESPACE".into(),
-                    regime: Regime::Emir,
-                    severity: Severity::Warning,
-                    dimension: DqDimension::Validity,
-                    record_id: None,
-                    uti: None,
-                    field: None,
-                    value: None,
-                    message: format!(
+                issues: vec![fmt_issue(
+                    "EMIR.FMT.XML_UNSUPPORTED_NAMESPACE",
+                    Severity::Warning,
+                    format!(
                         "Root namespace is '{actual}', expected 'urn:iso:std:iso:20022:tech:xsd:auth.109.001.01'."
                     ),
-                    source_file: Some(source_label),
-                    evidence: Vec::new(),
-                }],
+                    source_label,
+                )],
             })
         }
+    }
+}
+
+fn fmt_issue(check_id: &str, severity: Severity, message: String, source_file: String) -> DqIssue {
+    DqIssue {
+        check_id: check_id.into(),
+        regime: Regime::Emir,
+        severity,
+        dimension: DqDimension::Validity,
+        record_id: None,
+        uti: None,
+        field: None,
+        value: None,
+        message,
+        source_file: Some(source_file),
+        evidence: Vec::new(),
     }
 }
 
@@ -110,11 +143,11 @@ fn parse(path: &Path) -> anyhow::Result<MsrXmlReadOutcome> {
     let mut text_buf = String::new();
     let mut attrs_buf: Vec<(String, String)> = Vec::new();
 
-    let mut header_state_as_of: Option<DateTime<Utc>> = None;
     let mut current: Option<MarginStateRecord> = None;
     let mut rec_depth: Option<usize> = None;
     let mut records: Vec<MarginStateRecord> = Vec::new();
     let mut rec_index: u32 = 0;
+    let mut saw_dataset_actn = false;
 
     loop {
         match reader.read_resolved_event_into(&mut buf)? {
@@ -124,13 +157,15 @@ fn parse(path: &Path) -> anyhow::Result<MsrXmlReadOutcome> {
                 text_buf.clear();
                 attrs_buf = collect_attrs(&e);
 
-                if current.is_none() && pile.last().map(String::as_str) == Some(MARGIN_BLOCK) {
+                if current.is_none()
+                    && pile.last().map(String::as_str) == Some(STAT_BLOCK)
+                    && pile.iter().any(|s| s == "TradData")
+                {
                     rec_index += 1;
                     current = Some(MarginStateRecord {
                         source_file: Some(source_label.clone()),
-                        record_id: Some(format!("{source_label}#mrgnstat-{rec_index}")),
+                        record_id: Some(format!("{source_label}#stat-{rec_index}")),
                         regime: Regime::Emir,
-                        state_as_of: header_state_as_of,
                         ..Default::default()
                     });
                     rec_depth = Some(pile.len());
@@ -158,12 +193,9 @@ fn parse(path: &Path) -> anyhow::Result<MsrXmlReadOutcome> {
                 if leaf_now {
                     let trimmed = text_buf.trim();
                     if current.is_none()
-                        && pile.ends_with(&["Hdr".into(), "StateAsOf".into()])
-                        && !trimmed.is_empty()
+                        && pile.ends_with(&["TradData".into(), "DataSetActn".into()])
                     {
-                        if let Ok(dt) = DateTime::parse_from_rfc3339(trimmed) {
-                            header_state_as_of = Some(dt.with_timezone(&Utc));
-                        }
+                        saw_dataset_actn = true;
                     }
                     if let (Some(rec), Some(rdepth)) = (current.as_mut(), rec_depth) {
                         if pile.len() > rdepth {
@@ -174,10 +206,7 @@ fn parse(path: &Path) -> anyhow::Result<MsrXmlReadOutcome> {
 
                 if let Some(rdepth) = rec_depth {
                     if pile.len() == rdepth {
-                        if let Some(mut rec) = current.take() {
-                            if rec.state_as_of.is_none() {
-                                rec.state_as_of = header_state_as_of;
-                            }
+                        if let Some(rec) = current.take() {
                             records.push(rec);
                         }
                         rec_depth = None;
@@ -194,12 +223,39 @@ fn parse(path: &Path) -> anyhow::Result<MsrXmlReadOutcome> {
         buf.clear();
     }
 
-    Ok(MsrXmlReadOutcome {
-        records,
-        issues: Vec::new(),
-    })
+    let mut issues = Vec::new();
+    if records.is_empty() && saw_dataset_actn {
+        issues.push(fmt_issue(
+            "EMIR.FMT.MSR_NO_RECORDS",
+            Severity::Info,
+            "Margin State Report carries TradData/DataSetActn \
+             (no-activity report); zero margin-state records to evaluate."
+                .to_string(),
+            source_label,
+        ));
+    }
+
+    Ok(MsrXmlReadOutcome { records, issues })
 }
 
+/// True when `rel` ends with `suffix` (element-name tail match).
+fn tail(rel: &[String], suffix: &[&str]) -> bool {
+    rel.len() >= suffix.len()
+        && rel[rel.len() - suffix.len()..]
+            .iter()
+            .zip(suffix)
+            .all(|(a, b)| a == *b)
+}
+
+/// True when `seg` appears anywhere in `rel` (ancestor disambiguation).
+fn has(rel: &[String], seg: &str) -> bool {
+    rel.iter().any(|s| s == seg)
+}
+
+/// Map one leaf (path relative to the `Stat` record) onto the canonical
+/// `MarginStateRecord`. Real `auth.109.001.01` element paths; every
+/// other branch is intentionally not extracted (documented in
+/// `docs/auth-messages/emir-auth109.md`).
 fn commit_leaf(
     rec: &mut MarginStateRecord,
     rel: &[String],
@@ -209,70 +265,105 @@ fn commit_leaf(
     if value.is_empty() && attrs.is_empty() {
         return;
     }
-    let path: Vec<&str> = rel.iter().map(String::as_str).collect();
     let record_id = rec.record_id.clone().unwrap_or_default();
-    match path.as_slice() {
-        ["UnqTxIdr"] => rec.uti = Some(value.to_owned()),
-        ["CtrPty1", "LEI"] => rec.counterparty_1 = Some(value.to_owned()),
-        ["CtrPty2", "LEI"] => rec.counterparty_2 = Some(value.to_owned()),
-        ["PrtflCd"] => rec.collateral_portfolio_code = Some(value.to_owned()),
-        ["IMPstdCurr"] => {
-            set_decimal(
-                &mut rec.initial_margin_posted_current,
-                value,
-                "IMPstdCurr",
-                &record_id,
-            );
-            if let Some(ccy) = attr_of(attrs, "Ccy") {
-                rec.margin_currency = Some(ccy.to_owned());
-            }
+
+    if tail(rel, &["TxId", "UnqTxIdr"]) || tail(rel, &["TxId", "Prtry", "Id"]) {
+        if rec.uti.is_none() && !value.is_empty() {
+            rec.uti = Some(value.to_owned());
         }
-        ["IMCollCurr"] => {
-            set_decimal(
-                &mut rec.initial_margin_collected_current,
-                value,
-                "IMCollCurr",
-                &record_id,
-            );
-            if let Some(ccy) = attr_of(attrs, "Ccy") {
-                rec.margin_currency = Some(ccy.to_owned());
-            }
+        return;
+    }
+    if tail(rel, &["LEI"]) && has(rel, "RptgCtrPty") {
+        rec.counterparty_1 = Some(value.to_owned());
+        return;
+    }
+    if tail(rel, &["LEI"]) && has(rel, "OthrCtrPty") {
+        rec.counterparty_2 = Some(value.to_owned());
+        return;
+    }
+    if rel.last().map(String::as_str) == Some("RptgTmStmp") {
+        let mut tmp = None;
+        set_dt(&mut tmp, value, "RptgTmStmp", &record_id);
+        if tmp.is_some() {
+            rec.state_as_of = tmp;
         }
-        ["VMPstdCurr"] => {
-            set_decimal(
-                &mut rec.variation_margin_posted_current,
-                value,
-                "VMPstdCurr",
-                &record_id,
-            );
-            if let Some(ccy) = attr_of(attrs, "Ccy") {
-                rec.margin_currency = Some(ccy.to_owned());
-            }
-        }
-        ["VMCollCurr"] => {
-            set_decimal(
-                &mut rec.variation_margin_collected_current,
-                value,
-                "VMCollCurr",
-                &record_id,
-            );
-            if let Some(ccy) = attr_of(attrs, "Ccy") {
-                rec.margin_currency = Some(ccy.to_owned());
-            }
-        }
-        ["CollMktVal"] => set_decimal(
+        return;
+    }
+    if tail(rel, &["CollPrtflCd", "Prtfl", "Cd"]) {
+        rec.collateral_portfolio_code = Some(value.to_owned());
+        return;
+    }
+    if tail(rel, &["CollPrtflCd", "Prtfl", "NoPrtfl"]) {
+        return;
+    }
+    if tail(rel, &["CollstnCtgy"]) {
+        rec.collateralization_category = Some(value.to_owned());
+        return;
+    }
+    if tail(rel, &["InitlMrgnPstdPstHrcut"]) {
+        set_decimal(
+            &mut rec.initial_margin_posted_current,
+            value,
+            "InitlMrgnPstdPstHrcut",
+            &record_id,
+        );
+        set_ccy(&mut rec.margin_currency, attrs);
+        return;
+    }
+    if tail(rel, &["InitlMrgnRcvdPstHrcut"]) {
+        set_decimal(
+            &mut rec.initial_margin_collected_current,
+            value,
+            "InitlMrgnRcvdPstHrcut",
+            &record_id,
+        );
+        set_ccy(&mut rec.margin_currency, attrs);
+        return;
+    }
+    if tail(rel, &["VartnMrgnPstdPstHrcut"]) {
+        set_decimal(
+            &mut rec.variation_margin_posted_current,
+            value,
+            "VartnMrgnPstdPstHrcut",
+            &record_id,
+        );
+        set_ccy(&mut rec.margin_currency, attrs);
+        return;
+    }
+    if tail(rel, &["VartnMrgnRcvdPstHrcut"]) {
+        set_decimal(
+            &mut rec.variation_margin_collected_current,
+            value,
+            "VartnMrgnRcvdPstHrcut",
+            &record_id,
+        );
+        set_ccy(&mut rec.margin_currency, attrs);
+        return;
+    }
+    // No single "collateral market value" in auth.109; received excess
+    // collateral is the closest economic analog (documented limit).
+    if tail(rel, &["XcssCollRcvd"]) {
+        set_decimal(
             &mut rec.collateral_market_value,
             value,
-            "CollMktVal",
+            "XcssCollRcvd",
             &record_id,
-        ),
-        ["Hrcut"] => set_decimal(&mut rec.haircut_applied, value, "Hrcut", &record_id),
-        ["CollstnCtgy"] => rec.collateralization_category = Some(value.to_owned()),
-        _ => {
-            let key = rel.join("/");
-            if !value.is_empty() {
-                rec.raw_fields.insert(key, value.to_owned());
-            }
+        );
+        set_ccy(&mut rec.margin_currency, attrs);
+        return;
+    }
+    // haircut_applied: auth.109 has no haircut % → never set.
+    // CtrctMod/ActnTp, EvtDt, pre-haircut amounts, XcssCollPstd,
+    // Coll/TmStmp and everything else are preserved verbatim.
+    if !value.is_empty() {
+        rec.raw_fields.insert(rel.join("/"), value.to_owned());
+    }
+}
+
+fn set_ccy(dst: &mut Option<String>, attrs: &[(String, String)]) {
+    if dst.is_none() {
+        if let Some(ccy) = attr_of(attrs, "Ccy") {
+            *dst = Some(ccy.to_owned());
         }
     }
 }
@@ -325,6 +416,16 @@ fn set_decimal(dst: &mut Option<Decimal>, s: &str, field: &str, record: &str) {
     }
 }
 
+fn set_dt(dst: &mut Option<DateTime<Utc>>, s: &str, field: &str, record: &str) {
+    if s.is_empty() {
+        return;
+    }
+    match DateTime::parse_from_rfc3339(s) {
+        Ok(d) => *dst = Some(d.with_timezone(&Utc)),
+        Err(e) => warn!(record = %record, field, value = s, error = %e, "could not parse datetime"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -335,41 +436,84 @@ mod tests {
         p
     }
 
-    #[test]
-    fn parses_two_margin_states() {
-        let body = br#"<?xml version="1.0"?>
+    const REAL_ENVELOPE: &[u8] = br#"<?xml version="1.0"?>
 <Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.109.001.01">
-  <MrgnStateRpt>
-    <Hdr><StateAsOf>2026-05-13T08:00:00Z</StateAsOf></Hdr>
-    <MrgnStat>
-      <UnqTxIdr>U1</UnqTxIdr>
-      <CtrPty1><LEI>LEI-A</LEI></CtrPty1>
-      <CtrPty2><LEI>LEI-B</LEI></CtrPty2>
-      <PrtflCd>P1</PrtflCd>
-      <IMPstdCurr Ccy="EUR">1000000</IMPstdCurr>
-      <VMPstdCurr Ccy="EUR">50000</VMPstdCurr>
-      <CollMktVal Ccy="EUR">1100000</CollMktVal>
-      <Hrcut>0.05</Hrcut>
-      <CollstnCtgy>FCOL</CollstnCtgy>
-    </MrgnStat>
-    <MrgnStat>
-      <UnqTxIdr>U2</UnqTxIdr>
-      <CollstnCtgy>UCOL</CollstnCtgy>
-    </MrgnStat>
-  </MrgnStateRpt>
+  <DerivsTradMrgnDataTxStatRpt>
+    <RptHdr><NbRcrds>2</NbRcrds></RptHdr>
+    <TradData>
+      <Stat>
+        <RptgTmStmp>2026-05-13T08:00:00Z</RptgTmStmp>
+        <CtrPtyId>
+          <RptgCtrPty><Id><Lgl><Id><LEI>RPTGCPARTY0000000001</LEI></Id></Lgl></Id></RptgCtrPty>
+          <OthrCtrPty><IdTp><Lgl><Id><LEI>OTHRCPARTY0000000002</LEI></Id></Lgl></IdTp></OthrCtrPty>
+        </CtrPtyId>
+        <TxId><UnqTxIdr>MSR-U1</UnqTxIdr></TxId>
+        <Coll>
+          <CollPrtflCd><Prtfl><Cd>PF-1</Cd></Prtfl></CollPrtflCd>
+          <CollstnCtgy>FLCL</CollstnCtgy>
+        </Coll>
+        <PstdMrgnOrColl>
+          <InitlMrgnPstdPstHrcut Ccy="EUR">1000000.00</InitlMrgnPstdPstHrcut>
+          <VartnMrgnPstdPstHrcut Ccy="EUR">50000.00</VartnMrgnPstdPstHrcut>
+        </PstdMrgnOrColl>
+        <RcvdMrgnOrColl>
+          <XcssCollRcvd Ccy="EUR">1100000.00</XcssCollRcvd>
+        </RcvdMrgnOrColl>
+        <CtrctMod><ActnTp>NEWT</ActnTp></CtrctMod>
+      </Stat>
+      <Stat>
+        <RptgTmStmp>2026-05-13T08:00:00Z</RptgTmStmp>
+        <TxId><UnqTxIdr>MSR-U2</UnqTxIdr></TxId>
+        <Coll><CollstnCtgy>UNCL</CollstnCtgy></Coll>
+      </Stat>
+    </TradData>
+  </DerivsTradMrgnDataTxStatRpt>
 </Document>"#;
-        let p = write_tmp("ok.xml", body);
+
+    #[test]
+    fn parses_real_auth109_envelope() {
+        let p = write_tmp("real.xml", REAL_ENVELOPE);
         let out = read_emir_msr_xml(&p).unwrap();
         std::fs::remove_file(&p).unwrap();
+        assert!(out.issues.is_empty());
         assert_eq!(out.records.len(), 2);
-        assert_eq!(out.records[0].uti.as_deref(), Some("U1"));
+        let r0 = &out.records[0];
+        assert_eq!(r0.uti.as_deref(), Some("MSR-U1"));
+        assert_eq!(r0.counterparty_1.as_deref(), Some("RPTGCPARTY0000000001"));
+        assert_eq!(r0.counterparty_2.as_deref(), Some("OTHRCPARTY0000000002"));
+        assert_eq!(r0.collateralization_category.as_deref(), Some("FLCL"));
+        assert_eq!(r0.margin_currency.as_deref(), Some("EUR"));
         assert_eq!(
-            out.records[0].collateralization_category.as_deref(),
-            Some("FCOL")
+            r0.initial_margin_posted_current.unwrap().to_string(),
+            "1000000.00"
         );
-        assert_eq!(out.records[0].margin_currency.as_deref(), Some("EUR"));
-        assert!(out.records[0].state_as_of.is_some());
-        assert!(out.records[0].initial_margin_posted_current.is_some());
+        assert_eq!(
+            r0.collateral_market_value.unwrap().to_string(),
+            "1100000.00"
+        );
+        assert!(r0.state_as_of.is_some(), "state_as_of from RptgTmStmp");
+        // No haircut % in auth.109.
+        assert!(r0.haircut_applied.is_none());
+        // CtrctMod/ActnTp preserved in raw_fields, not a model field.
+        assert!(r0.raw_fields.values().any(|v| v == "NEWT"));
+    }
+
+    #[test]
+    fn empty_report_no_records_info() {
+        let body = br#"<?xml version="1.0"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.109.001.01">
+  <DerivsTradMrgnDataTxStatRpt>
+    <RptHdr><NbRcrds>0</NbRcrds></RptHdr>
+    <TradData><DataSetActn>NOTX</DataSetActn></TradData>
+  </DerivsTradMrgnDataTxStatRpt>
+</Document>"#;
+        let p = write_tmp("empty.xml", body);
+        let out = read_emir_msr_xml(&p).unwrap();
+        std::fs::remove_file(&p).unwrap();
+        assert!(out.records.is_empty());
+        assert_eq!(out.issues.len(), 1);
+        assert_eq!(out.issues[0].check_id, "EMIR.FMT.MSR_NO_RECORDS");
+        assert_eq!(out.issues[0].severity, Severity::Info);
     }
 
     #[test]

@@ -1,104 +1,102 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic ISO 20022 auth.108 EMIR Margin Activity Report fixture.
+  Hand-authored — NOT derived from, and does not redistribute, any
+  ESMA or SWIFT example or schema.
+
+  Element paths follow the real ESMA EMIR REFIT usage guideline
+  auth.108.001.01_ESMAUG_DATMDA_1.1.0 (DerivativesTradeMarginDataReportV01):
+  Document > DerivsTradMrgnDataRpt > {RptHdr/NbRcrds,
+  TradData/Rpt/(MrgnUpd|Crrctn)...}. Only the subset OpenDQI extracts is
+  populated. Schema-shaped, not a fully XSD-valid instance. See
+  docs/auth-messages/emir-auth108.md.
+
+  action_type is derived from the TradeReport31Choice wrapper
+  (MrgnUpd -> "MRGN", Crrctn -> "CORR"); neither is in the
+  EMIR.MAR.MARGIN_TYPE_ENUM allowed set {MARU,MARV,MARC,MARN}, so that
+  check fires on every record (documented limitation). Each <Rpt>
+  additionally exercises one EMIR.MAR.* check.
+-->
 <Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.108.001.01">
-  <MrgnActvtyRpt>
-    <!-- Row 1: clean MARU. -->
-    <MrgnEvt>
-      <UnqTxIdr>UTI-MAR-001</UnqTxIdr>
-      <CtrPty1><LEI>LEI111111111111111111</LEI></CtrPty1>
-      <CtrPty2><LEI>LEI222222222222222222</LEI></CtrPty2>
-      <ActnTp>MARU</ActnTp>
-      <PrtflCd>P-001</PrtflCd>
-      <IMPstd Ccy="EUR">1000000</IMPstd>
-      <VMPstd Ccy="EUR">50000</VMPstd>
-      <EvntDtTm>2026-05-12T16:00:00Z</EvntDtTm>
-      <RptgDtTm>2026-05-13T08:30:00Z</RptgDtTm>
-    </MrgnEvt>
-    <!-- Row 2: invalid action_type. -->
-    <MrgnEvt>
-      <UnqTxIdr>UTI-MAR-002</UnqTxIdr>
-      <ActnTp>XYZ</ActnTp>
-      <PrtflCd>P-002</PrtflCd>
-      <IMPstd Ccy="EUR">500000</IMPstd>
-      <EvntDtTm>2026-05-12T16:00:00Z</EvntDtTm>
-      <RptgDtTm>2026-05-13T08:30:00Z</RptgDtTm>
-    </MrgnEvt>
-    <!-- Row 3: negative VM posted (POSTED_NEGATIVE). -->
-    <MrgnEvt>
-      <UnqTxIdr>UTI-MAR-003</UnqTxIdr>
-      <ActnTp>MARV</ActnTp>
-      <PrtflCd>P-003</PrtflCd>
-      <VMPstd Ccy="EUR">-100000</VMPstd>
-      <EvntDtTm>2026-05-12T16:00:00Z</EvntDtTm>
-      <RptgDtTm>2026-05-13T08:30:00Z</RptgDtTm>
-    </MrgnEvt>
-    <!-- Row 4: negative IM collected (COLLECTED_NEGATIVE). -->
-    <MrgnEvt>
-      <UnqTxIdr>UTI-MAR-004</UnqTxIdr>
-      <ActnTp>MARC</ActnTp>
-      <PrtflCd>P-004</PrtflCd>
-      <IMColl Ccy="EUR">-25000</IMColl>
-      <EvntDtTm>2026-05-12T16:00:00Z</EvntDtTm>
-      <RptgDtTm>2026-05-13T08:30:00Z</RptgDtTm>
-    </MrgnEvt>
-    <!-- Rows 5+6: same portfolio, large jump (LARGE_MARGIN_DELTA). -->
-    <MrgnEvt>
-      <UnqTxIdr>UTI-MAR-005</UnqTxIdr>
-      <ActnTp>MARU</ActnTp>
-      <PrtflCd>P-DELTA</PrtflCd>
-      <IMPstd Ccy="EUR">100000</IMPstd>
-      <EvntDtTm>2026-05-12T08:00:00Z</EvntDtTm>
-      <RptgDtTm>2026-05-12T08:30:00Z</RptgDtTm>
-    </MrgnEvt>
-    <MrgnEvt>
-      <UnqTxIdr>UTI-MAR-006</UnqTxIdr>
-      <ActnTp>MARU</ActnTp>
-      <PrtflCd>P-DELTA</PrtflCd>
-      <IMPstd Ccy="EUR">800000</IMPstd>
-      <EvntDtTm>2026-05-13T08:00:00Z</EvntDtTm>
-      <RptgDtTm>2026-05-13T08:30:00Z</RptgDtTm>
-    </MrgnEvt>
-    <!-- Row 7: VM amount but no currency (MARGIN_NEEDS_CURRENCY). -->
-    <MrgnEvt>
-      <UnqTxIdr>UTI-MAR-007</UnqTxIdr>
-      <ActnTp>MARV</ActnTp>
-      <PrtflCd>P-007</PrtflCd>
-      <VMPstd>1000</VMPstd>
-      <EvntDtTm>2026-05-12T16:00:00Z</EvntDtTm>
-      <RptgDtTm>2026-05-13T08:30:00Z</RptgDtTm>
-    </MrgnEvt>
-    <!-- Row 8: missing portfolio code (PORTFOLIO_CODE_MISSING). -->
-    <MrgnEvt>
-      <UnqTxIdr>UTI-MAR-008</UnqTxIdr>
-      <ActnTp>MARU</ActnTp>
-      <IMPstd Ccy="EUR">100000</IMPstd>
-      <EvntDtTm>2026-05-12T16:00:00Z</EvntDtTm>
-      <RptgDtTm>2026-05-13T08:30:00Z</RptgDtTm>
-    </MrgnEvt>
-    <!-- Row 9: late reporting (TIMELINESS). -->
-    <MrgnEvt>
-      <UnqTxIdr>UTI-MAR-009</UnqTxIdr>
-      <ActnTp>MARU</ActnTp>
-      <PrtflCd>P-009</PrtflCd>
-      <IMPstd Ccy="EUR">100000</IMPstd>
-      <EvntDtTm>2026-05-01T00:00:00Z</EvntDtTm>
-      <RptgDtTm>2026-05-13T00:00:00Z</RptgDtTm>
-    </MrgnEvt>
-    <!-- Rows 10+11: duplicate margin call (DUPLICATE_MARGIN_CALL). -->
-    <MrgnEvt>
-      <UnqTxIdr>UTI-MAR-010</UnqTxIdr>
-      <ActnTp>MARU</ActnTp>
-      <PrtflCd>P-DUP</PrtflCd>
-      <IMPstd Ccy="EUR">100000</IMPstd>
-      <EvntDtTm>2026-05-12T16:00:00Z</EvntDtTm>
-      <RptgDtTm>2026-05-13T08:30:00Z</RptgDtTm>
-    </MrgnEvt>
-    <MrgnEvt>
-      <UnqTxIdr>UTI-MAR-011</UnqTxIdr>
-      <ActnTp>MARU</ActnTp>
-      <PrtflCd>P-DUP</PrtflCd>
-      <IMPstd Ccy="EUR">100000</IMPstd>
-      <EvntDtTm>2026-05-12T16:00:00Z</EvntDtTm>
-      <RptgDtTm>2026-05-13T08:30:00Z</RptgDtTm>
-    </MrgnEvt>
-  </MrgnActvtyRpt>
+  <DerivsTradMrgnDataRpt>
+    <RptHdr><NbRcrds>8</NbRcrds></RptHdr>
+    <TradData>
+
+      <!-- 1+2. Same portfolio PF-DELTA, IM posted 1M -> 20M across
+           two event dates -> LARGE_MARGIN_DELTA (and TIMELINESS:
+           event 2026-05-01 vs reporting 2026-05-13 > 24h). -->
+      <Rpt><MrgnUpd>
+        <RptgTmStmp>2026-05-13T08:00:00Z</RptgTmStmp>
+        <CtrPtyId>
+          <RptgCtrPty><Id><Lgl><Id><LEI>RPTGCPARTY0000000001</LEI></Id></Lgl></Id></RptgCtrPty>
+          <OthrCtrPty><IdTp><Lgl><Id><LEI>OTHRCPARTY0000000002</LEI></Id></Lgl></IdTp></OthrCtrPty>
+        </CtrPtyId>
+        <EvtDt>2026-05-01</EvtDt>
+        <TxId><UnqTxIdr>OPENDQI-MAR-DELTA-0001</UnqTxIdr></TxId>
+        <Coll><CollPrtflCd><Prtfl><Cd>PF-DELTA</Cd></Prtfl></CollPrtflCd><CollstnCtgy>FLCL</CollstnCtgy></Coll>
+        <PstdMrgnOrColl><InitlMrgnPstdPstHrcut Ccy="EUR">1000000.00</InitlMrgnPstdPstHrcut></PstdMrgnOrColl>
+      </MrgnUpd></Rpt>
+      <Rpt><MrgnUpd>
+        <RptgTmStmp>2026-05-13T08:00:00Z</RptgTmStmp>
+        <EvtDt>2026-05-02</EvtDt>
+        <TxId><UnqTxIdr>OPENDQI-MAR-DELTA-0002</UnqTxIdr></TxId>
+        <Coll><CollPrtflCd><Prtfl><Cd>PF-DELTA</Cd></Prtfl></CollPrtflCd></Coll>
+        <PstdMrgnOrColl><InitlMrgnPstdPstHrcut Ccy="EUR">20000000.00</InitlMrgnPstdPstHrcut></PstdMrgnOrColl>
+      </MrgnUpd></Rpt>
+
+      <!-- 3. Negative posted initial margin -> POSTED_NEGATIVE. -->
+      <Rpt><MrgnUpd>
+        <RptgTmStmp>2026-05-12T01:00:00Z</RptgTmStmp>
+        <EvtDt>2026-05-12</EvtDt>
+        <TxId><UnqTxIdr>OPENDQI-MAR-NEGP-0003</UnqTxIdr></TxId>
+        <Coll><CollPrtflCd><Prtfl><Cd>PF-NEGP</Cd></Prtfl></CollPrtflCd></Coll>
+        <PstdMrgnOrColl><InitlMrgnPstdPstHrcut Ccy="EUR">-500000.00</InitlMrgnPstdPstHrcut></PstdMrgnOrColl>
+      </MrgnUpd></Rpt>
+
+      <!-- 4. Negative received variation margin -> COLLECTED_NEGATIVE. -->
+      <Rpt><MrgnUpd>
+        <RptgTmStmp>2026-05-12T01:00:00Z</RptgTmStmp>
+        <EvtDt>2026-05-12</EvtDt>
+        <TxId><UnqTxIdr>OPENDQI-MAR-NEGC-0004</UnqTxIdr></TxId>
+        <Coll><CollPrtflCd><Prtfl><Cd>PF-NEGC</Cd></Prtfl></CollPrtflCd></Coll>
+        <RcvdMrgnOrColl><VartnMrgnRcvdPstHrcut Ccy="EUR">-300000.00</VartnMrgnRcvdPstHrcut></RcvdMrgnOrColl>
+      </MrgnUpd></Rpt>
+
+      <!-- 5. Margin amount with no @Ccy -> MARGIN_NEEDS_CURRENCY. -->
+      <Rpt><MrgnUpd>
+        <RptgTmStmp>2026-05-12T01:00:00Z</RptgTmStmp>
+        <EvtDt>2026-05-12</EvtDt>
+        <TxId><UnqTxIdr>OPENDQI-MAR-NOCCY-0005</UnqTxIdr></TxId>
+        <Coll><CollPrtflCd><Prtfl><Cd>PF-NOCCY</Cd></Prtfl></CollPrtflCd></Coll>
+        <PstdMrgnOrColl><InitlMrgnPstdPstHrcut>750000.00</InitlMrgnPstdPstHrcut></PstdMrgnOrColl>
+      </MrgnUpd></Rpt>
+
+      <!-- 6. No CollPrtflCd -> PORTFOLIO_CODE_MISSING. -->
+      <Rpt><MrgnUpd>
+        <RptgTmStmp>2026-05-12T01:00:00Z</RptgTmStmp>
+        <EvtDt>2026-05-12</EvtDt>
+        <TxId><UnqTxIdr>OPENDQI-MAR-NOPF-0006</UnqTxIdr></TxId>
+        <Coll><CollstnCtgy>UNCL</CollstnCtgy></Coll>
+        <PstdMrgnOrColl><InitlMrgnPstdPstHrcut Ccy="EUR">1000.00</InitlMrgnPstdPstHrcut></PstdMrgnOrColl>
+      </MrgnUpd></Rpt>
+
+      <!-- 7+8. Same portfolio PF-DUP, same event date -> DUPLICATE_MARGIN_CALL
+           (also TIMELINESS: event 2026-05-05 vs reporting 2026-05-13). -->
+      <Rpt><MrgnUpd>
+        <RptgTmStmp>2026-05-13T08:00:00Z</RptgTmStmp>
+        <EvtDt>2026-05-05</EvtDt>
+        <TxId><UnqTxIdr>OPENDQI-MAR-DUP-0007</UnqTxIdr></TxId>
+        <Coll><CollPrtflCd><Prtfl><Cd>PF-DUP</Cd></Prtfl></CollPrtflCd></Coll>
+        <PstdMrgnOrColl><InitlMrgnPstdPstHrcut Ccy="EUR">100000.00</InitlMrgnPstdPstHrcut></PstdMrgnOrColl>
+      </MrgnUpd></Rpt>
+      <Rpt><Crrctn>
+        <RptgTmStmp>2026-05-13T08:00:00Z</RptgTmStmp>
+        <EvtDt>2026-05-05</EvtDt>
+        <TxId><UnqTxIdr>OPENDQI-MAR-DUP-0007</UnqTxIdr></TxId>
+        <Coll><CollPrtflCd><Prtfl><Cd>PF-DUP</Cd></Prtfl></CollPrtflCd></Coll>
+        <PstdMrgnOrColl><InitlMrgnPstdPstHrcut Ccy="EUR">100000.00</InitlMrgnPstdPstHrcut></PstdMrgnOrColl>
+      </Crrctn></Rpt>
+
+    </TradData>
+  </DerivsTradMrgnDataRpt>
 </Document>
