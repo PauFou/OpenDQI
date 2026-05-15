@@ -66,6 +66,11 @@
   ul.bare li { padding: 0.25rem 0; }
   footer { color: var(--muted); font-size: 0.8rem; margin-top: 3rem; border-top: 1px solid #e5e7eb; padding-top: 1rem; }
   code { background: #f1f5f9; padding: 0.1rem 0.35rem; border-radius: 0.25rem; }
+  details.evidence { margin-top: 0.4rem; }
+  details.evidence > summary { cursor: pointer; color: var(--muted); font-size: 0.78rem; }
+  table.ev { margin-top: 0.35rem; width: auto; border: 1px solid #e5e7eb; border-radius: 0.35rem; }
+  table.ev th, table.ev td { padding: 0.3rem 0.55rem; font-size: 0.78rem; border-bottom: 1px solid #f1f5f9; }
+  table.ev th { background: #f8fafc; }
 </style>
 </head>
 <body>
@@ -151,7 +156,24 @@
           <td>{{ i.uti }}</td>
           <td class="muted">{{ i.record_id }}</td>
           <td>{{ i.field }}</td>
-          <td>{{ i.message }}</td>
+          <td>{{ i.message }}
+            {% if i.evidence %}
+            <details class="evidence">
+              <summary>evidence ({{ i.evidence | length }})</summary>
+              <table class="ev">
+                <tr><th>Field</th><th>Before</th><th>After</th><th>Line</th></tr>
+                {% for e in i.evidence %}
+                <tr>
+                  <td><code>{{ e.field }}</code></td>
+                  <td>{{ e.before }}</td>
+                  <td>{{ e.after }}</td>
+                  <td class="muted">{{ e.source_line }}</td>
+                </tr>
+                {% endfor %}
+              </table>
+            </details>
+            {% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>
