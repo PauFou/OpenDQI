@@ -15,6 +15,7 @@
       <option value="msr-scan">Margin State Report (auth.109 — EMIR only)</option>
       <option value="validate">Validate (XML well-formedness only — XSD via CLI)</option>
       <option value="book-reconcile">Book vs TSR reconciliation (multi-file)</option>
+      <option value="tr-audit">TR audit — TAR + TSR + feedback (multi-file)</option>
     </select>
 
     <label for="regime">Regime</label>
@@ -27,13 +28,17 @@
     <input id="file" name="file" type="file" accept=".xml,.parquet">
 
     <fieldset style="margin-top:1rem;border:1px solid #e5e7eb;border-radius:0.4rem;padding:0.75rem;">
-      <legend style="font-size:0.8rem;color:var(--muted);">Book vs TSR reconciliation only</legend>
-      <label for="file_book">Book export (CSV)</label>
+      <legend style="font-size:0.8rem;color:var(--muted);">Multi-file operations (book-reconcile / tr-audit)</legend>
+      <label for="file_book">Book export (CSV) — book-reconcile</label>
       <input id="file_book" name="file_book" type="file" accept=".csv">
-      <label for="file_tsr">TSR (auth.107 EMIR / auth.079 SFTR XML)</label>
+      <label for="file_tsr">TSR (auth.107 EMIR / auth.079 SFTR XML) — book-reconcile &amp; tr-audit</label>
       <input id="file_tsr" name="file_tsr" type="file" accept=".xml">
-      <label for="file_mapping">CSV mapping (YAML)</label>
+      <label for="file_mapping">CSV mapping (YAML) — book-reconcile</label>
       <input id="file_mapping" name="file_mapping" type="file" accept=".yml,.yaml">
+      <label for="file_tar">TAR (auth.030 EMIR / auth.052 SFTR XML) — tr-audit</label>
+      <input id="file_tar" name="file_tar" type="file" accept=".xml">
+      <label for="file_feedback">Feedback (auth.092 EMIR / auth.080 SFTR XML) — tr-audit</label>
+      <input id="file_feedback" name="file_feedback" type="file" accept=".xml">
     </fieldset>
 
     <button type="submit" style="margin-top:1rem;">Run</button>

@@ -1651,8 +1651,6 @@ fn run_tr_audit(
     out: &Path,
     email_config_path: Option<&Path>,
 ) -> Result<()> {
-    use std::collections::HashSet;
-
     let started_at = Utc::now();
 
     // 1. Load all three layers.
@@ -1753,119 +1751,13 @@ fn run_tr_audit(
     issues.extend(activity_checks);
 
     // 4. Cross-layer coherence checks (EMIR.AUD.*).
-    let tsr_utis: HashSet<&str> = tsr_outcome
-        .records
-        .iter()
-        .filter_map(|r| r.uti.as_deref())
-        .map(str::trim)
-        .filter(|u| !u.is_empty())
-        .collect();
-    let tar_utis: HashSet<&str> = tar_records
-        .iter()
-        .filter_map(|r| r.uti.as_deref())
-        .map(str::trim)
-        .filter(|u| !u.is_empty())
-        .collect();
-    let rejected_utis: HashSet<&str> = feedback_outcome
-        .records
-        .iter()
-        .filter(|f| matches!(f.feedback_type, opendqi_core::FeedbackType::Rejected))
-        .filter_map(|f| f.uti.as_deref())
-        .map(str::trim)
-        .filter(|u| !u.is_empty())
-        .collect();
-    let tsr_outstanding_utis: HashSet<&str> = tsr_outcome
-        .records
-        .iter()
-        .filter(|r| {
-            r.status
-                .as_deref()
-                .map(|s| {
-                    let s = s.trim();
-                    s.is_empty()
-                        || s.eq_ignore_ascii_case("OUTSTANDING")
-                        || s.eq_ignore_ascii_case("ACTIVE")
-                })
-                .unwrap_or(true)
-        })
-        .filter_map(|r| r.uti.as_deref())
-        .map(str::trim)
-        .filter(|u| !u.is_empty())
-        .collect();
-
-    // EMIR.AUD.NEWT_IN_TAR_NOT_IN_TSR
-    for r in &tar_records {
-        let is_newt = r
-            .action_type
-            .as_deref()
-            .map(|a| a.eq_ignore_ascii_case("NEWT"))
-            .unwrap_or(false);
-        if !is_newt {
-            continue;
-        }
-        if let Some(uti) = r.uti.as_deref() {
-            let uti = uti.trim();
-            if !uti.is_empty() && !tsr_utis.contains(uti) {
-                issues.push(DqIssue {
-                    check_id: "EMIR.AUD.NEWT_IN_TAR_NOT_IN_TSR".into(),
-                    regime: Regime::Emir,
-                    severity: Severity::High,
-                    dimension: DqDimension::Consistency,
-                    record_id: r.record_id.clone(),
-                    uti: Some(uti.to_owned()),
-                    field: Some("uti".into()),
-                    value: Some(uti.to_owned()),
-                    message: format!(
-                        "UTI {uti} was NEWT'd in the TAR but is absent from the TSR — submission may not have been accepted."
-                    ),
-                    source_file: r.source_file.clone(),
-                    evidence: Vec::new(),
-                });
-            }
-        }
-    }
-
-    // EMIR.AUD.OUTSTANDING_IN_TSR_NOT_IN_TAR
-    for uti in tsr_outstanding_utis.iter() {
-        if !tar_utis.contains(uti) {
-            issues.push(DqIssue {
-                check_id: "EMIR.AUD.OUTSTANDING_IN_TSR_NOT_IN_TAR".into(),
-                regime: Regime::Emir,
-                severity: Severity::Warning,
-                dimension: DqDimension::Consistency,
-                record_id: None,
-                uti: Some((*uti).to_owned()),
-                field: Some("uti".into()),
-                value: Some((*uti).to_owned()),
-                message: format!(
-                    "UTI {uti} is outstanding in the TSR but no record appears in the TAR for this period."
-                ),
-                source_file: Some(tsr_path.to_string_lossy().into_owned()),
-                evidence: Vec::new(),
-            });
-        }
-    }
-
-    // EMIR.AUD.REJECTED_BUT_OUTSTANDING_IN_TSR
-    for uti in rejected_utis.iter() {
-        if tsr_outstanding_utis.contains(uti) {
-            issues.push(DqIssue {
-                check_id: "EMIR.AUD.REJECTED_BUT_OUTSTANDING_IN_TSR".into(),
-                regime: Regime::Emir,
-                severity: Severity::Critical,
-                dimension: DqDimension::Consistency,
-                record_id: None,
-                uti: Some((*uti).to_owned()),
-                field: Some("uti".into()),
-                value: Some((*uti).to_owned()),
-                message: format!(
-                    "UTI {uti} is reported rejected in the feedback file yet appears outstanding in the TSR — TR-side inconsistency."
-                ),
-                source_file: Some(feedback_path.to_string_lossy().into_owned()),
-                evidence: Vec::new(),
-            });
-        }
-    }
+    issues.extend(opendqi_core::dq::compute_tr_audit_emir_issues(
+        &tar_records,
+        &tsr_outcome.records,
+        &feedback_outcome.records,
+        &tsr_path.to_string_lossy(),
+        &feedback_path.to_string_lossy(),
+    ));
 
     finalize_issues(&mut issues, &ctx);
 

@@ -25,12 +25,17 @@ The browser opens to a minimal upload form:
   - *Validate* — XML well-formedness only. XSD schema validation
     remains CLI-only (`opendqi {emir,sftr} validate --xsd <path>`).
   - *Book vs TSR reconciliation* — **multi-file**: book CSV +
-    TSR XML (auth.107 EMIR / auth.079 SFTR) + CSV mapping YAML,
-    uploaded via the three fields in the dedicated form box.
+    TSR XML (auth.107 EMIR / auth.079 SFTR) + CSV mapping YAML.
+  - *TR audit* — **multi-file**: TAR (auth.030 EMIR / auth.052
+    SFTR) + TSR (auth.107 / auth.079) + feedback (auth.092 /
+    auth.080). Runs every per-layer check pack plus the 3
+    cross-layer `*.AUD.*` coherence checks. Web UI v1 runs without
+    a history store, so store-backed lifecycle checks remain
+    CLI-only.
 - **Regime** — EMIR or SFTR.
 - **File / multi-file** — single-file operations use the `File`
-  picker; book-reconcile uses the three fields in its box. `tr-audit`
-  (3 files + optional store) stays CLI-only.
+  picker; book-reconcile and tr-audit use the named fields in the
+  multi-file box (10 operations total).
 - **File** — drop or pick an `.xml` or `.parquet` file.
 - **Run** — submits to `POST /api/scan` carrying the chosen operation
   in the multipart form.

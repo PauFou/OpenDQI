@@ -441,3 +441,67 @@ async fn post_scan_with_book_reconcile_emir_succeeds() {
     let resp = app.oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::SEE_OTHER);
 }
+
+#[tokio::test]
+async fn post_scan_with_tr_audit_emir_succeeds() {
+    let app = build_router();
+    let tar = std::fs::read("../../examples/emir/tr_activity/auth030-sample.xml")
+        .expect("auth030 fixture");
+    let tsr =
+        std::fs::read("../../examples/emir/tr_state/auth107-sample.xml").expect("auth107 fixture");
+    let fb =
+        std::fs::read("../../examples/emir/feedback/auth092-sample.xml").expect("auth092 fixture");
+    let boundary = "------OpenDqiTestBoundary";
+    let mut body = Vec::new();
+    let part = |b: &mut Vec<u8>, field: &str, filename: &str, ctype: &str, data: &[u8]| {
+        b.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+        b.extend_from_slice(
+            format!(
+                "Content-Disposition: form-data; name=\"{field}\"; filename=\"{filename}\"\r\nContent-Type: {ctype}\r\n\r\n"
+            )
+            .as_bytes(),
+        );
+        b.extend_from_slice(data);
+        b.extend_from_slice(b"\r\n");
+    };
+    body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+    body.extend_from_slice(
+        b"Content-Disposition: form-data; name=\"operation\"\r\n\r\ntr-audit\r\n",
+    );
+    body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+    body.extend_from_slice(b"Content-Disposition: form-data; name=\"regime\"\r\n\r\nemir\r\n");
+    part(
+        &mut body,
+        "file_tar",
+        "auth030.xml",
+        "application/xml",
+        &tar,
+    );
+    part(
+        &mut body,
+        "file_tsr",
+        "auth107.xml",
+        "application/xml",
+        &tsr,
+    );
+    part(
+        &mut body,
+        "file_feedback",
+        "auth092.xml",
+        "application/xml",
+        &fb,
+    );
+    body.extend_from_slice(format!("--{boundary}--\r\n").as_bytes());
+
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri("/api/scan")
+        .header(
+            header::CONTENT_TYPE,
+            format!("multipart/form-data; boundary={boundary}"),
+        )
+        .body(Body::from(body))
+        .unwrap();
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+}

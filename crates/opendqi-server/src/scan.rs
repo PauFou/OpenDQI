@@ -80,6 +80,11 @@ pub enum UiOperation {
     /// Book-vs-TSR reconciliation. Multi-file: `file_book` (CSV),
     /// `file_tsr` (auth.107/auth.079 XML), `file_mapping` (YAML).
     BookReconcile,
+    /// Consolidated TR audit. Multi-file: `file_tar` (auth.030/052
+    /// XML), `file_tsr` (auth.107/079 XML), `file_feedback`
+    /// (auth.092/080 XML). No store (web UI v1): lifecycle checks
+    /// remain CLI-only.
+    TrAudit,
 }
 
 impl UiOperation {
@@ -94,6 +99,7 @@ impl UiOperation {
             "msr-scan" | "msr_scan" => Some(Self::MsrScan),
             "validate" => Some(Self::Validate),
             "book-reconcile" | "book_reconcile" => Some(Self::BookReconcile),
+            "tr-audit" | "tr_audit" => Some(Self::TrAudit),
             _ => None,
         }
     }
@@ -109,6 +115,7 @@ impl UiOperation {
             Self::MsrScan => "msr-scan",
             Self::Validate => "validate",
             Self::BookReconcile => "book-reconcile",
+            Self::TrAudit => "tr-audit",
         }
     }
 }
@@ -167,8 +174,9 @@ pub fn run_server_operation(
             )),
         },
         UiOperation::Validate => run_validate_server(input, regime, out_dir),
-        UiOperation::BookReconcile => Err(anyhow!(
-            "book-reconcile is multi-file; route via run_server_dispatch"
+        UiOperation::BookReconcile | UiOperation::TrAudit => Err(anyhow!(
+            "{} is multi-file; route via run_server_dispatch",
+            operation.as_str()
         )),
     }
 }
@@ -197,6 +205,21 @@ pub fn run_server_dispatch(
             match regime {
                 UiRegime::Emir => run_emir_book_reconcile_server(book, tsr, mapping, out_dir),
                 UiRegime::Sftr => run_sftr_book_reconcile_server(book, tsr, mapping, out_dir),
+            }
+        }
+        UiOperation::TrAudit => {
+            let tar = saved
+                .get("file_tar")
+                .ok_or_else(|| anyhow!("tr-audit requires a `file_tar` (XML) upload"))?;
+            let tsr = saved
+                .get("file_tsr")
+                .ok_or_else(|| anyhow!("tr-audit requires a `file_tsr` (XML) upload"))?;
+            let feedback = saved
+                .get("file_feedback")
+                .ok_or_else(|| anyhow!("tr-audit requires a `file_feedback` (XML) upload"))?;
+            match regime {
+                UiRegime::Emir => run_emir_tr_audit_server(tar, tsr, feedback, out_dir),
+                UiRegime::Sftr => run_sftr_tr_audit_server(tar, tsr, feedback, out_dir),
             }
         }
         _ => {
@@ -294,6 +317,147 @@ fn run_sftr_book_reconcile_server(
         &[
             book.to_string_lossy().into_owned(),
             tsr.to_string_lossy().into_owned(),
+        ],
+        started_at,
+        Utc::now(),
+    )
+}
+
+fn run_emir_tr_audit_server(
+    tar: &Path,
+    tsr: &Path,
+    feedback: &Path,
+    out_dir: &Path,
+) -> Result<ScanArtifacts> {
+    use opendqi_core::dq::compute_tr_audit_emir_issues;
+
+    let started_at = Utc::now();
+    let tar_outcome =
+        read_emir_xml(tar).with_context(|| format!("reading TAR {}", tar.display()))?;
+    let tsr_outcome =
+        read_emir_tr_state_xml(tsr).with_context(|| format!("reading TSR {}", tsr.display()))?;
+    let fb_outcome = read_emir_feedback_xml(feedback)
+        .with_context(|| format!("reading feedback {}", feedback.display()))?;
+
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: Utc::now().date_naive(),
+        now: Utc::now(),
+    };
+    let mut issues = tar_outcome.issues;
+    issues.extend(tsr_outcome.issues.clone());
+    issues.extend(fb_outcome.issues.clone());
+    issues.extend(run_all(&default_checks(), &tar_outcome.records, &ctx));
+    issues.extend(run_all_tr_state(
+        &default_tr_state_checks(),
+        &tsr_outcome.records,
+        &[],
+        &ctx,
+    ));
+    issues.extend(run_all_feedback(
+        &default_feedback_checks(),
+        &fb_outcome.records,
+        &[],
+        &ctx,
+    ));
+    issues.extend(run_all_tr_activity(
+        &default_tr_activity_checks(),
+        &tar_outcome.records,
+        &[],
+        Some(&tsr_outcome.records),
+        &ctx,
+    ));
+    issues.extend(compute_tr_audit_emir_issues(
+        &tar_outcome.records,
+        &tsr_outcome.records,
+        &fb_outcome.records,
+        &tsr.to_string_lossy(),
+        &feedback.to_string_lossy(),
+    ));
+    finalize_issues(&mut issues, &ctx);
+    finalize_artifacts(
+        out_dir,
+        Regime::Emir,
+        UiRegime::Emir,
+        tar_outcome.records.len() as u32,
+        &issues,
+        &[
+            tar.to_string_lossy().into_owned(),
+            tsr.to_string_lossy().into_owned(),
+            feedback.to_string_lossy().into_owned(),
+        ],
+        started_at,
+        Utc::now(),
+    )
+}
+
+fn run_sftr_tr_audit_server(
+    tar: &Path,
+    tsr: &Path,
+    feedback: &Path,
+    out_dir: &Path,
+) -> Result<ScanArtifacts> {
+    use opendqi_core::dq::compute_tr_audit_sftr_issues;
+    use opendqi_xml::read_sftr_tr_state_xml;
+
+    let started_at = Utc::now();
+    let tar_outcome =
+        read_sftr_xml(tar).with_context(|| format!("reading SFTR TAR {}", tar.display()))?;
+    let tsr_outcome = read_sftr_tr_state_xml(tsr)
+        .with_context(|| format!("reading SFTR TSR {}", tsr.display()))?;
+    let fb_outcome = read_sftr_feedback_xml(feedback)
+        .with_context(|| format!("reading SFTR feedback {}", feedback.display()))?;
+
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: Utc::now().date_naive(),
+        now: Utc::now(),
+    };
+    let mut issues = tar_outcome.issues;
+    issues.extend(tsr_outcome.issues.clone());
+    issues.extend(fb_outcome.issues.clone());
+    issues.extend(run_all_sftr(
+        &default_sftr_checks(),
+        &tar_outcome.records,
+        &ctx,
+    ));
+    issues.extend(run_all_sftr_tr_state(
+        &default_sftr_tr_state_checks(),
+        &tsr_outcome.records,
+        &[],
+        &ctx,
+    ));
+    issues.extend(run_all_sftr_feedback(
+        &default_sftr_feedback_checks(),
+        &fb_outcome.records,
+        &[],
+        &ctx,
+    ));
+    issues.extend(run_all_sftr_tr_activity(
+        &default_sftr_tr_activity_checks(),
+        &tar_outcome.records,
+        &[],
+        Some(&tsr_outcome.records),
+        &ctx,
+    ));
+    issues.extend(compute_tr_audit_sftr_issues(
+        &tar_outcome.records,
+        &tsr_outcome.records,
+        &fb_outcome.records,
+        &tsr.to_string_lossy(),
+        &feedback.to_string_lossy(),
+    ));
+    finalize_issues(&mut issues, &ctx);
+    finalize_artifacts(
+        out_dir,
+        Regime::Sftr,
+        UiRegime::Sftr,
+        tar_outcome.records.len() as u32,
+        &issues,
+        &[
+            tar.to_string_lossy().into_owned(),
+            tsr.to_string_lossy().into_owned(),
+            feedback.to_string_lossy().into_owned(),
         ],
         started_at,
         Utc::now(),
