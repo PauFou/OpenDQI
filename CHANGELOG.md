@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-15
+
+Feature release — backwards-compatible additions on top of v0.1.0.
+
+### Added
+
+- **Structured evidence in the HTML report.** `report.html` renders
+  a collapsible `evidence` block (Field / Before / After / Line) per
+  issue that carries it — the audit trail captured on lifecycle,
+  reconciliation, duplicate-UTI and book-vs-TSR checks is now visible
+  in the primary human-facing artifact, not only in `issues.csv`.
+- **`opendqi completions <shell>`** — generates shell completion
+  scripts for bash / zsh / fish / powershell / elvish (stdout).
+- **`opendqi man`** — renders the top-level man page (roff) to
+  stdout.
+- **Book-vs-TSR reconciliation in the local web UI** — multi-file
+  upload (book CSV + TSR XML + mapping YAML) for EMIR and SFTR.
+- **TR audit in the local web UI** — multi-file upload (TAR + TSR +
+  feedback XML) running every per-layer check pack plus the three
+  cross-layer `*.AUD.*` coherence checks. The desktop UI now covers
+  10 operations — full parity with every report-producing CLI flow.
+  (Web UI runs without a history store; store-backed lifecycle
+  checks remain CLI-only.)
+
+### Changed
+
+- `compute_book_reconcile_issues` / `compute_sftr_book_reconcile_issues`
+  and `compute_tr_audit_emir_issues` / `compute_tr_audit_sftr_issues`
+  hoisted into `opendqi-core` as pure, unit-tested functions. The
+  CLI and web UI now share a single implementation each — no
+  duplicated reconciliation / audit logic.
+- Workspace version `0.1.0` → `0.2.0`.
+
 ## [0.1.0] - 2026-05-15
 
 First tagged release. OpenDQI is a local-first data-quality engine
@@ -88,5 +121,6 @@ sends back, and turns them into reproducible HTML / JSON / CSV
 - No SWIFT-licensed XSDs or real client data are committed; all
   fixtures are synthetic.
 
-[Unreleased]: https://github.com/PauFou/OpenDQI/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/PauFou/OpenDQI/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/PauFou/OpenDQI/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/PauFou/OpenDQI/releases/tag/v0.1.0

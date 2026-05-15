@@ -120,7 +120,7 @@ Public summary; see [`docs/positioning.md`](docs/positioning.md) for context.
 
 ## Status
 
-**v0.1.0 — first tagged release.** EMIR coverage spans submissions, TSR (`auth.107`), TAR (`auth.030`), feedback (`auth.092`), reconciliation (`auth.106`), MAR (`auth.108`), MSR (`auth.109`), and reconciliation statistics (`auth.091`). SFTR coverage spans submissions (`auth.052`), TSR (`auth.079`), TAR replay, feedback (`auth.080`), reconciliation (`auth.083`), and book-vs-TSR. Margin lending (MGLD) integrated into TAR/TSR layers. 199 data-quality checks, 625 tests, the post-TR → pre-TR rejection-profile loop, email notifications on every report-producing command, and an 8-operation local web UI.
+**v0.2.0.** EMIR coverage spans submissions, TSR (`auth.107`), TAR (`auth.030`), feedback (`auth.092`), reconciliation (`auth.106`), MAR (`auth.108`), MSR (`auth.109`), and reconciliation statistics (`auth.091`). SFTR coverage spans submissions (`auth.052`), TSR (`auth.079`), TAR replay, feedback (`auth.080`), reconciliation (`auth.083`), and book-vs-TSR. Margin lending (MGLD) integrated into TAR/TSR layers. 199 data-quality checks, 634 tests, the post-TR → pre-TR rejection-profile loop, email notifications on every report-producing command, structured evidence rendered in the HTML report, a **10-operation local web UI** (full CLI parity), and shell completions / man page.
 
 - **CI** — `cargo fmt --check`, `cargo clippy -D warnings`, `cargo build`, `cargo test --workspace` on Ubuntu + macOS for every push and PR to `main`.
 - **Security audit** — `cargo-deny` runs `check advisories bans licenses sources` daily and on every push/PR.
