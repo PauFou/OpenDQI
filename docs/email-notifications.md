@@ -3,8 +3,7 @@
 `opendqi emir scan --email-config smtp.yml ./submissions.csv …`
 emails the scan report (HTML inline + `summary.json` + `issues.csv`
 attachments) to a configured list of recipients after the scan
-finishes. CLAUDE.md priority #8 — opt-in, never blocking the scan
-itself.
+finishes. Opt-in, never blocking the scan itself.
 
 ## Quick start
 

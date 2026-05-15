@@ -4,8 +4,8 @@
 //! 20022 catalog conventions.
 //!
 //! See `docs/auth-messages.md` for the canonical message catalog.
-//! When the firm has access to the real XSD, the leaf table in
-//! [`commit_leaf`] is designed to be edited in one place.
+//! When the firm has access to the real XSD, the leaf table in the
+//! crate-private `commit_leaf` is designed to be edited in one place.
 
 use std::path::Path;
 use std::str::FromStr;

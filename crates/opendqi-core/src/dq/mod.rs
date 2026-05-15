@@ -411,9 +411,9 @@ pub fn sort_issues(issues: &mut [DqIssue]) {
 
 /// Apply `thresholds.severity_overrides` in-place: any issue whose
 /// `check_id` matches a key in the override map has its severity
-/// replaced. CLAUDE.md spec — a single chokepoint so a YAML
-/// configuration can downgrade a noisy check from `high` to `warning`
-/// (or escalate the other way) without touching the check code.
+/// replaced. A single chokepoint so a YAML configuration can
+/// downgrade a noisy check from `high` to `warning` (or escalate the
+/// other way) without touching the check code.
 pub fn apply_severity_overrides(issues: &mut [DqIssue], thresholds: &Thresholds) {
     if thresholds.severity_overrides.is_empty() {
         return;

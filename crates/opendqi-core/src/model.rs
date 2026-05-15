@@ -253,9 +253,9 @@ pub struct EmirRecord {
     /// Option greek: vega.
     pub vega: Option<Decimal>,
     /// Source system identifier from the report envelope (e.g. submitter
-    /// LEI/BIC, or an internal upstream system tag). CLAUDE.md spec
-    /// field; populated on best-effort basis from the XML envelope or
-    /// CSV mapping when present.
+    /// LEI/BIC, or an internal upstream system tag). Populated on a
+    /// best-effort basis from the XML envelope or CSV mapping when
+    /// present.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_system: Option<String>,
     /// Catch-all map of any source-format leaf that did not match a
@@ -355,8 +355,8 @@ pub struct SftrRecord {
     /// ISIN of the security used as collateral.
     pub collateral_isin: Option<String>,
     /// ISIN (or other identifier) of the security being lent / borrowed —
-    /// the principal SFT leg, distinct from the collateral leg. CLAUDE.md
-    /// spec field; populated for `SLEB`, `SBSC`, `BSB` typed SFTs.
+    /// the principal SFT leg, distinct from the collateral leg.
+    /// Populated for `SLEB`, `SBSC`, `BSB` typed SFTs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub security_identifier: Option<String>,
 

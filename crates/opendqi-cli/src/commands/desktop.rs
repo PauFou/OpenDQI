@@ -1,4 +1,5 @@
-//! `opendqi desktop` — launch the local web UI on http://127.0.0.1:<port>.
+//! `opendqi desktop` — launch the local web UI on
+//! `http://127.0.0.1:<port>`.
 
 use anyhow::Result;
 use clap::Args;

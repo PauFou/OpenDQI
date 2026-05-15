@@ -116,11 +116,11 @@ Public summary; see [`docs/positioning.md`](docs/positioning.md) for context.
 - **Phase 5** — Book vs TSR reconciliation (`book-reconcile`). ✅
 - **Phase 6** — SFTR equivalent modules. ✅ (`opendqi sftr scan/feedback/reconcile/tr-state-scan/tr-activity-scan/tr-audit/book-reconcile/normalize` — 62 SFTR checks across submission, TSR, TAR, feedback, reconciliation, and book-vs-TSR layers, including margin-lending state/activity.)
 - **Phase 7** — Local web UI. ✅ (`opendqi desktop` opens http://127.0.0.1:7878 — see [`docs/desktop-web-ui.md`](docs/desktop-web-ui.md).)
-- **Phase 8** — EMIR `auth.091` reconciliation statistics (`recon-stats`) ✅, CLAUDE.md model completeness (`source_system`, `security_identifier`, `evidence`, `severity_overrides`) ✅.
+- **Phase 8** — EMIR `auth.091` reconciliation statistics (`recon-stats`) ✅, canonical-model completeness (`source_system`, `security_identifier`, `evidence`, `severity_overrides`) ✅.
 
 ## Status
 
-OpenDQI is in active development. EMIR coverage spans submissions, TSR (`auth.107`), TAR (`auth.030`), feedback (`auth.092`), reconciliation (`auth.106`), MAR (`auth.108`), MSR (`auth.109`), and reconciliation statistics (`auth.091`). SFTR coverage spans submissions (`auth.052`), TSR (`auth.079`), TAR replay, feedback (`auth.080`), reconciliation (`auth.083`), and book-vs-TSR. Margin lending (MGLD) integrated into TAR/TSR layers.
+**v0.1.0 — first tagged release.** EMIR coverage spans submissions, TSR (`auth.107`), TAR (`auth.030`), feedback (`auth.092`), reconciliation (`auth.106`), MAR (`auth.108`), MSR (`auth.109`), and reconciliation statistics (`auth.091`). SFTR coverage spans submissions (`auth.052`), TSR (`auth.079`), TAR replay, feedback (`auth.080`), reconciliation (`auth.083`), and book-vs-TSR. Margin lending (MGLD) integrated into TAR/TSR layers. 199 data-quality checks, 625 tests, the post-TR → pre-TR rejection-profile loop, email notifications on every report-producing command, and an 8-operation local web UI.
 
 - **CI** — `cargo fmt --check`, `cargo clippy -D warnings`, `cargo build`, `cargo test --workspace` on Ubuntu + macOS for every push and PR to `main`.
 - **Security audit** — `cargo-deny` runs `check advisories bans licenses sources` daily and on every push/PR.

@@ -76,8 +76,9 @@ pub struct MaturityThresholds {
 }
 
 /// EMIR Article 11 risk-mitigation thresholds. Each NFC clearing
-/// threshold is keyed by the canonical asset-class short code (see
-/// [`crate::dq::formats::canonical_asset_class`]).
+/// threshold is keyed by the canonical asset-class short code
+/// (`IR`, `CR`, `EQ`, `FX`, `CO`) — the same codes the crate-private
+/// `dq::formats::canonical_asset_class` helper normalises to.
 ///
 /// YAML semantics: each scalar field falls back to its ESMA default
 /// when omitted. The NFC map is treated as a whole — providing it in

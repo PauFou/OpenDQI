@@ -1,4 +1,4 @@
-//! SMTP email notifications for scan reports (CLAUDE.md priority #8).
+//! SMTP email notifications for scan reports.
 //!
 //! Loads an `SmtpConfig` from a YAML file passed via `--email-config`
 //! on `opendqi {emir,sftr} scan`, builds a MIME multipart email

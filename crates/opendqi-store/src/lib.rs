@@ -10,8 +10,8 @@
 //! ## File format
 //!
 //! A single SQLite file. The schema is created on first open via
-//! idempotent `CREATE TABLE IF NOT EXISTS` statements (no separate
-//! migration tooling for v1). See [`schema`] for the SQL.
+//! idempotent `CREATE TABLE IF NOT EXISTS` statements run through the
+//! versioned migration pipeline.
 
 use std::path::Path;
 
@@ -28,8 +28,8 @@ pub use load::FeedbackRow;
 /// Open (or create) the SQLite store at `path` and run the versioned
 /// migration pipeline. Existing databases (created before the
 /// migration tooling existed) are detected and back-filled at v1.
-/// See [`migrations`] for the migration model. The returned [`Store`]
-/// owns the connection.
+/// The migration model lives in the crate-private `migrations`
+/// module. The returned [`Store`] owns the connection.
 pub fn open_store(path: &Path) -> Result<Store, StoreError> {
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
