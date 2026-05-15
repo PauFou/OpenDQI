@@ -17,6 +17,9 @@ planning_internal.md
 
 # Rust
 /target/
+# Local Cargo tuning (job cap, linker) — developer-machine preference,
+# must not be forced on CI or other contributors. Strictly local.
+/.cargo/
 
 # IDE
 .vscode/

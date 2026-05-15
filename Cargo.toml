@@ -53,3 +53,10 @@ clap_mangen = "0.2"
 [profile.release]
 lto = "thin"
 codegen-units = 1
+
+# Dev/test builds keep only line tables (file:line in backtraces) —
+# full DWARF is the bulk of `target/debug` and slows every link. ~2-3x
+# smaller debug tree, faster incremental rebuilds, backtraces still
+# point at source locations.
+[profile.dev]
+debug = "line-tables-only"
