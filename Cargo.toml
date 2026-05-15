@@ -45,6 +45,8 @@ tower-http = { version = "0.6", features = ["trace"] }
 uuid = { version = "1", features = ["v4"] }
 mime_guess = "2"
 lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "rustls-tls", "tokio1-rustls-tls", "hostname"] }
+clap_complete = "4"
+clap_mangen = "0.2"
 
 [profile.release]
 lto = "thin"

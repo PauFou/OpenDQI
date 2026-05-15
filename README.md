@@ -129,6 +129,24 @@ Public summary; see [`docs/positioning.md`](docs/positioning.md) for context.
 
 See [`CHANGELOG.md`](CHANGELOG.md) for release notes.
 
+## Shell completions & man page
+
+```bash
+# Bash (system-wide)
+opendqi completions bash | sudo tee /etc/bash_completion.d/opendqi
+
+# Zsh (into a dir on $fpath)
+opendqi completions zsh > ~/.zfunc/_opendqi
+
+# Fish
+opendqi completions fish > ~/.config/fish/completions/opendqi.fish
+
+# Man page
+opendqi man > opendqi.1 && man ./opendqi.1
+```
+
+Supported shells: `bash`, `zsh`, `fish`, `powershell`, `elvish`.
+
 ## Documentation
 
 - Positioning & roadmap: [`docs/positioning.md`](docs/positioning.md).

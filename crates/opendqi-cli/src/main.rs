@@ -8,7 +8,7 @@ use std::process::ExitCode;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use commands::{desktop, emir, feedback, sftr, smtp_test};
+use commands::{completions, desktop, emir, feedback, sftr, smtp_test};
 
 #[derive(Parser)]
 #[command(
@@ -17,7 +17,7 @@ use commands::{desktop, emir, feedback, sftr, smtp_test};
     about = "OpenDQI — local-first data quality engine for EMIR/SFTR reporting files.",
     long_about = None,
 )]
-struct Cli {
+pub(crate) struct Cli {
     #[command(subcommand)]
     command: TopLevel,
 }
@@ -45,6 +45,11 @@ enum TopLevel {
     /// Use `--dry-run` to check the config + env var without sending.
     /// See `docs/email-notifications.md`.
     SmtpTest(smtp_test::SmtpTestArgs),
+    /// Generate a shell completion script (bash / zsh / fish /
+    /// powershell / elvish) to stdout.
+    Completions(completions::CompletionsArgs),
+    /// Render the top-level man page (roff) to stdout.
+    Man,
 }
 
 fn main() -> Result<ExitCode> {
@@ -62,6 +67,8 @@ fn main() -> Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
         TopLevel::SmtpTest(args) => smtp_test::run(args),
+        TopLevel::Completions(args) => completions::run_completions(args),
+        TopLevel::Man => completions::run_man(),
     }
 }
 

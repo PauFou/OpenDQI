@@ -1,3 +1,4 @@
+pub mod completions;
 pub mod desktop;
 pub mod emir;
 pub mod feedback;
