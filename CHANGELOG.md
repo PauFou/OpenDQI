@@ -19,6 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "deterministic outputs" product guarantee against regressions.
   Regenerate with `UPDATE_GOLDEN=1`. See
   [`docs/reliability.md`](docs/reliability.md).
+- **Parser robustness suite.** Dependency-free, fixed-seed adversarial
+  tests (`crates/opendqi-xml/tests/robustness.rs`,
+  `crates/opendqi-io/tests/robustness_io.rs`) drive every public
+  parser / ingestion entry point with a hostile corpus (empty,
+  malformed, truncated, invalid-UTF-8, wrong-namespace, deep-nesting,
+  size bombs, billion-laughs, garbage zip/gzip/Parquet, hostile
+  CSV/YAML) plus deterministic byte-mutation of the valid fixtures,
+  asserting each call returns `Ok`/`Err` and **never panics or
+  exceeds a 15s wall-clock bound**. Includes a self-test proving the
+  harness actually catches an injected panic. No parser change was
+  needed — the streaming parsers already survive the full corpus.
 
 ### Changed
 
