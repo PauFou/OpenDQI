@@ -31,13 +31,17 @@
 //! scalar `reason_code` is its first element (kept for compatibility).
 //! `ACPT` rows are not feedback and are skipped.
 //!
-//! ## SFTR `auth.080` — synthetic (caveat only)
+//! ## SFTR `auth.080` — not feedback (handled by `sftr reconcile`)
 //!
 //! Real `auth.080` is a *reconciliation status advice*, not rejection
-//! feedback (see the naming caveat in `docs/auth-messages.md`). The
-//! SFTR path is left on its hand-authored synthetic shape, honestly
-//! labelled `partial`; a faithful feedback re-model is a separate
-//! future milestone.
+//! feedback. The **real `auth.080.001.02`** parser lives in
+//! `reconciliation.rs` and is reached via `opendqi sftr reconcile`
+//! (see `docs/auth-messages/sftr-auth080.md`). SFTR has **no**
+//! rejection-feedback message, so the `SFTR.FBK.*` checks have no real
+//! SFTR input. This synthetic SFTR path is retained only as an inert
+//! placeholder for the `auth.080.001.01` hand-authored fixture; a
+//! real `auth.080.001.02` document routed here trips the
+//! unsupported-namespace warning by design.
 
 use std::path::Path;
 

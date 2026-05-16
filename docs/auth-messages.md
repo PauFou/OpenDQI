@@ -47,7 +47,7 @@ parsers' leaf tables are designed to be edited in one place.
 | auth id | ISO/ESMA name (best-effort) | Direction | Coverage | Parser / command |
 |---|---|---|---|---|
 | `auth.052.001.02` | SFT Trade Report | firm → TR | verified | `opendqi sftr scan` via `crates/opendqi-xml/src/sftr/iso20022.rs`. Also re-used by `opendqi sftr tr-activity-scan` for TR replays. |
-| `auth.080.001.NN` | SFT Reconciliation Status Advice | TR → firm | partial | `opendqi sftr feedback` via the shared `crates/opendqi-xml/src/feedback.rs` (synthetic SFTR shape — **not** the real reconciliation-status-advice structure). See the naming caveat below. |
+| `auth.080.001.02` | SFT Reconciliation Status Advice | TR → firm | **schema-verified (subset)** | `opendqi sftr reconcile` via `crates/opendqi-xml/src/reconciliation.rs`, aligned with `auth.080.001.02_ESMAUG_SFTREC_1.1.0` (re-homed from `sftr feedback` — it is reconciliation, not feedback). Derive map onto `ReconciliationRecord`, ignored branches and documented limits in [`auth-messages/sftr-auth080.md`](auth-messages/sftr-auth080.md). |
 | `auth.079.001.02` | Securities Financing Transaction State Report (SFTR TSR) | TR → firm | **schema-verified (subset)** | `opendqi sftr tr-state-scan` via `crates/opendqi-xml/src/sftr_tr_state.rs`, aligned with `auth.079.001.02_ESMAUG_SFTTRS_1.1.0`; 6 `SFTR.TST.*` + 6 `SFTR.MSR.MGLD_*` checks. Extracted-subset map, the 4-way loan choice, ignored branches and documented limits in [`auth-messages/sftr-auth079.md`](auth-messages/sftr-auth079.md). |
 | `auth.083.001.NN` | (SFTR analog of `auth.106`) | TR → firm | **placeholder (matching-style)** | Same caveat as `auth.106`. |
 
@@ -103,15 +103,20 @@ projection — the messages are not per-UTI feeds:
 - **`auth.080.001.02`** is the SFTR *Securities Financing Reporting
   Reconciliation Status Advice* — a pairing/reconciliation state
   machine with field-level matching criteria, **not** rejection
-  feedback (the same family as `auth.106`/`auth.083` above). The SFTR
-  `feedback` path is still on a hand-authored synthetic shape, honestly
-  labelled `partial`; it is not the real `auth.080` structure.
+  feedback. It has been **re-homed**: the real `auth.080.001.02`
+  parser lives in `reconciliation.rs` and is reached via
+  `opendqi sftr reconcile`, mapping onto `ReconciliationRecord`
+  (`schema-verified (subset)` — see
+  [`auth-messages/sftr-auth080.md`](auth-messages/sftr-auth080.md)).
+  Consequently **SFTR has no rejection-feedback message**: the
+  `SFTR.FBK.*` checks have no real SFTR input, and the synthetic SFTR
+  `feedback` path is retained only as an inert placeholder.
 
-A faithful feedback re-model — repeating validation-rule codes, a
-reconciliation-status enum, the SQLite `feedbacks`-table migration and
-adapting the `*.FBK.*` checks / `rejection_profile.yml` / `*.PSC.*`
-loop — is intentionally **out of scope** of the schema-hardening
-milestone and tracked as a separate future milestone.
+The faithful re-model is proceeding as a sequenced milestone: the
+`auth.092` validation-rule list (done) and the real `auth.080` parser
+(done) are shipped; remaining items (EMIR `auth.091` per-transaction
+detail; deleting the now-inert synthetic SFTR-feedback command/checks)
+are tracked there.
 
 ## Adding a new auth.* message
 

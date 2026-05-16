@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic auth.080 SFTR Reconciliation Status Advice — no-activity
+  variant. Real ESMA envelope; RcncltnData carries the DataSetActn
+  "NOTX" choice instead of any Rpt. OpenDQI yields zero records plus
+  one informational SFTR.FMT.RCNCLN_NO_RECORDS note (no error).
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.080.001.02">
+  <SctiesFincgRptgRcncltnStsAdvc>
+    <RcncltnData>
+      <DataSetActn>NOTX</DataSetActn>
+    </RcncltnData>
+  </SctiesFincgRptgRcncltnStsAdvc>
+</Document>

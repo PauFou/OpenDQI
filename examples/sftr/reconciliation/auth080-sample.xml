@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic ISO 20022 auth.080 SFTR Reconciliation Status Advice
+  fixture. Hand-authored — NOT derived from, and does not redistribute,
+  any ESMA or SWIFT example or schema.
+
+  Element paths follow the real ESMA SFTR usage guideline
+  auth.080.001.02_ESMAUG_SFTREC_1.1.0
+  (SecuritiesFinancingReportingReconciliationStatusAdviceV02):
+  Document > SctiesFincgRptgRcncltnStsAdvc > RcncltnData/{DataSetActn |
+  Rpt/RcncltnRpt...}. Schema-shaped, not a fully XSD-valid instance.
+  See docs/auth-messages/sftr-auth080.md.
+
+  auth.080 is a reconciliation status advice (NOT rejection feedback);
+  it is ingested by `opendqi sftr reconcile`. Per-RcncltnRpt:
+  Mtchd -> PAIRED/RECONCILED ; NotMtchd -> PAIRED/UNRECONCILED with
+  mismatched_fields = the MtchgCrit criterion element names ;
+  NoRcncltnReqrd -> no status assertion. UNPAIRED is only a
+  PairgRcncltnSts summary count -> SFTR.REC.UNPAIRED_TRADE is
+  unreachable from real auth.080.
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.080.001.02">
+  <SctiesFincgRptgRcncltnStsAdvc>
+    <RcncltnData>
+      <Rpt>
+        <PairgRcncltnSts><DtldNbOfRpts>3</DtldNbOfRpts><DtldSts>RECO</DtldSts></PairgRcncltnSts>
+
+        <!-- 1. Matched -> RECONCILED (no SFTR.REC issue). -->
+        <RcncltnRpt>
+          <TechRcrdId>REC-1</TechRcrdId>
+          <TxId>
+            <RptgCtrPty><LEI>RPTGLEI0000000000001</LEI></RptgCtrPty>
+            <OthrCtrPty><Lgl><LEI>OTHRLEI0000000000002</LEI></Lgl></OthrCtrPty>
+            <UnqTradIdr>OPENDQI-SFTR-RECON-MTCHD-1</UnqTradIdr>
+          </TxId>
+          <Modfd>false</Modfd>
+          <RcncltnSts><RptgData><Mtchd/></RptgData></RcncltnSts>
+        </RcncltnRpt>
+
+        <!-- 2. Not matched -> UNRECONCILED + FIELD_MISMATCH
+             (mismatched_fields = TermntnDt, MtrtyDt, CollValDt). -->
+        <RcncltnRpt>
+          <TxId>
+            <RptgCtrPty><LEI>RPTGLEI0000000000001</LEI></RptgCtrPty>
+            <OthrCtrPty><Lgl><LEI>OTHRLEI0000000000002</LEI></Lgl></OthrCtrPty>
+            <UnqTradIdr>OPENDQI-SFTR-RECON-NOTMTCHD-2</UnqTradIdr>
+          </TxId>
+          <Modfd>true</Modfd>
+          <RcncltnSts><RptgData><NotMtchd>
+            <CtrPty1><LEI>RPTGLEI0000000000001</LEI></CtrPty1>
+            <CtrPty2><LEI>OTHRLEI0000000000002</LEI></CtrPty2>
+            <MtchgCrit>
+              <LnMtchgCrit>
+                <TermntnDt><Val1>2026-01-01</Val1><Val2>2026-02-01</Val2></TermntnDt>
+                <MtrtyDt><Val1>2030-01-01</Val1><Val2>2030-06-01</Val2></MtrtyDt>
+              </LnMtchgCrit>
+              <CollMtchgCrit>
+                <CollValDt><Val1>2026-05-13</Val1><Val2>2026-05-14</Val2></CollValDt>
+              </CollMtchgCrit>
+            </MtchgCrit>
+          </NotMtchd></RptgData></RcncltnSts>
+        </RcncltnRpt>
+
+        <!-- 3. No reconciliation required -> no status assertion. -->
+        <RcncltnRpt>
+          <TxId><UnqTradIdr>OPENDQI-SFTR-RECON-NOREQ-3</UnqTradIdr></TxId>
+          <Modfd>false</Modfd>
+          <RcncltnSts><NoRcncltnReqrd>NORE</NoRcncltnReqrd></RcncltnSts>
+        </RcncltnRpt>
+
+      </Rpt>
+    </RcncltnData>
+  </SctiesFincgRptgRcncltnStsAdvc>
+</Document>

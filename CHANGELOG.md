@@ -24,6 +24,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stores upgrade transparently (old rows read as an empty list).
   Check IDs, the `FeedbackType` enum, the `rejection_profile.yml`
   schema and the `*.PSC.*` loop are unchanged.
+- **Real SFTR `auth.080` parser, re-homed into reconciliation.** Real
+  `auth.080.001.02` is a *Reconciliation Status Advice* (not rejection
+  feedback). A schema-aligned parser is added in `reconciliation.rs`
+  and reached via **`opendqi sftr reconcile`** (namespace-dispatched
+  alongside the synthetic `auth.083`), projecting onto the existing
+  `ReconciliationRecord` (`Mtchd`→PAIRED/RECONCILED;
+  `NotMtchd`→PAIRED/UNRECONCILED + the mismatched-criteria field
+  names; `NoRcncltnReqrd`→no assertion). `DataSetActn=NOTX` →
+  `SFTR.FMT.RCNCLN_NO_RECORDS`. Consequently SFTR has no
+  rejection-feedback message: `auth.080` no longer flows through
+  `sftr feedback`, and the `SFTR.FBK.*` checks have no real SFTR
+  input (`SFTR.REC.UNPAIRED_TRADE` is also unreachable — "unpaired" is
+  summary-only in `auth.080`). No model/check/store-schema change; the
+  synthetic `auth.083`/`auth.106` paths are untouched. See
+  [`docs/auth-messages/sftr-auth080.md`](docs/auth-messages/sftr-auth080.md).
 
 ## [0.3.0] - 2026-05-15
 
