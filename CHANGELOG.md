@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+### Changed
+
+### Removed
+
+## [0.4.0] - 2026-05-16
+
+Faithful feedback / reconciliation re-model — the EMIR/SFTR TR
+feedback and reconciliation messages are now modelled faithfully to
+the real ESMA ISO 20022 schemas, and the synthetic dishonest SFTR
+feedback path is removed. Includes one breaking CLI change (the
+`opendqi sftr feedback` subcommand no longer exists; `opendqi sftr
+tr-audit` is TAR+TSR-only). EMIR feedback, the shared
+`FeedbackRecord`/`feedbacks` store and the `opendqi feedback`
+workflow are unchanged.
+
 ### Removed
 
 - **Synthetic SFTR rejection-feedback path.** SFTR has no
@@ -76,6 +93,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reachable from real auth.091. No `--store`/persistence, and no
   canonical-model / check / store-schema change. See
   [`docs/auth-messages/emir-auth091.md`](docs/auth-messages/emir-auth091.md).
+
+### Changed
+
+- Workspace version `0.3.0` → `0.4.0`.
 
 ## [0.3.0] - 2026-05-15
 
@@ -248,7 +269,8 @@ sends back, and turns them into reproducible HTML / JSON / CSV
 - No SWIFT-licensed XSDs or real client data are committed; all
   fixtures are synthetic.
 
-[Unreleased]: https://github.com/PauFou/OpenDQI/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/PauFou/OpenDQI/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/PauFou/OpenDQI/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/PauFou/OpenDQI/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/PauFou/OpenDQI/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/PauFou/OpenDQI/releases/tag/v0.1.0
