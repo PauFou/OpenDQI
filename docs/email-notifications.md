@@ -74,8 +74,9 @@ EMIR — `scan`, `feedback`, `reconcile`, `tr-activity-scan`,
 `tr-state-scan`, `tr-audit`, `recon-stats`, `mar-scan`, `msr-scan`,
 `book-reconcile`.
 
-SFTR — `scan`, `feedback`, `reconcile`, `tr-activity-scan`,
-`tr-state-scan`, `tr-audit`, `book-reconcile`.
+SFTR — `scan`, `reconcile`, `tr-activity-scan`, `tr-state-scan`,
+`tr-audit`, `book-reconcile`. (No `feedback` — SFTR has no
+rejection-feedback message.)
 
 (`normalize` and `validate` produce no HTML report, so they have no
 `--email-config`.) Every site uses the identical pattern:

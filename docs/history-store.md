@@ -98,7 +98,9 @@ Indexes on `uti`, `(uti, action_type)`, `feedbacks(uti, status)`, and
 ## Feedbacks table — workflow
 
 The `feedbacks` table persists every row ingested by
-`opendqi {emir,sftr} feedback`. Each row starts in `status='open'`
+`opendqi emir feedback` (the table is regime-tagged and was designed
+to hold SFTR rows too, but SFTR has no rejection-feedback message so
+only EMIR writes to it today). Each row starts in `status='open'`
 and can be transitioned to `resolved` or `stale` via the top-level
 `opendqi feedback` subcommand:
 

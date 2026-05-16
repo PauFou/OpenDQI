@@ -9,13 +9,13 @@
       <option value="scan">Standard scan (submission XML/Parquet)</option>
       <option value="tr-state-scan">TR Trade State Report (auth.107 EMIR / auth.079 SFTR)</option>
       <option value="tr-activity-scan">TR Trade Activity Report (auth.030 EMIR / auth.052 SFTR replay)</option>
-      <option value="feedback">TR Feedback (auth.092 EMIR / auth.080 SFTR) — format checks only</option>
+      <option value="feedback">TR Feedback (auth.092 — EMIR only) — format checks only</option>
       <option value="recon-stats">Reconciliation Statistics (auth.091 — EMIR only)</option>
       <option value="mar-scan">Margin Activity Report (auth.108 — EMIR only)</option>
       <option value="msr-scan">Margin State Report (auth.109 — EMIR only)</option>
       <option value="validate">Validate (XML well-formedness only — XSD via CLI)</option>
       <option value="book-reconcile">Book vs TSR reconciliation (multi-file)</option>
-      <option value="tr-audit">TR audit — TAR + TSR + feedback (multi-file)</option>
+      <option value="tr-audit">TR audit — EMIR: TAR+TSR+feedback / SFTR: TAR+TSR (multi-file)</option>
     </select>
 
     <label for="regime">Regime</label>
@@ -37,7 +37,7 @@
       <input id="file_mapping" name="file_mapping" type="file" accept=".yml,.yaml">
       <label for="file_tar">TAR (auth.030 EMIR / auth.052 SFTR XML) — tr-audit</label>
       <input id="file_tar" name="file_tar" type="file" accept=".xml">
-      <label for="file_feedback">Feedback (auth.092 EMIR / auth.080 SFTR XML) — tr-audit</label>
+      <label for="file_feedback">Feedback (auth.092 EMIR XML) — EMIR tr-audit only</label>
       <input id="file_feedback" name="file_feedback" type="file" accept=".xml">
     </fieldset>
 

@@ -1,16 +1,20 @@
 # Feedback (TR → firm) checks
 
-OpenDQI's "feedback" checks ingest Trade Repository response messages
-(ISO 20022 `auth.092` for EMIR, `auth.080` for SFTR) and cross-reference
-them against the local SQLite history store. They surface the
-**Errors & Omissions** signals the TR sends back to the firm in a form
-that is directly actionable.
+OpenDQI's "feedback" checks ingest the EMIR Trade Repository response
+message (ISO 20022 `auth.092`) and cross-reference it against the local
+SQLite history store. They surface the **Errors & Omissions** signals
+the TR sends back to the firm in a form that is directly actionable.
 
-Feedback checks run via the `feedback` subcommand:
+**SFTR has no rejection-feedback message.** Real `auth.080` is a
+*reconciliation status advice* (handled by `opendqi sftr reconcile` →
+`SFTR.REC.*`, see [`auth-messages/sftr-auth080.md`](auth-messages/sftr-auth080.md)).
+The synthetic SFTR feedback command and the `SFTR.FBK.*` checks were
+removed in Milestone 0.4; feedback is EMIR-only.
+
+Feedback checks run via the EMIR `feedback` subcommand:
 
 ```bash
 opendqi emir feedback <auth.092.xml> --store <history.db> --out <dir>
-opendqi sftr feedback <auth.080.xml> --store <history.db> --out <dir>
 ```
 
 `--store` is **required** here: without the history of prior
@@ -31,16 +35,12 @@ and legal note on the SWIFT-licensed schemas.
 | `EMIR.FBK.TR_MISSING_DESPITE_SUBMISSION` | Consistency | Critical | The TR signals a UTI as missing but the local history store **does** record a prior NEWT for it — either a TR ingestion failure or a stale feedback file. |
 | `EMIR.FBK.TR_INACCURATE_REPORTED` | Accuracy | High | The TR accepted the report but flagged one or more inaccurate fields. Message includes the flagged field and the TR's reason. |
 
-### SFTR (4)
+### SFTR
 
-Parallel checks for the SFTR regime:
-
-| Check ID | Dimension | Severity | What it detects |
-|---|---|---|---|
-| `SFTR.FBK.TR_REJECTED_UTI` | Validity | Critical | TR rejected the SFT submission. |
-| `SFTR.FBK.TR_MISSING_BUT_NOT_SENT` | Completeness | High | TR signals UTI as missing, no prior NEWT in store. |
-| `SFTR.FBK.TR_MISSING_DESPITE_SUBMISSION` | Consistency | Critical | TR signals UTI as missing but a prior NEWT exists in store. |
-| `SFTR.FBK.TR_INACCURATE_REPORTED` | Accuracy | High | TR flagged inaccurate field(s). |
+None — SFTR has no rejection-feedback message (see the note above).
+The SFTR equivalent of the TR→firm matching signal is the
+reconciliation status advice (`auth.080` → `SFTR.REC.*`, via
+`opendqi sftr reconcile`).
 
 ### Reserved
 
@@ -54,10 +54,10 @@ scoped to a future milestone.
 
 Each feedback check sees two inputs:
 
-- **feedback**: records parsed from the `auth.092` / `auth.080` file.
-- **prior**: every prior EMIR / SFTR record in the store whose UTI
-  appears in the feedback (no `scan_id` filter — for feedback, "what
-  is known" is the right semantic).
+- **feedback**: records parsed from the `auth.092` file.
+- **prior**: every prior EMIR record in the store whose UTI appears in
+  the feedback (no `scan_id` filter — for feedback, "what is known" is
+  the right semantic).
 
 Each ingested feedback batch is **persisted into the `feedbacks`
 table** in the history store. Use `opendqi feedback list/resolve/stale`
@@ -67,9 +67,8 @@ the catalogue of CLI verbs.
 
 ## Adding a feedback check
 
-EMIR checks live under `crates/opendqi-core/src/dq/feedback/`,
-SFTR checks under `crates/opendqi-core/src/dq/sftr/feedback/`.
-Implement `FeedbackCheck` / `SftrFeedbackCheck`, add positive and
-negative unit tests, then register the struct in
-`default_feedback_checks()` / `default_sftr_feedback_checks()` inside
-`crates/opendqi-core/src/dq/mod.rs`.
+EMIR feedback checks live under `crates/opendqi-core/src/dq/feedback/`.
+Implement `FeedbackCheck`, add positive and negative unit tests, then
+register the struct in `default_feedback_checks()` inside
+`crates/opendqi-core/src/dq/mod.rs`. (There is no SFTR feedback
+registry — SFTR has no rejection-feedback message.)

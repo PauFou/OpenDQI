@@ -62,20 +62,24 @@ feedback / TSR cross-references.
   consumer can grep by check_id family (`EMIR.COMP`, `EMIR.TST`,
   `EMIR.FBK`, `EMIR.TRA`, `EMIR.AUD`, …) to slice by layer.
 
-## SFTR (`auth.052` + `auth.079` + `auth.080`)
+## SFTR (`auth.052` + `auth.079`) — TAR + TSR only
 
-The same consolidated audit is available for SFTR:
+A consolidated audit is available for SFTR, but **TAR + TSR only**:
+SFTR has no rejection-feedback message (real `auth.080` is a
+reconciliation status advice — see
+[`auth-messages/sftr-auth080.md`](auth-messages/sftr-auth080.md)), so
+there is no feedback layer.
 
 ```bash
 opendqi sftr tr-audit \
   --tar examples/sftr/tr_activity/auth052-tar-sample.xml \
   --tsr examples/sftr/tr_state/auth079-sample.xml \
-  --feedback examples/sftr/feedback/auth080-sample.xml \
   [--store <db>] --out <dir>
 ```
 
-It runs every SFTR layer (single-batch, lifecycle, TSR, TAR, feedback)
-and adds 3 inline cross-layer `SFTR.AUD.*` checks mirroring the EMIR
-equivalents: `NEWT_IN_TAR_NOT_IN_TSR`, `OUTSTANDING_IN_TSR_NOT_IN_TAR`,
-`REJECTED_BUT_OUTSTANDING_IN_TSR`. Output files are
-`summary.json`, `tr_audit_issues.csv`, `tr_audit_report.html`.
+It runs every SFTR layer (single-batch, lifecycle, TSR, TAR) and adds
+**2** inline cross-layer `SFTR.AUD.*` checks:
+`NEWT_IN_TAR_NOT_IN_TSR`, `OUTSTANDING_IN_TSR_NOT_IN_TAR`. There is no
+`SFTR.AUD.REJECTED_BUT_OUTSTANDING_IN_TSR` — that EMIR-only check
+needs the feedback layer. Output files are `summary.json`,
+`tr_audit_issues.csv`, `tr_audit_report.html`.

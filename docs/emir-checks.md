@@ -29,7 +29,7 @@ margin-activity, **8 MSR** margin-state, **5 lifecycle** (cross-batch),
 **4 feedback**, **3 reconciliation**, **4 RST** recon-statistics
 (auth.091), and **2 PSC** pre-submission (rejection-profile driven,
 auth.092 → next scan) checks — see the dedicated docs. **Total live
-EMIR catalog: 135 checks**, plus 62 SFTR counterparts
+EMIR catalog: 135 checks**, plus 60 SFTR counterparts
 (`docs/sftr-checks.md`).
 
 Severity scale: `info` < `warning` < `high` < `critical`.

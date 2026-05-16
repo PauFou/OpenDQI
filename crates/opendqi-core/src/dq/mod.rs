@@ -686,36 +686,10 @@ pub fn run_all_feedback(
     issues
 }
 
-pub use sftr::feedback::{
-    SftrFeedbackCheck, SftrTrInaccurateReported, SftrTrMissingButNotSent,
-    SftrTrMissingDespiteSubmission, SftrTrRejectedUti,
-};
-
-/// Default SFTR feedback check registry (4 checks).
-pub fn default_sftr_feedback_checks() -> Vec<Box<dyn SftrFeedbackCheck>> {
-    vec![
-        Box::new(SftrTrRejectedUti),
-        Box::new(SftrTrMissingButNotSent),
-        Box::new(SftrTrMissingDespiteSubmission),
-        Box::new(SftrTrInaccurateReported),
-    ]
-}
-
-/// Run every SFTR feedback check and return the concatenated, sorted
-/// issues.
-pub fn run_all_sftr_feedback(
-    checks: &[Box<dyn SftrFeedbackCheck>],
-    feedback: &[FeedbackRecord],
-    prior: &[SftrRecord],
-    ctx: &CheckContext,
-) -> Vec<DqIssue> {
-    let mut issues: Vec<DqIssue> = checks
-        .par_iter()
-        .flat_map_iter(|c| c.run(feedback, prior, ctx))
-        .collect();
-    finalize_issues(&mut issues, ctx);
-    issues
-}
+// SFTR has no rejection-feedback message: real auth.080 is a
+// reconciliation status advice (see `opendqi sftr reconcile`). The
+// synthetic SFTR feedback parser and the `SFTR.FBK.*` checks were
+// removed in Milestone 0.4 — there is no SFTR feedback registry.
 
 // ---- Reconciliation (TR auth.106 / auth.083) checks ---------------
 //

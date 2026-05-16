@@ -9,11 +9,10 @@ use chrono::Utc;
 use clap::Subcommand;
 use opendqi_core::dq::compute_sftr_book_reconcile_issues;
 use opendqi_core::dq::{
-    default_sftr_checks, default_sftr_feedback_checks, default_sftr_lifecycle_checks,
-    default_sftr_pre_submission_checks, default_sftr_reconciliation_checks,
-    default_sftr_tr_activity_checks, default_sftr_tr_state_checks,
-    default_sftr_tr_state_lifecycle_checks, finalize_issues, run_all_sftr, run_all_sftr_feedback,
-    run_all_sftr_lifecycle, run_all_sftr_pre_submission, run_all_sftr_reconciliation,
+    default_sftr_checks, default_sftr_lifecycle_checks, default_sftr_pre_submission_checks,
+    default_sftr_reconciliation_checks, default_sftr_tr_activity_checks,
+    default_sftr_tr_state_checks, default_sftr_tr_state_lifecycle_checks, finalize_issues,
+    run_all_sftr, run_all_sftr_lifecycle, run_all_sftr_pre_submission, run_all_sftr_reconciliation,
     run_all_sftr_tr_activity, run_all_sftr_tr_state, run_all_sftr_tr_state_lifecycle, sort_issues,
     CheckContext,
 };
@@ -27,8 +26,8 @@ use opendqi_io::{
 };
 use opendqi_report::{write_issues_csv, write_report_html, write_summary_json};
 use opendqi_xml::{
-    check_wellformedness, read_sftr_feedback_xml, read_sftr_reconciliation_xml,
-    read_sftr_tr_state_xml, read_sftr_xml, ExternalXmllintValidator, XsdValidator, XsdViolation,
+    check_wellformedness, read_sftr_reconciliation_xml, read_sftr_tr_state_xml, read_sftr_xml,
+    ExternalXmllintValidator, XsdValidator, XsdViolation,
 };
 use tracing::{info, warn};
 
@@ -85,24 +84,6 @@ pub enum SftrAction {
         /// Required path to an XSD schema file.
         #[arg(long)]
         xsd: PathBuf,
-    },
-    /// Ingest an SFTR Trade Repository feedback file (`auth.080`) and
-    /// cross-reference each UTI against the local SQLite history
-    /// store. Produces `SFTR.FBK.*` issues.
-    Feedback {
-        /// Path to the `auth.080` XML file received from the TR.
-        input: PathBuf,
-        /// Required path to the SQLite history store containing prior
-        /// SFTR scans.
-        #[arg(long)]
-        store: PathBuf,
-        /// Directory where reports are written.
-        #[arg(long)]
-        out: PathBuf,
-        /// Optional SMTP configuration YAML — emails the SFTR
-        /// feedback report. See `docs/email-notifications.md`.
-        #[arg(long, value_name = "PATH")]
-        email_config: Option<PathBuf>,
     },
     /// Ingest a TR pairing / matching report and produce
     /// `SFTR.REC.*` issues for UNPAIRED / UNRECONCILED trades and
@@ -171,11 +152,13 @@ pub enum SftrAction {
         #[arg(long, value_name = "PATH")]
         email_config: Option<PathBuf>,
     },
-    /// Consolidated SFTR TR audit. Ingests a TAR (`auth.052`), a TSR
-    /// (`auth.079`), and a feedback file (`auth.080`) together,
-    /// runs every layer's checks, plus 3 cross-layer coherence
-    /// checks (`SFTR.AUD.*`), and writes a single
-    /// `tr_audit_report.html` consolidating all three layers.
+    /// Consolidated SFTR TR audit. Ingests a TAR (`auth.052`) and a
+    /// TSR (`auth.079`) together, runs every layer's checks plus the
+    /// 2 cross-layer coherence checks (`SFTR.AUD.*`), and writes a
+    /// single `tr_audit_report.html` consolidating both layers.
+    /// (SFTR has no rejection-feedback message — there is no feedback
+    /// layer; use `opendqi emir tr-audit` for the EMIR equivalent
+    /// which does include feedback.)
     TrAudit {
         /// Path to the TAR `auth.052` XML file (or directory).
         #[arg(long)]
@@ -183,9 +166,6 @@ pub enum SftrAction {
         /// Path to the TSR `auth.079` XML file.
         #[arg(long)]
         tsr: PathBuf,
-        /// Path to the feedback `auth.080` XML file.
-        #[arg(long)]
-        feedback: PathBuf,
         /// Optional path to the SQLite history store.
         #[arg(long)]
         store: Option<PathBuf>,
@@ -262,15 +242,6 @@ pub fn run(action: SftrAction) -> Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
         SftrAction::Validate { input, xsd } => run_validate(&input, &xsd),
-        SftrAction::Feedback {
-            input,
-            store,
-            out,
-            email_config,
-        } => {
-            run_feedback(&input, &store, &out, email_config.as_deref())?;
-            Ok(ExitCode::SUCCESS)
-        }
         SftrAction::Reconcile {
             input,
             store,
@@ -308,19 +279,11 @@ pub fn run(action: SftrAction) -> Result<ExitCode> {
         SftrAction::TrAudit {
             tar,
             tsr,
-            feedback,
             store,
             out,
             email_config,
         } => {
-            run_tr_audit(
-                &tar,
-                &tsr,
-                &feedback,
-                store.as_deref(),
-                &out,
-                email_config.as_deref(),
-            )?;
+            run_tr_audit(&tar, &tsr, store.as_deref(), &out, email_config.as_deref())?;
             Ok(ExitCode::SUCCESS)
         }
         SftrAction::BookReconcile {
@@ -678,112 +641,6 @@ fn run_validate(input: &Path, xsd_path: &Path) -> Result<ExitCode> {
     } else {
         ExitCode::from(1)
     })
-}
-
-fn run_feedback(
-    input: &Path,
-    store_path: &Path,
-    out: &Path,
-    email_config_path: Option<&Path>,
-) -> Result<()> {
-    let started_at = Utc::now();
-    let outcome = read_sftr_feedback_xml(input)
-        .with_context(|| format!("reading feedback file {}", input.display()))?;
-    info!(
-        file = %input.display(),
-        records = outcome.records.len(),
-        format_issues = outcome.issues.len(),
-        "loaded SFTR feedback XML",
-    );
-
-    let mut issues: Vec<DqIssue> = outcome.issues;
-
-    let mut store = opendqi_store::open_store(store_path)
-        .with_context(|| format!("opening history store at {}", store_path.display()))?;
-
-    // Persist the feedback batch into the `feedbacks` table so the
-    // `opendqi feedback list/resolve/stale` workflow can pick it up.
-    let persisted = store
-        .persist_feedback_batch(&outcome.records)
-        .context("persisting SFTR feedback batch to history store")?;
-    info!(persisted, "feedback rows persisted to store");
-
-    let utis: Vec<&str> = outcome
-        .records
-        .iter()
-        .filter_map(|r| r.uti.as_deref())
-        .map(str::trim)
-        .filter(|u| !u.is_empty())
-        .collect();
-    let prior = store
-        .load_prior_sftr(&utis, i64::MAX)
-        .context("loading prior SFTR records from history store")?;
-    info!(prior_records = prior.len(), "loaded prior records");
-
-    let now = Utc::now();
-    let ctx = CheckContext {
-        thresholds: Thresholds::default(),
-        today: now.date_naive(),
-        now,
-    };
-    let fbk_issues = run_all_sftr_feedback(
-        &default_sftr_feedback_checks(),
-        &outcome.records,
-        &prior,
-        &ctx,
-    );
-    info!(feedback_issues = fbk_issues.len(), "feedback checks run");
-    issues.extend(fbk_issues);
-    finalize_issues(&mut issues, &ctx);
-
-    let inputs = vec![input.to_path_buf()];
-    let sources = vec![input.to_string_lossy().into_owned()];
-    let summary = build_feedback_summary(
-        outcome.records.len(),
-        &issues,
-        &inputs,
-        started_at,
-        Utc::now(),
-    );
-
-    std::fs::create_dir_all(out)
-        .with_context(|| format!("creating output directory {}", out.display()))?;
-    write_summary_json(&out.join("summary.json"), &summary)?;
-    write_issues_csv(&out.join("issues.csv"), &issues)?;
-    write_report_html(&out.join("report.html"), &summary, &issues, &sources)?;
-
-    if let Some(path) = email_config_path {
-        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
-        let sent = opendqi_report::send_report_email(
-            &cfg,
-            &summary,
-            &out.join("report.html"),
-            &out.join("summary.json"),
-            &out.join("issues.csv"),
-        )?;
-        if sent {
-            info!(to = ?cfg.to, "SFTR feedback report emailed");
-        } else {
-            info!("email config is disabled — skipped send");
-        }
-    }
-
-    let critical = summary
-        .issues_by_severity
-        .get(&Severity::Critical)
-        .copied()
-        .unwrap_or(0);
-    let high = summary
-        .issues_by_severity
-        .get(&Severity::High)
-        .copied()
-        .unwrap_or(0);
-    println!(
-        "Ingested {} SFTR feedback record(s). {} issues ({} critical, {} high). Score: {:.1}/100.",
-        summary.records_processed, summary.issues_total, critical, high, summary.quality_score
-    );
-    println!("Report: {}", out.join("report.html").display());
-    Ok(())
 }
 
 fn build_feedback_summary(
@@ -1209,14 +1066,13 @@ fn run_tr_activity_scan(
 fn run_tr_audit(
     tar_path: &Path,
     tsr_path: &Path,
-    feedback_path: &Path,
     store_path: Option<&Path>,
     out: &Path,
     email_config_path: Option<&Path>,
 ) -> Result<()> {
     let started_at = Utc::now();
 
-    // 1. Load all three SFTR layers.
+    // 1. Load the TAR + TSR layers (SFTR has no feedback message).
     let tar_inputs = discover_emir_inputs(tar_path)?;
     let mut tar_records: Vec<SftrRecord> = Vec::new();
     let mut tar_issues: Vec<DqIssue> = Vec::new();
@@ -1235,16 +1091,8 @@ fn run_tr_audit(
         .with_context(|| format!("reading SFTR TSR {}", tsr_path.display()))?;
     info!(records = tsr_outcome.records.len(), "loaded SFTR TSR");
 
-    let feedback_outcome = read_sftr_feedback_xml(feedback_path)
-        .with_context(|| format!("reading SFTR feedback {}", feedback_path.display()))?;
-    info!(
-        records = feedback_outcome.records.len(),
-        "loaded SFTR feedback"
-    );
-
     let mut issues: Vec<DqIssue> = tar_issues;
     issues.extend(tsr_outcome.issues.clone());
-    issues.extend(feedback_outcome.issues.clone());
 
     let prior: Vec<SftrRecord> = if let Some(sp) = store_path {
         let store = opendqi_store::open_store(sp)
@@ -1257,14 +1105,6 @@ fn run_tr_audit(
             .collect();
         utis.extend(
             tsr_outcome
-                .records
-                .iter()
-                .filter_map(|r| r.uti.as_deref())
-                .map(str::trim)
-                .filter(|u| !u.is_empty()),
-        );
-        utis.extend(
-            feedback_outcome
                 .records
                 .iter()
                 .filter_map(|r| r.uti.as_deref())
@@ -1299,13 +1139,6 @@ fn run_tr_audit(
         &ctx,
     );
     issues.extend(tsr_checks);
-    let fbk_checks = run_all_sftr_feedback(
-        &default_sftr_feedback_checks(),
-        &feedback_outcome.records,
-        &prior,
-        &ctx,
-    );
-    issues.extend(fbk_checks);
     let activity_checks = run_all_sftr_tr_activity(
         &default_sftr_tr_activity_checks(),
         &tar_records,
@@ -1315,22 +1148,16 @@ fn run_tr_audit(
     );
     issues.extend(activity_checks);
 
-    // Cross-layer coherence (SFTR.AUD.*).
+    // Cross-layer coherence (SFTR.AUD.*, TAR↔TSR only).
     issues.extend(opendqi_core::dq::compute_tr_audit_sftr_issues(
         &tar_records,
         &tsr_outcome.records,
-        &feedback_outcome.records,
         &tsr_path.to_string_lossy(),
-        &feedback_path.to_string_lossy(),
     ));
 
     finalize_issues(&mut issues, &ctx);
 
-    let all_inputs = vec![
-        tar_path.to_path_buf(),
-        tsr_path.to_path_buf(),
-        feedback_path.to_path_buf(),
-    ];
+    let all_inputs = vec![tar_path.to_path_buf(), tsr_path.to_path_buf()];
     let sources: Vec<String> = all_inputs
         .iter()
         .map(|p| p.to_string_lossy().into_owned())
@@ -1375,10 +1202,9 @@ fn run_tr_audit(
         .copied()
         .unwrap_or(0);
     println!(
-        "SFTR TR audit: TAR={} TSR={} feedback={}. {} issues ({} critical, {} high). Score: {:.1}/100.",
+        "SFTR TR audit: TAR={} TSR={}. {} issues ({} critical, {} high). Score: {:.1}/100.",
         tar_records.len(),
         tsr_outcome.records.len(),
-        feedback_outcome.records.len(),
         summary.issues_total,
         critical,
         high,

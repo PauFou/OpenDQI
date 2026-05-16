@@ -1,7 +1,8 @@
 # SFTR `auth.080` — Securities Financing Reporting Reconciliation Status Advice
 
 Per-message coverage note. Parent catalog: [`../auth-messages.md`](../auth-messages.md).
-Command: `opendqi sftr reconcile` (re-homed from `sftr feedback`).
+Command: `opendqi sftr reconcile`. (The old synthetic `sftr feedback`
+command was removed in Milestone 0.4 — SFTR has no feedback message.)
 
 ## Business meaning
 
@@ -90,9 +91,12 @@ pairs (only the criterion *name* is kept, not the differing values);
 - **No per-record reconciliation timestamp** in auth.080 →
   `reconciliation_timestamp` stays `None`.
 - **SFTR has no rejection-feedback message.** auth.080 being
-  reconciliation means the `SFTR.FBK.*` checks and the synthetic
-  `sftr feedback` path have no real SFTR input (the latter is retained
-  only as an inert placeholder).
+  reconciliation, the synthetic `opendqi sftr feedback` command, its
+  `auth.080.001.01` parser and the four `SFTR.FBK.*` checks were
+  **removed** in Milestone 0.4. Consequently `opendqi sftr tr-audit`
+  is **TAR+TSR-only** (2 `SFTR.AUD.*`; there is no
+  `SFTR.AUD.REJECTED_BUT_OUTSTANDING_IN_TSR` — that cross-layer check
+  is EMIR-only, since it needs the feedback layer).
 - **Not a full XSD validation** — same documented "subset" stance as
   `auth.107`; use `--xsd` with a locally-held official schema for
   strict validation (see [`../xsd-validation.md`](../xsd-validation.md)).
@@ -116,8 +120,8 @@ nesting and cardinalities were used.
    + `SFTR.REC.FIELD_MISMATCH`, no `SFTR.REC.UNPAIRED_TRADE`;
    `…/auth080-no-records.xml` → zero records + one
    `SFTR.FMT.RCNCLN_NO_RECORDS` info note; re-open the same store
-   (migration idempotent). `opendqi sftr feedback <real auth.080>`
-   cleanly warns unsupported-namespace (no mis-parse).
+   (migration idempotent). (`opendqi sftr feedback` no longer exists —
+   removed in Milestone 0.4; SFTR has no feedback message.)
 4. Optional strict check against a locally-held official XSD (not
    committed): `xmllint --noout --schema <local auth.080 xsd> <file>`
    (fixtures are schema-shaped subsets).

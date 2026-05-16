@@ -2,7 +2,7 @@
 
 OpenDQI's check loop fans out over the dimension `checks`, not
 `records`. Records are small structs (40-50 typed fields); the
-catalog is 199 checks (135 EMIR + 64 SFTR) running mostly O(n) over
+catalog is 195 checks (135 EMIR + 60 SFTR) running mostly O(n) over
 records. Parallelizing the **checks** dimension is the high-leverage
 choice: scheduling overhead amortises across `n_records` iterations
 of each check.
@@ -48,7 +48,7 @@ Two suites are exercised at 1k, 10k, and 100k synthetic records each:
 - `run_all_emir/{1000,10000,100000}` — `default_checks()` (the full
   135-check EMIR single-batch catalog).
 - `run_all_sftr/{1000,10000,100000}` — `default_sftr_checks()` (the
-  64-check SFTR catalog).
+  60-check SFTR catalog).
 
 The synthetic generators are **deterministic** (index-driven, no
 RNG) and populate ~30 typed fields per record so the vast majority
@@ -59,7 +59,7 @@ detection.
 ## Reference numbers
 
 Local-machine numbers (Apple Silicon, Rust stable, release build,
-`lto=thin`), measured 2026-05-15 against the full 199-check
+`lto=thin`), measured 2026-05-15 against the full 195-check
 catalog with the enriched deterministic generators. They scale
 roughly linearly with `n_records` once warm. **Indicative, not a
 benchmark contract** — re-run `cargo bench` on your hardware.
@@ -73,7 +73,7 @@ benchmark contract** — re-run `cargo bench` on your hardware.
 | `run_all_sftr` | 10 000 | ~12.8 ms | ~779 k records/s |
 | `run_all_sftr` | 100 000 | ~164 ms | ~609 k records/s |
 
-SFTR is faster per record because its catalog is smaller (64 vs
+SFTR is faster per record because its catalog is smaller (60 vs
 135 checks). These numbers are lower than the pre-0.1.0 baseline
 because the generators now populate far more fields, so more checks
 do real work per record (a more honest figure than the old

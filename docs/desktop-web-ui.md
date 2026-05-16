@@ -16,9 +16,10 @@ The browser opens to a minimal upload form:
   - *Standard scan* (default) — submission XML/Parquet.
   - *TR Trade State Report* — auth.107 (EMIR) / auth.079 (SFTR).
   - *TR Trade Activity Report* — auth.030 (EMIR) / auth.052 (SFTR) replay.
-  - *TR Feedback* — auth.092 (EMIR) / auth.080 (SFTR). v1 runs the
-    format / namespace checks only; the store-cross-referenced
-    `EMIR.FBK.*` / `SFTR.FBK.*` checks remain CLI-only.
+  - *TR Feedback* — auth.092 (EMIR only). v1 runs the format /
+    namespace checks only; the store-cross-referenced `EMIR.FBK.*`
+    checks remain CLI-only. (SFTR has no feedback message —
+    selecting SFTR for this operation returns an error.)
   - *Reconciliation Statistics* — auth.091 (EMIR only).
   - *Margin Activity Report* — auth.108 (EMIR only).
   - *Margin State Report* — auth.109 (EMIR only).
@@ -26,12 +27,12 @@ The browser opens to a minimal upload form:
     remains CLI-only (`opendqi {emir,sftr} validate --xsd <path>`).
   - *Book vs TSR reconciliation* — **multi-file**: book CSV +
     TSR XML (auth.107 EMIR / auth.079 SFTR) + CSV mapping YAML.
-  - *TR audit* — **multi-file**: TAR (auth.030 EMIR / auth.052
-    SFTR) + TSR (auth.107 / auth.079) + feedback (auth.092 /
-    auth.080). Runs every per-layer check pack plus the 3
-    cross-layer `*.AUD.*` coherence checks. Web UI v1 runs without
-    a history store, so store-backed lifecycle checks remain
-    CLI-only.
+  - *TR audit* — **multi-file**. EMIR: TAR (auth.030) + TSR
+    (auth.107) + feedback (auth.092), 3 cross-layer `EMIR.AUD.*`
+    checks. SFTR: TAR (auth.052) + TSR (auth.079) only (no feedback
+    message), 2 cross-layer `SFTR.AUD.*` checks. Runs every per-layer
+    check pack. Web UI v1 runs without a history store, so
+    store-backed lifecycle checks remain CLI-only.
 - **Regime** — EMIR or SFTR.
 - **File / multi-file** — single-file operations use the `File`
   picker; book-reconcile and tr-audit use the named fields in the

@@ -3,12 +3,15 @@
 //!
 //! The per-layer checks (TAR / TSR / feedback / activity) are run by
 //! the existing `run_all_*` registries; this module only computes the
-//! three `*.AUD.*` cross-layer coherence checks that need TAR + TSR +
-//! feedback together:
+//! `*.AUD.*` cross-layer coherence checks.
 //!
-//! - `*.AUD.NEWT_IN_TAR_NOT_IN_TSR` (high)
-//! - `*.AUD.OUTSTANDING_IN_TSR_NOT_IN_TAR` (warning)
-//! - `*.AUD.REJECTED_BUT_OUTSTANDING_IN_TSR` (critical)
+//! - EMIR (TAR + TSR + feedback): 3 checks —
+//!   `EMIR.AUD.NEWT_IN_TAR_NOT_IN_TSR` (high),
+//!   `EMIR.AUD.OUTSTANDING_IN_TSR_NOT_IN_TAR` (warning),
+//!   `EMIR.AUD.REJECTED_BUT_OUTSTANDING_IN_TSR` (critical).
+//! - SFTR (TAR + TSR only — SFTR has no rejection-feedback message):
+//!   2 checks — `SFTR.AUD.NEWT_IN_TAR_NOT_IN_TSR` (high),
+//!   `SFTR.AUD.OUTSTANDING_IN_TSR_NOT_IN_TAR` (warning).
 
 use std::collections::HashSet;
 
@@ -146,13 +149,15 @@ pub fn compute_tr_audit_emir_issues(
     out
 }
 
-/// SFTR cross-layer TR-audit checks (mirror of the EMIR variant).
+/// SFTR cross-layer TR-audit checks. SFTR has no rejection-feedback
+/// message (real `auth.080` is a reconciliation status advice), so the
+/// SFTR audit is **TAR + TSR only** — there is no
+/// `SFTR.AUD.REJECTED_BUT_OUTSTANDING_IN_TSR` counterpart to the EMIR
+/// variant.
 pub fn compute_tr_audit_sftr_issues(
     tar: &[SftrRecord],
     tsr: &[SftrTrStateRecord],
-    feedback: &[FeedbackRecord],
     tsr_source: &str,
-    feedback_source: &str,
 ) -> Vec<DqIssue> {
     let tsr_utis: HashSet<&str> = tsr
         .iter()
@@ -161,11 +166,6 @@ pub fn compute_tr_audit_sftr_issues(
     let tar_utis: HashSet<&str> = tar
         .iter()
         .filter_map(|r| trimmed_nonempty(r.uti.as_deref()))
-        .collect();
-    let rejected_utis: HashSet<&str> = feedback
-        .iter()
-        .filter(|f| matches!(f.feedback_type, FeedbackType::Rejected))
-        .filter_map(|f| trimmed_nonempty(f.uti.as_deref()))
         .collect();
     let tsr_outstanding_utis: HashSet<&str> = tsr
         .iter()
@@ -215,21 +215,6 @@ pub fn compute_tr_audit_sftr_issues(
             ));
         }
     }
-    for uti in rejected_utis.iter() {
-        if tsr_outstanding_utis.contains(uti) {
-            out.push(aud_issue(
-                "SFTR.AUD.REJECTED_BUT_OUTSTANDING_IN_TSR",
-                Regime::Sftr,
-                Severity::Critical,
-                None,
-                uti,
-                format!(
-                    "SFT UTI {uti} is reported rejected in the feedback file yet appears outstanding in the TSR — TR-side inconsistency."
-                ),
-                Some(feedback_source.to_owned()),
-            ));
-        }
-    }
     out
 }
 
@@ -265,6 +250,32 @@ mod tests {
             .expect("critical AUD issue");
         assert_eq!(crit.severity, Severity::Critical);
         assert_eq!(crit.uti.as_deref(), Some("U-REJ"));
+    }
+
+    #[test]
+    fn sftr_tar_tsr_audit_flags_newt_and_outstanding() {
+        let tar = vec![SftrRecord {
+            uti: Some("U-NEWT-MISSING".into()),
+            action_type: Some("NEWT".into()),
+            record_id: Some("r1".into()),
+            ..Default::default()
+        }];
+        let tsr = vec![SftrTrStateRecord {
+            uti: Some("U-ONLY-TSR".into()),
+            status: Some("OUTSTANDING".into()),
+            ..Default::default()
+        }];
+        let issues = compute_tr_audit_sftr_issues(&tar, &tsr, "tsr.xml");
+        assert!(issues
+            .iter()
+            .any(|i| i.check_id == "SFTR.AUD.NEWT_IN_TAR_NOT_IN_TSR"));
+        assert!(issues
+            .iter()
+            .any(|i| i.check_id == "SFTR.AUD.OUTSTANDING_IN_TSR_NOT_IN_TAR"));
+        // SFTR has no feedback layer — the REJECTED check does not exist.
+        assert!(!issues
+            .iter()
+            .any(|i| i.check_id == "SFTR.AUD.REJECTED_BUT_OUTSTANDING_IN_TSR"));
     }
 
     #[test]

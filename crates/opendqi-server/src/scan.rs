@@ -11,12 +11,11 @@ use chrono::Utc;
 use opendqi_core::dq::{
     default_checks, default_feedback_checks, default_margin_activity_checks,
     default_margin_state_checks, default_recon_stats_checks, default_reconciliation_checks,
-    default_sftr_checks, default_sftr_feedback_checks, default_sftr_tr_activity_checks,
-    default_sftr_tr_state_checks, default_tr_activity_checks, default_tr_state_checks,
-    finalize_issues, run_all, run_all_feedback, run_all_margin_activity, run_all_margin_state,
-    run_all_recon_stats, run_all_reconciliation, run_all_sftr, run_all_sftr_feedback,
-    run_all_sftr_tr_activity, run_all_sftr_tr_state, run_all_tr_activity, run_all_tr_state,
-    CheckContext,
+    default_sftr_checks, default_sftr_tr_activity_checks, default_sftr_tr_state_checks,
+    default_tr_activity_checks, default_tr_state_checks, finalize_issues, run_all,
+    run_all_feedback, run_all_margin_activity, run_all_margin_state, run_all_recon_stats,
+    run_all_reconciliation, run_all_sftr, run_all_sftr_tr_activity, run_all_sftr_tr_state,
+    run_all_tr_activity, run_all_tr_state, CheckContext,
 };
 use opendqi_core::{
     DqDimension, DqIssue, EmirRecord, Regime, ScanSummary, Severity, SftrRecord, Thresholds,
@@ -25,8 +24,8 @@ use opendqi_io::{has_extension, read_emir_parquet, read_sftr_parquet};
 use opendqi_report::{write_issues_csv, write_report_html, write_summary_json};
 use opendqi_xml::{
     check_wellformedness, read_emir_feedback_xml, read_emir_mar_xml, read_emir_msr_xml,
-    read_emir_recon_stats_xml, read_emir_tr_state_xml, read_emir_xml, read_sftr_feedback_xml,
-    read_sftr_tr_state_xml, read_sftr_xml,
+    read_emir_recon_stats_xml, read_emir_tr_state_xml, read_emir_xml, read_sftr_tr_state_xml,
+    read_sftr_xml,
 };
 
 /// What the user picked in the form.
@@ -154,7 +153,10 @@ pub fn run_server_operation(
         },
         UiOperation::Feedback => match regime {
             UiRegime::Emir => run_emir_feedback_server(input, out_dir),
-            UiRegime::Sftr => run_sftr_feedback_server(input, out_dir),
+            UiRegime::Sftr => Err(anyhow!(
+                "SFTR has no rejection-feedback message — real auth.080 is a \
+                 reconciliation status advice; use the SFTR reconcile operation."
+            )),
         },
         UiOperation::ReconStats => match regime {
             UiRegime::Emir => run_emir_recon_stats_server(input, out_dir),
@@ -215,12 +217,15 @@ pub fn run_server_dispatch(
             let tsr = saved
                 .get("file_tsr")
                 .ok_or_else(|| anyhow!("tr-audit requires a `file_tsr` (XML) upload"))?;
-            let feedback = saved
-                .get("file_feedback")
-                .ok_or_else(|| anyhow!("tr-audit requires a `file_feedback` (XML) upload"))?;
             match regime {
-                UiRegime::Emir => run_emir_tr_audit_server(tar, tsr, feedback, out_dir),
-                UiRegime::Sftr => run_sftr_tr_audit_server(tar, tsr, feedback, out_dir),
+                UiRegime::Emir => {
+                    let feedback = saved.get("file_feedback").ok_or_else(|| {
+                        anyhow!("EMIR tr-audit requires a `file_feedback` (XML) upload")
+                    })?;
+                    run_emir_tr_audit_server(tar, tsr, feedback, out_dir)
+                }
+                // SFTR has no rejection-feedback message → TAR+TSR only.
+                UiRegime::Sftr => run_sftr_tr_audit_server(tar, tsr, out_dir),
             }
         }
         _ => {
@@ -392,12 +397,7 @@ fn run_emir_tr_audit_server(
     )
 }
 
-fn run_sftr_tr_audit_server(
-    tar: &Path,
-    tsr: &Path,
-    feedback: &Path,
-    out_dir: &Path,
-) -> Result<ScanArtifacts> {
+fn run_sftr_tr_audit_server(tar: &Path, tsr: &Path, out_dir: &Path) -> Result<ScanArtifacts> {
     use opendqi_core::dq::compute_tr_audit_sftr_issues;
     use opendqi_xml::read_sftr_tr_state_xml;
 
@@ -406,8 +406,6 @@ fn run_sftr_tr_audit_server(
         read_sftr_xml(tar).with_context(|| format!("reading SFTR TAR {}", tar.display()))?;
     let tsr_outcome = read_sftr_tr_state_xml(tsr)
         .with_context(|| format!("reading SFTR TSR {}", tsr.display()))?;
-    let fb_outcome = read_sftr_feedback_xml(feedback)
-        .with_context(|| format!("reading SFTR feedback {}", feedback.display()))?;
 
     let ctx = CheckContext {
         thresholds: Thresholds::default(),
@@ -416,7 +414,6 @@ fn run_sftr_tr_audit_server(
     };
     let mut issues = tar_outcome.issues;
     issues.extend(tsr_outcome.issues.clone());
-    issues.extend(fb_outcome.issues.clone());
     issues.extend(run_all_sftr(
         &default_sftr_checks(),
         &tar_outcome.records,
@@ -425,12 +422,6 @@ fn run_sftr_tr_audit_server(
     issues.extend(run_all_sftr_tr_state(
         &default_sftr_tr_state_checks(),
         &tsr_outcome.records,
-        &[],
-        &ctx,
-    ));
-    issues.extend(run_all_sftr_feedback(
-        &default_sftr_feedback_checks(),
-        &fb_outcome.records,
         &[],
         &ctx,
     ));
@@ -444,9 +435,7 @@ fn run_sftr_tr_audit_server(
     issues.extend(compute_tr_audit_sftr_issues(
         &tar_outcome.records,
         &tsr_outcome.records,
-        &fb_outcome.records,
         &tsr.to_string_lossy(),
-        &feedback.to_string_lossy(),
     ));
     finalize_issues(&mut issues, &ctx);
     finalize_artifacts(
@@ -458,7 +447,6 @@ fn run_sftr_tr_audit_server(
         &[
             tar.to_string_lossy().into_owned(),
             tsr.to_string_lossy().into_owned(),
-            feedback.to_string_lossy().into_owned(),
         ],
         started_at,
         Utc::now(),
@@ -728,43 +716,6 @@ fn run_emir_feedback_server(input: &Path, out_dir: &Path) -> Result<ScanArtifact
         out_dir,
         Regime::Emir,
         UiRegime::Emir,
-        outcome.records.len() as u32,
-        &issues,
-        &[input.to_string_lossy().into_owned()],
-        started_at,
-        Utc::now(),
-    )
-}
-
-/// SFTR feedback file scan (auth.080) — server-side.
-fn run_sftr_feedback_server(input: &Path, out_dir: &Path) -> Result<ScanArtifacts> {
-    if !has_extension(input, "xml") {
-        return Err(anyhow!(
-            "feedback expects an XML input (auth.080). Got {}",
-            input.display()
-        ));
-    }
-    let started_at = Utc::now();
-    let outcome = read_sftr_feedback_xml(input)
-        .with_context(|| format!("reading SFTR feedback file {}", input.display()))?;
-    let now = Utc::now();
-    let ctx = CheckContext {
-        thresholds: Thresholds::default(),
-        today: now.date_naive(),
-        now,
-    };
-    let mut issues = outcome.issues;
-    issues.extend(run_all_sftr_feedback(
-        &default_sftr_feedback_checks(),
-        &outcome.records,
-        &[],
-        &ctx,
-    ));
-    finalize_issues(&mut issues, &ctx);
-    finalize_artifacts(
-        out_dir,
-        Regime::Sftr,
-        UiRegime::Sftr,
         outcome.records.len() as u32,
         &issues,
         &[input.to_string_lossy().into_owned()],

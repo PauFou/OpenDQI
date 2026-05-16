@@ -48,10 +48,11 @@ or changed state at the TR.
 
 The rejection layer answers **"what failed, and why?"**.
 
-- Input today: `opendqi emir feedback <auth.092>` and the parallel
-  SFTR command. Feedback rows are persisted in the SQLite history
-  store with an `open / resolved / stale` status driven by the
-  top-level `opendqi feedback list/resolve/stale` workflow.
+- Input today: `opendqi emir feedback <auth.092>` (EMIR-only — SFTR
+  has no rejection-feedback message). Feedback rows are persisted in
+  the SQLite history store with an `open / resolved / stale` status
+  driven by the top-level `opendqi feedback list/resolve/stale`
+  workflow.
 - Phase 3 will deepen this layer with top rejection causes, repeated
   rejected UTIs, ageing analytics, and (when a TAR is available)
   rejected-then-accepted detection.

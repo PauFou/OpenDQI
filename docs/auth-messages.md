@@ -83,7 +83,7 @@ and [`tr-reconciliation.md`](tr-reconciliation.md).
 
 ## Naming caveat — `auth.092` and `auth.080` ("feedback")
 
-OpenDQI's `opendqi {emir,sftr} feedback` workflow models a per-UTI
+OpenDQI's `opendqi emir feedback` workflow models a per-UTI
 `FeedbackRecord` with a single `reason_code` and a
 `FeedbackType ∈ {Rejected, Missing, Inaccurate, ReconciliationBreak}`.
 Against the **real** schemas this is a deliberate, documented
@@ -109,23 +109,24 @@ projection — the messages are not per-UTI feeds:
   (`schema-verified (subset)` — see
   [`auth-messages/sftr-auth080.md`](auth-messages/sftr-auth080.md)).
   Consequently **SFTR has no rejection-feedback message**: the
-  `SFTR.FBK.*` checks have no real SFTR input, and the synthetic SFTR
-  `feedback` path is retained only as an inert placeholder.
+  synthetic `opendqi sftr feedback` command, its `auth.080.001.01`
+  parser and the four `SFTR.FBK.*` checks were **removed** in
+  Milestone 0.4. SFTR feedback no longer exists; `opendqi sftr
+  tr-audit` is TAR+TSR-only (it has no
+  `SFTR.AUD.REJECTED_BUT_OUTSTANDING_IN_TSR` — that check is EMIR-only).
 
-The faithful re-model is proceeding as a sequenced milestone: the
-`auth.092` validation-rule list (done), the real `auth.080` parser
-(done) and the EMIR `auth.091` per-transaction `RcncltnRpt`/`MtchgCrit`
-detail (done) are shipped; the only remaining tracked item is the
-optional deletion of the now-inert synthetic SFTR-feedback
-command/checks.
+The faithful re-model milestone is **complete**: the `auth.092`
+validation-rule list, the real `auth.080` parser, the EMIR `auth.091`
+per-transaction `RcncltnRpt`/`MtchgCrit` detail, and the removal of
+the synthetic SFTR-feedback command/parser/checks are all shipped.
 
 ## Adding a new auth.* message
 
 1. Add a row to the table above with `not yet` coverage and the
    intended `Phase N` label.
 2. When implementing, decide between a shared adapter (e.g.
-   `feedback.rs` handles both `auth.092` and `auth.080`) or a
-   dedicated module (e.g. `iso20022.rs` per regime).
+   `reconciliation.rs` namespace-dispatches `auth.083`/`auth.080`) or
+   a dedicated module (e.g. `iso20022.rs` per regime).
 3. Document the synthetic namespace used by the fixture and flag the
    coverage level honestly. Move to `verified` only when the parser
    has been confronted with the official XSD (even indirectly via a

@@ -27,7 +27,7 @@ pub use emir::{read_emir_xml, XmlReadOutcome};
 pub use emir_mar::{read_emir_mar_xml, MarXmlReadOutcome};
 pub use emir_msr::{read_emir_msr_xml, MsrXmlReadOutcome};
 pub use emir_recon_stats::{read_emir_recon_stats_xml, ReconStatsXmlReadOutcome};
-pub use feedback::{read_emir_feedback_xml, read_sftr_feedback_xml, FeedbackXmlReadOutcome};
+pub use feedback::{read_emir_feedback_xml, FeedbackXmlReadOutcome};
 pub use reconciliation::{
     read_emir_reconciliation_xml, read_sftr_reconciliation_xml, ReconciliationXmlReadOutcome,
 };

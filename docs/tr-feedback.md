@@ -7,13 +7,16 @@ produces issues that are directly actionable for Errors & Omissions
 workflows: confirmed gaps, rejected submissions, inaccurate fields,
 TR-vs-firm discrepancies.
 
-Two regimes are supported in v1:
-
-- EMIR: ISO 20022 `auth.092` — Missing / Inaccurate Trade Reports.
-- SFTR: ISO 20022 `auth.080` — equivalent for the SFTR regime.
+Feedback ingestion is **EMIR-only**: ISO 20022 `auth.092`
+(Derivatives Trade Rejection Statistical Report). SFTR has no
+rejection-feedback message — real `auth.080` is a *reconciliation
+status advice*, handled by `opendqi sftr reconcile`
+(see [`auth-messages/sftr-auth080.md`](auth-messages/sftr-auth080.md)).
 
 See [`feedback-checks.md`](feedback-checks.md) for the catalog of
-`*.FBK.*` checks fired by these messages.
+`EMIR.FBK.*` checks, and
+[`auth-messages/emir-auth092.md`](auth-messages/emir-auth092.md) for
+the real `auth.092` envelope and the extracted-field map.
 
 ## Usage
 
@@ -25,10 +28,6 @@ opendqi emir scan ./reports/april/ --mapping ./mapping.yml \
 # Ingest the auth.092 file received from the TR.
 opendqi emir feedback ./trade-repo/april/auth092-feedback.xml \
     --store ./opendqi-history.db --out ./feedback-april/
-
-# SFTR is parallel.
-opendqi sftr feedback ./trade-repo/april/auth080-feedback.xml \
-    --store ./opendqi-history.db --out ./feedback-april-sftr/
 ```
 
 `--store <PATH>` is **required** for `feedback` (it is optional for
@@ -39,53 +38,29 @@ rejected UTIs with no context.
 
 ## Expected XML structure
 
-A feedback document carries a header plus a sequence of `<Sts>` blocks.
-Each block contains exactly one of the four status wrappers:
-
-| Wrapper | `FeedbackType` |
-|---|---|
-| `<Rjctd>` | `Rejected` |
-| `<Mssng>` | `Missing` |
-| `<Inaccrt>` | `Inaccurate` |
-| `<RcncltnBrk>` | `ReconciliationBreak` |
-
-Recognised leaves inside any wrapper:
-
-| Element | Mapped to |
-|---|---|
-| `UnqTxIdr` | `uti` |
-| `RsnCd` | `reason_code` |
-| `RsnDesc` | `reason_description` |
-| `FldNm` | `reported_field` (used by `Inaccurate`) |
-
-Plus, at the document header:
-
-| Element | Mapped to |
-|---|---|
-| `Hdr/FdbckDtTm` | `feedback_timestamp` (RFC 3339, applied to every record in the file) |
-
-See `examples/emir/feedback/auth092-sample.xml` and
-`examples/sftr/feedback/auth080-sample.xml` for a complete, hand-authored
-fixture.
+The EMIR path parses the **real** ESMA usage-guideline envelope
+`auth.092.001.04` (`DerivativesTradeRejectionStatisticalReportV04`) —
+a rejection *statistics* report. The extracted-field map (UTI from
+`TxId/UnqIdr/UnqTxIdr`, the repeating `DtldVldtnRule/Id` list, `Sts`,
+`RptgTmStmp`), the ignored branches and the documented limits are in
+[`auth-messages/emir-auth092.md`](auth-messages/emir-auth092.md). See
+`examples/emir/feedback/auth092-sample.xml` for a complete,
+hand-authored, schema-shaped fixture.
 
 ## Legal note
 
-The official SWIFT-licensed XSDs for `auth.092` / `auth.080` are **not
-redistributed** with OpenDQI, in the same way the `auth.030` /
-`auth.052` XSDs are not. The OpenDQI adapter parses a plausible
-structure inspired by the public ISO 20022 catalog. If the schema you
-receive from your TR differs in element names (e.g. `<MissingReport>`
-instead of `<Mssng>`), edit the leaf table in
-`crates/opendqi-xml/src/feedback.rs` accordingly — the parser
-architecture is robust to that change.
+The official SWIFT-licensed `auth.092` XSD is **not redistributed**
+with OpenDQI, in the same way the `auth.030` / `auth.052` XSDs are
+not. Only the schema *shape* is encoded; the per-message coverage note
+documents the subset OpenDQI consumes.
 
 ## Storage and lifecycle
 
-For v1 the feedback batch is **not** persisted into the SQLite store.
-The store remains an audit trail of *submissions*. A future milestone
-will add a `feedbacks` table and a status column so that the user can
-mark each TR signal as Open / Resolved / Stale and let the next scan
-pick up where the previous one left off.
+The feedback batch is persisted into the `feedbacks` table of the
+SQLite history store. Each row starts `open` and can be transitioned
+to `resolved` / `stale` via the top-level `opendqi feedback
+list/resolve/stale` workflow — see
+[`history-store.md`](history-store.md#feedbacks-table--workflow).
 
 ## Diagnostics
 

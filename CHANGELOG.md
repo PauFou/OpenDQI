@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **Synthetic SFTR rejection-feedback path.** SFTR has no
+  rejection-feedback message — real `auth.080` is a *reconciliation
+  status advice* (handled by `opendqi sftr reconcile` → `SFTR.REC.*`).
+  The synthetic `opendqi sftr feedback` command, its
+  `auth.080.001.01` parser (`read_sftr_feedback_xml`), the
+  `examples/sftr/feedback/` fixture and the four `SFTR.FBK.*` checks
+  are **removed** (breaking: the `sftr feedback` subcommand and the
+  SFTR "feedback" web-UI operation no longer exist). Consequently
+  **`opendqi sftr tr-audit` is now TAR+TSR-only** — its `--feedback`
+  argument is gone and the feedback-dependent
+  `SFTR.AUD.REJECTED_BUT_OUTSTANDING_IN_TSR` cross-layer check is
+  removed for SFTR (it remains EMIR-only; SFTR keeps the two TAR↔TSR
+  `SFTR.AUD.*` coherence checks). EMIR feedback (`auth.092`,
+  `EMIR.FBK.*`, `EMIR.AUD.*`, `opendqi emir feedback` / `tr-audit`),
+  the shared regime-tagged `FeedbackRecord` / `feedbacks` store table
+  / `opendqi feedback list/resolve/stale/analytics` workflow, and the
+  `SFTR.PSC.*` rejection-profile loop are **unchanged**. This
+  completes the Milestone 0.4 faithful feedback/reconciliation
+  re-model. See
+  [`docs/auth-messages/sftr-auth080.md`](docs/auth-messages/sftr-auth080.md).
+
 ### Added
 
 - **Faithful `auth.092` validation-rule list (end-to-end).** EMIR
