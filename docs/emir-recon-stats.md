@@ -7,9 +7,11 @@ counterparty and reporting period.
 
 This layer is **statistical**: each record summarises rates and
 counts for one counterparty over one period. It is distinct from
-`auth.106` (per-trade reconciliation) and from `auth.092` (per-UTI
-rejection feedback). See [`auth-messages.md`](auth-messages.md) for
-the broader catalog.
+`auth.106` data-quality warnings (`EMIR.WRN.*`, see
+[`emir-warnings.md`](emir-warnings.md)) and from `auth.092` per-UTI
+rejection feedback. (`recon-stats` also projects the `auth.091`
+per-transaction `RcncltnRpt` detail onto the `EMIR.REC.*` checks.)
+See [`auth-messages.md`](auth-messages.md) for the broader catalog.
 
 ## Command
 

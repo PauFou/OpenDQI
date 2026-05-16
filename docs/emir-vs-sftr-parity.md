@@ -23,7 +23,7 @@ Updated for Phase 7.6.
 | `UNI.*` (uniqueness) | 1 | 1 | `DUPLICATE_UTI` on both sides. |
 | `TIM.*` (timeliness) | 2 | 2 | `LATE_REPORTING` on both sides; SFTR adds `LATE_REPORTING_SETTLEMENT` ¹. |
 | `FBK.*` (TR feedback `auth.092`) | 4 | — | EMIR-only. SFTR has no rejection-feedback message (real `auth.080` is a reconciliation status advice → `SFTR.REC.*`); the synthetic `SFTR.FBK.*` checks were removed in Milestone 0.4. |
-| `REC.*` (reconciliation `auth.106` / `auth.083`) | 6 | 3 | Both layers exist with the same caveat (`auth.106`/`auth.083` are placeholders, see `docs/auth-messages.md`). |
+| `REC.*` (reconciliation) | 3 | 3 | Both kept and fed by **real** messages: `EMIR.REC.*` from the `auth.091` per-transaction detail (`emir recon-stats`); `SFTR.REC.*` from the real `auth.080` Reconciliation Status Advice (`sftr reconcile`). The synthetic `auth.106`/`auth.083` pairing path was removed in M0.6 (real `auth.106` is warnings; real `auth.083` is missing-collateral). |
 | `TST.*` (TR State Report — `auth.107` / `auth.079`) | 7 | 12 | SFTR has more state-oriented checks because SFTR margin lending state lives only in the TSR (see `docs/sftr-margin-lending.md`). EMIR margin state has its own `auth.109`. |
 | `TST.LFC.*` (cross-batch TSR drift) | 4 | 3 | Symmetric; EMIR's `MATURITY_CHANGED` doesn't exist on the SFTR side (SFT maturity rarely revised at the TR). |
 | `TRA.*` (Trade Activity replay `auth.030` / `auth.052`) | 5 | 5 | Symmetric: repeated correction, spike TERM, spike MODI, duplicate NEWT, NEWT not in TSR. |

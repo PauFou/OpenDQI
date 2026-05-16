@@ -1,17 +1,16 @@
 # Reconciliation (TR ↔ counterparty) checks
 
-> **Naming caveat.** The official ESMA `auth.106` (EMIR) and
-> `auth.083` (SFTR) messages appear in the ISO 20022 catalog as
-> data-quality warning messages, **not** as pairing / matching
-> reports. The OpenDQI parser today reads a synthetic pairing /
-> matching structure with `<Rcncltn>` blocks; the 6 `*.REC.*` checks
-> documented below operate on that shape. This is a useful
-> placeholder if a firm receives a matching-style file from its TR,
-> but it diverges semantically from the official message. The
-> resolution is on the roadmap (Phase 3 — Rejection analytics): we
-> will either extend this parser or add a dedicated `tr-warnings`
-> parser alongside it. See [`auth-messages.md`](auth-messages.md)
-> for the canonical message catalog.
+> **Real sources (resolved in Milestone 0.6).** The synthetic
+> `auth.106`/`auth.083` pairing shape and `opendqi emir reconcile`
+> were removed — real `auth.106` is a data-quality *warnings* report
+> (`EMIR.WRN.*`, see [`emir-warnings.md`](emir-warnings.md)) and real
+> `auth.083` is a *Missing Collateral Request*; EMIR has no
+> reconciliation message. The `*.REC.*` checks below are **kept** and
+> fed by **real** messages: `EMIR.REC.*` from the `auth.091`
+> per-transaction detail via `opendqi emir recon-stats`, and
+> `SFTR.REC.*` from the real `auth.080.001.02` Reconciliation Status
+> Advice via `opendqi sftr reconcile`. See
+> [`auth-messages.md`](auth-messages.md) for the canonical catalog.
 
 OpenDQI's "reconciliation" checks ingest TR pairing / matching
 reports following the synthetic structure described above. Each

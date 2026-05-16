@@ -30,8 +30,8 @@ use opendqi_io::{
 use opendqi_report::{write_issues_csv, write_report_html, write_summary_json};
 use opendqi_xml::{
     check_wellformedness, read_emir_feedback_xml, read_emir_mar_xml, read_emir_msr_xml,
-    read_emir_recon_stats_xml, read_emir_reconciliation_xml, read_emir_tr_state_xml,
-    read_emir_warnings_xml, read_emir_xml, ExternalXmllintValidator, XsdValidator, XsdViolation,
+    read_emir_recon_stats_xml, read_emir_tr_state_xml, read_emir_warnings_xml, read_emir_xml,
+    ExternalXmllintValidator, XsdValidator, XsdViolation,
 };
 use tracing::{info, warn};
 
@@ -158,28 +158,6 @@ pub enum EmirAction {
         /// report + summary.json + issues.csv are emailed to the
         /// recipients listed in the config after the scan. See
         /// `docs/email-notifications.md`.
-        #[arg(long, value_name = "PATH")]
-        email_config: Option<PathBuf>,
-    },
-    /// Ingest a TR pairing / matching report and produce
-    /// `EMIR.REC.*` issues for UNPAIRED / UNRECONCILED trades and
-    /// field-level mismatches.
-    ///
-    /// Naming caveat: this command reads a synthetic structure
-    /// documented as `auth.106` v1; ESMA's official `auth.106` is
-    /// a data-quality warning message and is on the Phase 3
-    /// roadmap. See `docs/auth-messages.md`.
-    Reconcile {
-        /// Path to the `auth.106` XML file received from the TR.
-        input: PathBuf,
-        /// Required path to the SQLite history store.
-        #[arg(long)]
-        store: PathBuf,
-        /// Directory where reports are written.
-        #[arg(long)]
-        out: PathBuf,
-        /// Optional SMTP configuration YAML — emails the reconciliation
-        /// report after writing it. See `docs/email-notifications.md`.
         #[arg(long, value_name = "PATH")]
         email_config: Option<PathBuf>,
     },
@@ -368,15 +346,6 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
             email_config,
         } => {
             run_feedback(&input, &store, &out, email_config.as_deref())?;
-            Ok(ExitCode::SUCCESS)
-        }
-        EmirAction::Reconcile {
-            input,
-            store,
-            out,
-            email_config,
-        } => {
-            run_reconcile(&input, &store, &out, email_config.as_deref())?;
             Ok(ExitCode::SUCCESS)
         }
         EmirAction::TrStateScan {
@@ -1159,113 +1128,6 @@ fn run_warnings(
         summary.records_processed, summary.issues_total, critical, high, summary.quality_score
     );
     println!("Report: {}", out.join("warnings_report.html").display());
-    Ok(())
-}
-
-fn run_reconcile(
-    input: &Path,
-    store_path: &Path,
-    out: &Path,
-    email_config_path: Option<&Path>,
-) -> Result<()> {
-    let started_at = Utc::now();
-    let outcome = read_emir_reconciliation_xml(input)
-        .with_context(|| format!("reading reconciliation file {}", input.display()))?;
-    info!(
-        file = %input.display(),
-        records = outcome.records.len(),
-        format_issues = outcome.issues.len(),
-        "loaded EMIR reconciliation XML",
-    );
-
-    let mut issues: Vec<DqIssue> = outcome.issues;
-
-    let mut store = opendqi_store::open_store(store_path)
-        .with_context(|| format!("opening history store at {}", store_path.display()))?;
-
-    let persisted = store
-        .persist_reconciliation_batch(&outcome.records)
-        .context("persisting EMIR reconciliation batch to history store")?;
-    info!(persisted, "reconciliation rows persisted to store");
-
-    let utis: Vec<&str> = outcome
-        .records
-        .iter()
-        .filter_map(|r| r.uti.as_deref())
-        .map(str::trim)
-        .filter(|u| !u.is_empty())
-        .collect();
-    let prior = store
-        .load_prior_emir(&utis, i64::MAX)
-        .context("loading prior EMIR records from history store")?;
-    info!(prior_records = prior.len(), "loaded prior records");
-
-    let now = Utc::now();
-    let ctx = CheckContext {
-        thresholds: Thresholds::default(),
-        today: now.date_naive(),
-        now,
-    };
-    let rec_issues = run_all_reconciliation(
-        &default_reconciliation_checks(),
-        &outcome.records,
-        &prior,
-        &ctx,
-    );
-    info!(
-        reconciliation_issues = rec_issues.len(),
-        "reconciliation checks run"
-    );
-    issues.extend(rec_issues);
-    finalize_issues(&mut issues, &ctx);
-
-    let inputs = vec![input.to_path_buf()];
-    let sources = vec![input.to_string_lossy().into_owned()];
-    let summary = build_feedback_summary(
-        outcome.records.len(),
-        &issues,
-        &inputs,
-        started_at,
-        Utc::now(),
-    );
-
-    std::fs::create_dir_all(out)
-        .with_context(|| format!("creating output directory {}", out.display()))?;
-    write_summary_json(&out.join("summary.json"), &summary)?;
-    write_issues_csv(&out.join("issues.csv"), &issues)?;
-    write_report_html(&out.join("report.html"), &summary, &issues, &sources)?;
-
-    if let Some(path) = email_config_path {
-        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
-        let sent = opendqi_report::send_report_email(
-            &cfg,
-            &summary,
-            &out.join("report.html"),
-            &out.join("summary.json"),
-            &out.join("issues.csv"),
-        )?;
-        if sent {
-            info!(to = ?cfg.to, "reconciliation report emailed");
-        } else {
-            info!("email config is disabled — skipped send");
-        }
-    }
-
-    let critical = summary
-        .issues_by_severity
-        .get(&Severity::Critical)
-        .copied()
-        .unwrap_or(0);
-    let high = summary
-        .issues_by_severity
-        .get(&Severity::High)
-        .copied()
-        .unwrap_or(0);
-    println!(
-        "Ingested {} reconciliation record(s). {} issues ({} critical, {} high). Score: {:.1}/100.",
-        summary.records_processed, summary.issues_total, critical, high, summary.quality_score
-    );
-    println!("Report: {}", out.join("report.html").display());
     Ok(())
 }
 

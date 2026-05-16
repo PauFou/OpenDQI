@@ -302,20 +302,10 @@ fn emir_feedback() {
         ]),
     );
 }
-#[test]
-fn emir_reconcile() {
-    let store = unique_dir("emir-reconcile-store").join("h.db");
-    run_case(
-        "emir-reconcile",
-        &a(&[
-            "emir",
-            "reconcile",
-            &ex("examples/emir/reconciliation/auth106-sample.xml"),
-            "--store",
-            &store.to_string_lossy(),
-        ]),
-    );
-}
+// (No `emir reconcile`: EMIR has no reconciliation message — removed
+// in Milestone 0.6. `EMIR.REC.*` is exercised via `emir recon-stats`
+// over the real auth.091 per-transaction detail, covered by
+// `recon_stats_integration.rs` + the `emir-recon-stats` golden.)
 
 // ---- SFTR ----------------------------------------------------------
 golden_test!(
@@ -375,7 +365,7 @@ fn sftr_reconcile() {
         &a(&[
             "sftr",
             "reconcile",
-            &ex("examples/sftr/reconciliation/auth083-sample.xml"),
+            &ex("examples/sftr/reconciliation/auth080-sample.xml"),
             "--store",
             &store.to_string_lossy(),
         ]),

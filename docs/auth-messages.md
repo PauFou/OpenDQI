@@ -40,7 +40,7 @@ parsers' leaf tables are designed to be edited in one place.
 | `auth.108.001.01` | Derivatives Trade Margin Data Report (MAR) | TR → firm | **schema-verified (subset)** | `opendqi emir mar-scan` via `crates/opendqi-xml/src/emir_mar.rs`, aligned with `auth.108.001.01_ESMAUG_DATMDA_1.1.0`; 8 `EMIR.MAR.*` checks. Extracted-subset map, ignored branches and verification in [`auth-messages/emir-auth108.md`](auth-messages/emir-auth108.md). Checks: [`emir-mar-msr.md`](emir-mar-msr.md). |
 | `auth.109.001.01` | Derivatives Trade Margin Data Transaction State Report (MSR) | TR → firm | **schema-verified (subset)** | `opendqi emir msr-scan` via `crates/opendqi-xml/src/emir_msr.rs`, aligned with `auth.109.001.01_ESMAUG_DATMDS_1.1.0`; 8 `EMIR.MSR.*` checks. Extracted-subset map, ignored branches and limits in [`auth-messages/emir-auth109.md`](auth-messages/emir-auth109.md). Checks: [`emir-mar-msr.md`](emir-mar-msr.md). |
 | `auth.091.001.02` | Derivatives Trade Reconciliation Statistical Report | TR → firm | **schema-verified (subset)** | `opendqi emir recon-stats` via `crates/opendqi-xml/src/emir_recon_stats.rs`, aligned with `auth.091.001.02_ESMAUG_DATREC_1.0.0`; 4 `EMIR.RST.*` checks. Rates are **derived** by accumulating cohort `TtlNbOfTxs` by `Pairg`/`Rcncltn` (no explicit rate fields); `outstanding_*` has no source → `OUTSTANDING_UNPAIRED_HIGH` unreachable. The per-transaction `TxDtls/RcncltnRpt`/`MtchgCrit` detail is now also projected onto `ReconciliationRecord` (cohort-inherited status; `Val1`≠`Val2` mismatch) and `recon-stats` folds the resulting `EMIR.REC.*` issues into `recon_stats_issues.csv`. Map, derivation and limits in [`auth-messages/emir-auth091.md`](auth-messages/emir-auth091.md). Checks: [`emir-recon-stats.md`](emir-recon-stats.md). |
-| `auth.106.001.01` | Derivatives Trade Warnings Report (DATWRN) | TR → firm | **schema-verified (subset)** | `opendqi emir warnings` via `crates/opendqi-xml/src/emir_warnings.rs`, aligned with `auth.106.001.01_ESMAUG_DATWRN_1.1.0`; 5 `EMIR.WRN.*` checks. Report-level missing/outdated valuation & margin and abnormal-values rates are **derived** from the counts; the per-counterparty `Wrnngs` breakdown is a deferred subset. Map, derivation and limits in [`auth-messages/emir-auth106.md`](auth-messages/emir-auth106.md). Checks: [`emir-warnings.md`](emir-warnings.md). **Note:** a legacy *synthetic* "pairing" path under this namespace (the old `opendqi emir reconcile`) still exists and is removed in the next increment — see "Naming caveat" below. |
+| `auth.106.001.01` | Derivatives Trade Warnings Report (DATWRN) | TR → firm | **schema-verified (subset)** | `opendqi emir warnings` via `crates/opendqi-xml/src/emir_warnings.rs`, aligned with `auth.106.001.01_ESMAUG_DATWRN_1.1.0`; 5 `EMIR.WRN.*` checks. Report-level missing/outdated valuation & margin and abnormal-values rates are **derived** from the counts; the per-counterparty `Wrnngs` breakdown is a deferred subset. Map, derivation and limits in [`auth-messages/emir-auth106.md`](auth-messages/emir-auth106.md). Checks: [`emir-warnings.md`](emir-warnings.md). EMIR has **no** counterparty pairing/reconciliation message; the old synthetic `opendqi emir reconcile` was removed (see "Naming caveat" below). |
 
 ## SFTR
 
@@ -49,36 +49,37 @@ parsers' leaf tables are designed to be edited in one place.
 | `auth.052.001.02` | SFT Trade Report | firm → TR | verified | `opendqi sftr scan` via `crates/opendqi-xml/src/sftr/iso20022.rs`. Also re-used by `opendqi sftr tr-activity-scan` for TR replays. |
 | `auth.080.001.02` | SFT Reconciliation Status Advice | TR → firm | **schema-verified (subset)** | `opendqi sftr reconcile` via `crates/opendqi-xml/src/reconciliation.rs`, aligned with `auth.080.001.02_ESMAUG_SFTREC_1.1.0` (re-homed from `sftr feedback` — it is reconciliation, not feedback). Derive map onto `ReconciliationRecord`, ignored branches and documented limits in [`auth-messages/sftr-auth080.md`](auth-messages/sftr-auth080.md). |
 | `auth.079.001.02` | Securities Financing Transaction State Report (SFTR TSR) | TR → firm | **schema-verified (subset)** | `opendqi sftr tr-state-scan` via `crates/opendqi-xml/src/sftr_tr_state.rs`, aligned with `auth.079.001.02_ESMAUG_SFTTRS_1.1.0`; 6 `SFTR.TST.*` + 6 `SFTR.MSR.MGLD_*` checks. Extracted-subset map, the 4-way loan choice, ignored branches and documented limits in [`auth-messages/sftr-auth079.md`](auth-messages/sftr-auth079.md). |
-| `auth.083.001.NN` | (SFTR analog of `auth.106`) | TR → firm | **placeholder (matching-style)** | Same caveat as `auth.106`. |
+| `auth.083.001.02` | SFT Missing Collateral Request | TR → firm | **not yet** | Real `auth.083` is a per-UTI *Missing Collateral Request* — **not** reconciliation and not the "SFTR analog of `auth.106`". The old synthetic `auth.083` pairing path was removed; a faithful parser is a future item. SFTR reconciliation is the real `auth.080` (above). |
 
-## Naming caveat — `auth.106` and `auth.083`
+## Resolved — `auth.106` / `auth.083` were never reconciliation
 
-The current `opendqi {emir,sftr} reconcile` subcommands parse a
-synthetic pairing / matching structure with `<Rcncltn>` blocks
-carrying `PrngSts` (`PAIRED` / `UNPAIRED`), `RcncltnSts` (`RECONCILED`
-/ `UNRECONCILED`), and a repeating `MismatchedField` list. The 6
-`*.REC.*` checks (`UNPAIRED_TRADE`, `UNRECONCILED_TRADE`,
-`FIELD_MISMATCH`) operate on that shape.
+Earlier OpenDQI parsed a **synthetic** pairing/matching structure
+(`<Rcncltn>` blocks with `PrngSts`/`RcncltnSts`/`MismatchedField`)
+under the `auth.106` (EMIR) / `auth.083` (SFTR) namespaces, exposed
+via `opendqi {emir,sftr} reconcile`. Reading the real ESMA XSDs in
+Milestone 0.6 showed both were mislabelled:
 
-This shape is **plausible for a counterparty-pairing report from a
-TR** but is not the documented semantic of the official `auth.106` /
-`auth.083`, which in the ESMA catalog appear to carry **data-quality
-warnings**.
+- **`auth.106`** is `DerivativesTradeWarningsReportV01` (ESMA
+  **DATWRN**) — aggregate data-quality *warnings statistics*, **not**
+  a pairing report. EMIR has **no** counterparty
+  pairing/reconciliation message. It is now faithfully modelled via
+  `opendqi emir warnings` →
+  [`auth-messages/emir-auth106.md`](auth-messages/emir-auth106.md).
+- **`auth.083`** is `SecuritiesFinancingReportingMissingCollateralRequestV02`
+  — a per-UTI *Missing Collateral Request*, not reconciliation and
+  not the SFTR analog of `auth.106`. A faithful parser is a future
+  item; only the dishonest "reconciliation" claim was removed.
 
-Concretely:
+Resolution (M0.6): the synthetic `opendqi emir reconcile` command, the
+synthetic `auth.106`/`auth.083` parser path and the synthetic fixtures
+were **removed**. The `EMIR.REC.*` checks are **kept** — they are
+legitimately fed by the **real** `auth.091` per-transaction
+reconciliation detail via `opendqi emir recon-stats` (Milestone 0.4).
+`SFTR.REC.*` and `opendqi sftr reconcile` continue to operate on the
+**real** `auth.080.001.02` Reconciliation Status Advice (above). No
+check ID was removed.
 
-- The parser code in `crates/opendqi-xml/src/reconciliation.rs` and
-  the `*.REC.*` checks remain useful for firms that have a
-  matching-style file from their TR.
-- When we have access to a real `auth.106` XSD, the parser will
-  either be extended (if the message is a superset) or renamed to
-  `tr-warnings` and a new `auth.106` parser will be added in its
-  place. No fixture or check ID is locked to the current shape.
-- The roadmap places the resolution of this caveat at Phase 3
-  ("Rejection analytics"), where `auth.092` and `auth.106` will be
-  consolidated under a single rejection / warning intelligence layer.
-
-This caveat is mirrored in [`reconciliation-checks.md`](reconciliation-checks.md)
+This is mirrored in [`reconciliation-checks.md`](reconciliation-checks.md)
 and [`tr-reconciliation.md`](tr-reconciliation.md).
 
 ## Naming caveat — `auth.092` and `auth.080` ("feedback")

@@ -30,9 +30,7 @@ pub use emir_msr::{read_emir_msr_xml, MsrXmlReadOutcome};
 pub use emir_recon_stats::{read_emir_recon_stats_xml, ReconStatsXmlReadOutcome};
 pub use emir_warnings::{read_emir_warnings_xml, WarningsXmlReadOutcome};
 pub use feedback::{read_emir_feedback_xml, FeedbackXmlReadOutcome};
-pub use reconciliation::{
-    read_emir_reconciliation_xml, read_sftr_reconciliation_xml, ReconciliationXmlReadOutcome,
-};
+pub use reconciliation::{read_sftr_reconciliation_xml, ReconciliationXmlReadOutcome};
 pub use sftr::{read_sftr_xml, SftrXmlReadOutcome};
 pub use sftr_tr_state::{read_sftr_tr_state_xml, SftrTrStateXmlReadOutcome};
 pub use tr_state::{read_emir_tr_state_xml, TrStateXmlReadOutcome};

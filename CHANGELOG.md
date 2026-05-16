@@ -63,6 +63,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- **Synthetic `auth.106`/`auth.083` reconciliation path.** Reading the
+  real ESMA XSDs showed both were mislabelled: `auth.106` is a
+  data-quality *warnings* report (now modelled — see Added) and
+  `auth.083` is a *Missing Collateral Request*; EMIR has no
+  counterparty pairing/reconciliation message. The synthetic
+  `opendqi emir reconcile` command, the synthetic
+  `read_emir_reconciliation_xml` parser path, the `auth.106`/`auth.083`
+  synthetic namespace handling and the synthetic
+  `examples/{emir,sftr}/reconciliation/auth1{06,}-/auth083-sample`
+  fixtures are **removed** (breaking: `opendqi emir reconcile` no
+  longer exists). `read_sftr_reconciliation_xml` now accepts **only**
+  the real `auth.080.001.02`. The `EMIR.REC.*` / `SFTR.REC.*` checks
+  are **unchanged and kept** — `EMIR.REC.*` is fed by the real
+  `auth.091` per-transaction detail (`opendqi emir recon-stats`,
+  Milestone 0.4) and `SFTR.REC.*` by the real `auth.080`
+  (`opendqi sftr reconcile`); no check ID, the `ReconciliationRecord`
+  model or the `reconciliations` store changed. Completes the
+  Milestone 0.6 faithful `auth.106`/`auth.083` re-model. See
+  [`docs/auth-messages.md`](docs/auth-messages.md).
+
 ## [0.4.0] - 2026-05-16
 
 Faithful feedback / reconciliation re-model — the EMIR/SFTR TR

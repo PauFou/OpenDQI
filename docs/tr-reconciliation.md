@@ -1,14 +1,14 @@
 # TR reconciliation ingestion
 
-> **Naming caveat.** The OpenDQI parser today reads a synthetic
-> pairing / matching structure with `<Rcncltn>` blocks. This
-> diverges from the documented semantic of ESMA's official
-> `auth.106` / `auth.083` messages, which appear to carry
-> data-quality warnings rather than counterparty matching results.
-> The parser remains useful as a stand-in for matching-style files
-> a firm may receive from its TR, but the naming should not be
-> taken as authoritative. See [`auth-messages.md`](auth-messages.md)
-> for the canonical message catalog and roadmap.
+> **Resolved (Milestone 0.6).** SFTR reconciliation is the **real**
+> `auth.080.001.02` Reconciliation Status Advice
+> (`opendqi sftr reconcile`). The old synthetic `auth.106`/`auth.083`
+> pairing shape and `opendqi emir reconcile` were removed: real
+> `auth.106` is a data-quality *warnings* report (`opendqi emir
+> warnings`) and real `auth.083` is a *Missing Collateral Request* —
+> EMIR has no reconciliation message. `EMIR.REC.*` is fed by the real
+> `auth.091` per-transaction detail (`opendqi emir recon-stats`). See
+> [`auth-messages.md`](auth-messages.md) for the canonical catalog.
 
 OpenDQI reads TR pairing / matching reports — the files a TR sends
 back to a firm summarising whether its submitted trades have been
