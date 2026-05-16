@@ -40,11 +40,23 @@ investigate before regenerating. The harness is dependency-free
 ## Parser robustness contract
 
 Every public parser entry point (`opendqi-xml` `read_*`, `opendqi-io`
-CSV / zip / gzip ingestion) must, for **any** byte input —
+CSV / zip / gzip / Parquet ingestion) must, for **any** byte input —
 well-formed, malformed, truncated, hostile — either return
 `Ok(outcome)` (surfacing format problems as `DqIssue`s) or a clean
 `Err`. It must **never panic, OOM, or hang**. Archive ingestion is
-zip-slip / path-traversal hardened. This contract is exercised by an
-adversarial corpus + deterministic byte-mutation suite under
-`crates/opendqi-xml/tests/` (added incrementally; this section is the
-authoritative statement of the guarantee).
+zip-slip / path-traversal hardened. This contract is exercised by the
+adversarial corpus + deterministic byte-mutation suites
+(`crates/opendqi-xml/tests/robustness.rs`,
+`crates/opendqi-io/tests/robustness_io.rs`).
+
+### Panic-freedom of the parse paths (audit)
+
+An audit of every non-test `unwrap()` / `expect()` confirmed the
+untrusted parse / ingest paths contain **none**: all `opendqi-xml`
+parsers and the `opendqi-io` readers handle fallible conversions
+gracefully (`.ok()` / `?` / `DqIssue`), never `unwrap`. The only
+non-test `unwrap`/`expect` in the IO/core layers are in the Parquet
+**writer** and `Default` impls, operate on crate constants (not
+input), and are justified inline. New code on a parse path must keep
+this invariant — no `unwrap()`/`expect()` on anything derived from
+input bytes.

@@ -560,6 +560,8 @@ fn boolean(name: &str) -> Field {
 
 fn decimal_builder() -> Decimal128Builder {
     Decimal128Builder::new()
+        // Infallible: DECIMAL_PRECISION/SCALE are crate constants kept
+        // within Decimal128's valid range — not derived from input.
         .with_precision_and_scale(DECIMAL_PRECISION, DECIMAL_SCALE)
         .unwrap()
 }

@@ -33,6 +33,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`unwrap()`/`expect()` audit of the parse paths.** Audited every
+  non-test `unwrap()`/`expect()` in `opendqi-xml`, the `opendqi-io`
+  ingestion readers and the `opendqi-core` conversion helpers: the
+  untrusted parse/ingest paths contain **none** (all fallible
+  conversions are already graceful — `.ok()`/`?`/`DqIssue`). The only
+  non-test occurrences are in the Parquet *writer* / `Default` impls
+  over crate constants, not input; the lone un-annotated one
+  (`decimal_builder`) gained an inline justification. No behavior
+  change. The panic-freedom invariant is now documented in
+  [`docs/reliability.md`](docs/reliability.md).
+
 ### Removed
 
 ## [0.4.0] - 2026-05-16
