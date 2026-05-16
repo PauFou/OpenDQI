@@ -1,0 +1,3 @@
+check_id,regime,severity,dimension,record_id,uti,field,value,message,source_file,evidence_json
+EMIR.FBK.TR_REJECTED_UTI,emir,critical,validity,<WS>/examples/emir/feedback/auth092-sample.xml#rjctn-1,OPENDQI-FBK-RJCT-0001,,VR-0001,"TR rejected report for UTI OPENDQI-FBK-RJCT-0001: [VR-0001] Notional amount missing (validation rules: VR-0001, VR-0042)",<WS>/examples/emir/feedback/auth092-sample.xml,"[{""field"":""validation_rules"",""after"":""VR-0001, VR-0042""}]"
+EMIR.FBK.TR_REJECTED_UTI,emir,critical,validity,<WS>/examples/emir/feedback/auth092-sample.xml#rjctn-2,OPENDQI-FBK-INCF-0002,,VR-0100,TR rejected report for UTI OPENDQI-FBK-INCF-0002: [VR-0100] (no description),<WS>/examples/emir/feedback/auth092-sample.xml,

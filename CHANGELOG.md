@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Golden snapshot regression harness.** A dependency-free
+  integration test (`crates/opendqi-cli/tests/golden.rs`) runs the
+  real `opendqi` binary over the synthetic `examples/` fixtures for
+  every report-producing command family (17 cases) and pins the
+  deterministic `summary.json` + issues CSV byte-for-byte against
+  committed goldens, normalizing only absolute paths (→ `<WS>` /
+  `<TMP>`) and wall-clock timestamps. Locks the
+  "deterministic outputs" product guarantee against regressions.
+  Regenerate with `UPDATE_GOLDEN=1`. See
+  [`docs/reliability.md`](docs/reliability.md).
+
 ### Changed
 
 ### Removed

@@ -1,0 +1,18 @@
+{
+  "regime": "emir",
+  "files_processed": 1,
+  "records_processed": 20,
+  "issues_total": 7,
+  "issues_by_severity": {
+    "warning": 4,
+    "high": 1,
+    "critical": 2
+  },
+  "issues_by_dimension": {
+    "uniqueness": 2,
+    "accuracy": 5
+  },
+  "quality_score": 96.4,
+  "started_at": "1970-01-01T00:00:00Z",
+  "finished_at": "1970-01-01T00:00:00Z"
+}
