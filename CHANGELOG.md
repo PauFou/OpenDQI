@@ -12,7 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **XSD-conformance reliability gate.** Each schema-verified message
   now ships a **fully XSD-valid** conformance fixture
   (`examples/emir/conformance/auth0{30,91,92}-valid.xml`,
-  `auth1{06,07,08,09}-valid.xml`; SFTR added in a follow-up). The new
+  `auth1{06,07,08,09}-valid.xml`,
+  `examples/sftr/conformance/auth0{52,79,80}-valid.xml` — all 10
+  schema-verified messages). The new
   `crates/opendqi-xml/tests/xsd_conformance.rs` strictly validates
   each against the **real ESMA XSD** via `xmllint` (reusing
   `ExternalXmllintValidator`) **and** round-trips it through the

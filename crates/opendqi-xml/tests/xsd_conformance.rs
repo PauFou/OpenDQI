@@ -25,8 +25,8 @@ use std::process::Command;
 
 use opendqi_xml::{
     read_emir_feedback_xml, read_emir_mar_xml, read_emir_msr_xml, read_emir_recon_stats_xml,
-    read_emir_tr_state_xml, read_emir_warnings_xml, read_emir_xml, ExternalXmllintValidator,
-    XsdValidator,
+    read_emir_tr_state_xml, read_emir_warnings_xml, read_emir_xml, read_sftr_reconciliation_xml,
+    read_sftr_tr_state_xml, read_sftr_xml, ExternalXmllintValidator, XsdValidator,
 };
 
 fn xmllint_available() -> bool {
@@ -186,4 +186,24 @@ conformance!(
     "auth.109",
     "examples/emir/conformance/auth109-valid.xml",
     read_emir_msr_xml
+);
+
+// ---- SFTR group ----------------------------------------------------
+conformance!(
+    auth052_tar,
+    "auth.052",
+    "examples/sftr/conformance/auth052-valid.xml",
+    read_sftr_xml
+);
+conformance!(
+    auth079_tr_state,
+    "auth.079",
+    "examples/sftr/conformance/auth079-valid.xml",
+    read_sftr_tr_state_xml
+);
+conformance!(
+    auth080_reconciliation,
+    "auth.080",
+    "examples/sftr/conformance/auth080-valid.xml",
+    read_sftr_reconciliation_xml
 );
