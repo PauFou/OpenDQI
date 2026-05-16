@@ -30,6 +30,21 @@ parsers' leaf tables are designed to be edited in one place.
   matching-style or testing flows, but not authoritative.
 - **not yet** — on the roadmap, not implemented.
 
+### Conformance gate
+
+Every **schema-verified (subset)** message additionally ships a
+**fully XSD-valid** conformance fixture
+(`examples/{emir,sftr}/conformance/auth<NNN>-valid.xml`) that is
+strictly validated against the **real ESMA XSD** via `xmllint` **and**
+round-tripped through the parser by
+`crates/opendqi-xml/tests/xsd_conformance.rs`. So "full XSD instance
+validity is out of scope" / "a full pass is not asserted" in the
+per-message notes below refers to the *lean* test fixtures; the
+separate conformance fixture **is** XSD-validated. That gate is
+developer/preflight-local and self-skips in public CI (the
+SWIFT-licensed XSDs are gitignored) — see
+[`xsd-validation.md`](xsd-validation.md).
+
 ## EMIR
 
 | auth id | ISO/ESMA name (best-effort) | Direction | Coverage | Parser / command |

@@ -77,3 +77,41 @@ Schema violations are `high`, not `critical`. A non-conforming
 document can usually be repaired upstream and resubmitted. `critical`
 is reserved for cases where there is no record at all to remediate
 (malformed XML, duplicate UTI within the same active state).
+
+## XSD-conformance reliability gate
+
+The lean fixtures under `examples/{emir,sftr}/<layer>/` are
+deliberately **schema-shaped subsets** (fast unit/golden/robustness
+tests) — they are *not* fully XSD-valid and never claim to be.
+
+In addition, each schema-verified message ships a **fully
+XSD-valid** conformance fixture under
+`examples/{emir,sftr}/conformance/auth<NNN>-valid.xml`. The gate
+`crates/opendqi-xml/tests/xsd_conformance.rs` proves, per message,
+that this instance (a) validates against the **real ESMA XSD** via
+`xmllint` and (b) is ingested by the OpenDQI parser producing records
+with no format issues.
+
+This gate is **developer/preflight-local and never runs in public
+CI**: the real ESMA XSDs are SWIFT-licensed and gitignored
+(`ESMA_docs/`), so they are not present in CI. Each case **self-skips**
+(prints a notice, passes as a no-op) unless both:
+
+- `xmllint` is on `PATH` (`libxml2-utils` on Debian/Ubuntu;
+  preinstalled on macOS), and
+- `OPENDQI_XSD_DIR` points at a directory of **extracted real ESMA
+  `.xsd` files** you hold locally (never commit them).
+
+Prepare it once (the ESMA usage-guideline XSDs are self-contained, so
+a flat directory of `.xsd` files is enough; filenames may carry ESMA
+version suffixes — the gate resolves by `auth.NNN` prefix):
+
+```bash
+mkdir -p /tmp/esma-xsd
+unzip -j "ESMA_docs/EMIR/EMIR Refit Outgoing Messages v1.0.0.zip" '*.xsd' -d /tmp/esma-xsd
+unzip -j "ESMA_docs/SFTR/SFTR Reporting Mar 2023.zip"            '*.xsd' -d /tmp/esma-xsd
+OPENDQI_XSD_DIR=/tmp/esma-xsd cargo test -p opendqi-xml --test xsd_conformance
+```
+
+`./scripts/preflight.sh` runs the gate automatically when
+`OPENDQI_XSD_DIR` is exported, and prints how to enable it otherwise.

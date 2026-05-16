@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic, fully XSD-valid ISO 20022 auth.030 conformance fixture.
+  Hand-authored (scaffolded) — NOT derived from, and does not
+  redistribute, any ESMA/SWIFT example or schema; only public ISO
+  20022 element names + synthetic values. Unlike the lean parser
+  fixtures, this instance is COMPLETE and validates against the real
+  ESMA XSD (gated by crates/opendqi-xml/tests/xsd_conformance.rs when
+  OPENDQI_XSD_DIR is set). See docs/xsd-validation.md.
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.030.001.03">
+  <DerivsTradRpt>
+    <RptHdr>
+      <NbRcrds>1000</NbRcrds>
+    </RptHdr>
+    <TradData>
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <CtrPty>
+              <RptgCtrPty>
+                <Id>
+                  <Lgl>
+                    <Id>
+                      <LEI>ABCDEFGHIJKLMNOPQR99</LEI>
+                    </Id>
+                  </Lgl>
+                </Id>
+                <Ntr>
+                  <FI>
+                    <Sctr>
+                      <Cd>AIFD</Cd>
+                    </Sctr>
+                  </FI>
+                </Ntr>
+              </RptgCtrPty>
+              <OthrCtrPty>
+                <IdTp>
+                  <Lgl>
+                    <Id>
+                      <LEI>ABCDEFGHIJKLMNOPQR99</LEI>
+                    </Id>
+                  </Lgl>
+                </IdTp>
+              </OthrCtrPty>
+            </CtrPty>
+            <RptgTmStmp>2026-05-13T08:00:00Z</RptgTmStmp>
+          </CtrPtySpcfcData>
+          <CmonTradData>
+            <TxData>
+              <TxId>
+                <UnqTxIdr>ABCDEFGHIJKLMNOPQR99</UnqTxIdr>
+              </TxId>
+              <NtnlAmt>
+                <FrstLeg>
+                  <Amt>
+                    <Amt Ccy="EUR">1.00</Amt>
+                  </Amt>
+                </FrstLeg>
+              </NtnlAmt>
+            </TxData>
+          </CmonTradData>
+        </New>
+      </Rpt>
+    </TradData>
+  </DerivsTradRpt>
+</Document>

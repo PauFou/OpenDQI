@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **XSD-conformance reliability gate.** Each schema-verified message
+  now ships a **fully XSD-valid** conformance fixture
+  (`examples/emir/conformance/auth0{30,91,92}-valid.xml`,
+  `auth1{06,07,08,09}-valid.xml`; SFTR added in a follow-up). The new
+  `crates/opendqi-xml/tests/xsd_conformance.rs` strictly validates
+  each against the **real ESMA XSD** via `xmllint` (reusing
+  `ExternalXmllintValidator`) **and** round-trips it through the
+  parser (records produced, no format issues) — closing the last
+  reliability caveat that parsers had only seen schema-shaped
+  *subset* fixtures. The gate is **developer/preflight-local and
+  self-skips in public CI**: it activates only when `xmllint` is
+  present and `OPENDQI_XSD_DIR` points at locally-extracted real ESMA
+  XSDs (SWIFT-licensed, gitignored, never committed). The lean
+  parser/golden/robustness fixtures are unchanged (still documented
+  schema-shaped subsets). See
+  [`docs/xsd-validation.md`](docs/xsd-validation.md).
+
 - **Faithful EMIR `auth.106` data-quality warnings.** Real
   `auth.106.001.01` is a *Derivatives Trade Warnings Report* (ESMA
   **DATWRN**) — aggregate missing-valuation / missing-margin-info /

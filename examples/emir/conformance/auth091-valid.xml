@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic, fully XSD-valid ISO 20022 auth.091 conformance fixture.
+  Hand-authored (scaffolded) — NOT derived from, and does not
+  redistribute, any ESMA/SWIFT example or schema; only public ISO
+  20022 element names + synthetic values. Unlike the lean parser
+  fixtures, this instance is COMPLETE and validates against the real
+  ESMA XSD (gated by crates/opendqi-xml/tests/xsd_conformance.rs when
+  OPENDQI_XSD_DIR is set). See docs/xsd-validation.md.
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.091.001.02">
+  <DerivsTradRcncltnSttstclRpt>
+    <RcncltnSttstcs>
+      <Rpt>
+        <RefDt>2026-05-13</RefDt>
+        <RcncltnCtgrs>
+          <RptgRqrmnt>
+            <RptgTp>SWOS</RptgTp>
+            <Pairg>PARD</Pairg>
+            <Rcncltn>NREC</Rcncltn>
+            <ValtnRcncltn>NREC</ValtnRcncltn>
+            <Rvvd>false</Rvvd>
+            <FrthrMod>false</FrthrMod>
+          </RptgRqrmnt>
+        </RcncltnCtgrs>
+        <TtlNbOfTxs>1000</TtlNbOfTxs>
+        <TxDtls>
+          <CtrPtyId>
+            <RptgCtrPty>
+              <LEI>ABCDEFGHIJKLMNOPQR99</LEI>
+            </RptgCtrPty>
+          </CtrPtyId>
+          <TtlNbOfTxs>1000</TtlNbOfTxs>
+          <RcncltnRpt>
+            <TxId>
+              <UnqIdr>
+                <UnqTxIdr>ABCDEFGHIJKLMNOPQR99</UnqTxIdr>
+              </UnqIdr>
+            </TxId>
+            <MtchgCrit/>
+          </RcncltnRpt>
+        </TxDtls>
+      </Rpt>
+    </RcncltnSttstcs>
+  </DerivsTradRcncltnSttstclRpt>
+</Document>

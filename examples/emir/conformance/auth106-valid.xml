@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic, fully XSD-valid ISO 20022 auth.106 conformance fixture.
+  Hand-authored (scaffolded) — NOT derived from, and does not
+  redistribute, any ESMA/SWIFT example or schema; only public ISO
+  20022 element names + synthetic values. Unlike the lean parser
+  fixtures, this instance is COMPLETE and validates against the real
+  ESMA XSD (gated by crates/opendqi-xml/tests/xsd_conformance.rs when
+  OPENDQI_XSD_DIR is set). See docs/xsd-validation.md.
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.106.001.01">
+  <DerivsTradWrnngsRpt>
+    <WrnngsSttstcs>
+      <Rpt>
+        <RefDt>2026-05-13</RefDt>
+        <MssngValtn>
+          <Rpt>
+            <NbOfOutsdngDerivs>1000</NbOfOutsdngDerivs>
+            <NbOfOutsdngDerivsWthNoValtn>1000</NbOfOutsdngDerivsWthNoValtn>
+            <NbOfOutsdngDerivsWthOutdtdValtn>1000</NbOfOutsdngDerivsWthOutdtdValtn>
+            <Wrnngs>
+              <CtrPtyId/>
+              <NbOfOutsdngDerivs>1000</NbOfOutsdngDerivs>
+              <NbOfOutsdngDerivsWthNoValtn>1000</NbOfOutsdngDerivsWthNoValtn>
+              <NbOfOutsdngDerivsWthOutdtdValtn>1000</NbOfOutsdngDerivsWthOutdtdValtn>
+            </Wrnngs>
+          </Rpt>
+        </MssngValtn>
+        <MssngMrgnInf>
+          <Rpt>
+            <NbOfOutsdngDerivs>1000</NbOfOutsdngDerivs>
+            <NbOfOutsdngDerivsWthNoMrgnInf>1000</NbOfOutsdngDerivsWthNoMrgnInf>
+            <NbOfOutsdngDerivsWthOutdtdMrgnInf>1000</NbOfOutsdngDerivsWthOutdtdMrgnInf>
+            <Wrnngs>
+              <CtrPtyId/>
+              <NbOfOutsdngDerivs>1000</NbOfOutsdngDerivs>
+              <NbOfOutsdngDerivsWthNoMrgnInf>1000</NbOfOutsdngDerivsWthNoMrgnInf>
+              <NbOfOutsdngDerivsWthOutdtdMrgnInf>1000</NbOfOutsdngDerivsWthOutdtdMrgnInf>
+            </Wrnngs>
+          </Rpt>
+        </MssngMrgnInf>
+        <AbnrmlVals>
+          <Rpt>
+            <NbOfDerivsRptd>1000</NbOfDerivsRptd>
+            <NbOfDerivsRptdWthOtlrs>1000</NbOfDerivsRptdWthOtlrs>
+            <Wrnngs>
+              <CtrPtyId/>
+              <NbOfDerivsRptd>1000</NbOfDerivsRptd>
+              <NbOfDerivsRptdWthOtlrs>1000</NbOfDerivsRptdWthOtlrs>
+            </Wrnngs>
+          </Rpt>
+        </AbnrmlVals>
+      </Rpt>
+    </WrnngsSttstcs>
+  </DerivsTradWrnngsRpt>
+</Document>

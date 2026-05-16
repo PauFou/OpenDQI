@@ -33,4 +33,16 @@ else
     cargo deny check
 fi
 
+# Optional XSD-conformance gate (developer-local; never in public CI —
+# the real ESMA XSDs are SWIFT-licensed and gitignored). `cargo test`
+# above already ran `xsd_conformance`, which self-skips unless
+# OPENDQI_XSD_DIR points at a dir of extracted real ESMA .xsd files.
+if [[ -n "${OPENDQI_XSD_DIR:-}" ]]; then
+    echo "(OPENDQI_XSD_DIR set → XSD conformance gate was enforced above)"
+else
+    echo "(XSD conformance: skipped — set OPENDQI_XSD_DIR=<extracted ESMA xsd dir>"
+    echo "  then: OPENDQI_XSD_DIR=… cargo test -p opendqi-xml --test xsd_conformance"
+    echo "  to strictly validate the conformance fixtures. See docs/xsd-validation.md.)"
+fi
+
 echo "✓ All preflight checks passed."
