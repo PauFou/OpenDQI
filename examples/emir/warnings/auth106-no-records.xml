@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic ISO 20022 auth.106 no-activity report. Hand-authored — not
+  derived from any ESMA/SWIFT example. WrnngsSttstcs carries
+  DataSetActn = "NOTX" (no transactions) instead of an Rpt; OpenDQI
+  yields zero records + one EMIR.FMT.WRN_NO_RECORDS info note.
+  See docs/auth-messages/emir-auth106.md.
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.106.001.01">
+  <DerivsTradWrnngsRpt>
+    <WrnngsSttstcs>
+      <DataSetActn>NOTX</DataSetActn>
+    </WrnngsSttstcs>
+  </DerivsTradWrnngsRpt>
+</Document>

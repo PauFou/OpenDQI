@@ -23,6 +23,6 @@ pub use model::{
     DqDimension, DqIssue, EmirRecord, EvidenceItem, FeedbackRecord, FeedbackType,
     MarginActivityRecord, MarginStateRecord, ReconStatsRecord, ReconciliationRecord, Regime,
     RejectionCause, RejectionProfile, RejectionProfileFile, RepeatedRejection, ScanSummary,
-    Severity, SftrRecord, SftrTrStateRecord, TrActivitySummary, TrStateRecord,
+    Severity, SftrRecord, SftrTrStateRecord, TrActivitySummary, TrStateRecord, TradeWarningsRecord,
 };
 pub use scoring::quality_score;

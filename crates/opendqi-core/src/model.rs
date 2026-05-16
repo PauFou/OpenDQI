@@ -867,6 +867,84 @@ impl Default for ReconStatsRecord {
     }
 }
 
+/// One report-level line from an EMIR Data-Quality Warnings Report
+/// (ISO 20022 `auth.106`, `DerivativesTradeWarningsReportV01`). Each
+/// record summarises, for one reference date, the TR-produced
+/// missing-valuation / missing-margin-info / abnormal-values counts and
+/// the rates derived from them. The per-counterparty `Wrnngs` detail
+/// is a documented deferred subset (see
+/// `docs/auth-messages/emir-auth106.md`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TradeWarningsRecord {
+    /// Source file path (or other origin label).
+    pub source_file: Option<String>,
+    /// Stable identifier of the line within the source.
+    pub record_id: Option<String>,
+    /// Regulatory regime — always `Regime::Emir` for v1.
+    pub regime: Regime,
+    /// Reference date the warnings statistics cover.
+    pub reporting_date: Option<NaiveDate>,
+    /// LEI of the counterparty — `None` at the report-level aggregate
+    /// (the per-counterparty `Wrnngs` breakdown is a deferred subset).
+    pub counterparty_lei: Option<String>,
+    /// Outstanding derivatives considered for missing-valuation.
+    pub outstanding_derivatives: Option<i64>,
+    /// Outstanding derivatives with no valuation reported.
+    pub missing_valuation: Option<i64>,
+    /// Outstanding derivatives whose valuation is outdated (>14 days).
+    pub outdated_valuation: Option<i64>,
+    /// Outstanding derivatives considered for missing-margin-info.
+    pub outstanding_derivatives_margin: Option<i64>,
+    /// Outstanding derivatives with no margin information reported.
+    pub missing_margin_info: Option<i64>,
+    /// Outstanding derivatives whose margin information is outdated.
+    pub outdated_margin_info: Option<i64>,
+    /// Derivatives reported (action NEWT/POSC/MODI/CORR) considered for
+    /// the abnormal-values (notional outlier) check.
+    pub derivatives_reported: Option<i64>,
+    /// Derivatives reported whose notional is an abnormal outlier.
+    pub abnormal_values: Option<i64>,
+    /// Derived: `missing_valuation / outstanding_derivatives`.
+    pub missing_valuation_rate: Option<Decimal>,
+    /// Derived: `outdated_valuation / outstanding_derivatives`.
+    pub outdated_valuation_rate: Option<Decimal>,
+    /// Derived: `missing_margin_info / outstanding_derivatives_margin`.
+    pub missing_margin_rate: Option<Decimal>,
+    /// Derived: `outdated_margin_info / outstanding_derivatives_margin`.
+    pub outdated_margin_rate: Option<Decimal>,
+    /// Derived: `abnormal_values / derivatives_reported`.
+    pub abnormal_values_rate: Option<Decimal>,
+    /// Catch-all of XML leaves that were not promoted to typed fields.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub raw_fields: BTreeMap<String, String>,
+}
+
+impl Default for TradeWarningsRecord {
+    fn default() -> Self {
+        Self {
+            source_file: None,
+            record_id: None,
+            regime: Regime::Emir,
+            reporting_date: None,
+            counterparty_lei: None,
+            outstanding_derivatives: None,
+            missing_valuation: None,
+            outdated_valuation: None,
+            outstanding_derivatives_margin: None,
+            missing_margin_info: None,
+            outdated_margin_info: None,
+            derivatives_reported: None,
+            abnormal_values: None,
+            missing_valuation_rate: None,
+            outdated_valuation_rate: None,
+            missing_margin_rate: None,
+            outdated_margin_rate: None,
+            abnormal_values_rate: None,
+            raw_fields: BTreeMap::new(),
+        }
+    }
+}
+
 /// Post-TR rejection profile loaded from `rejection_profile.yml`
 /// (the YAML emitted by `opendqi feedback analytics`). Used to drive
 /// the `EMIR.PSC.*` pre-submission check family so that historical

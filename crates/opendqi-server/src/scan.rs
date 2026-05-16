@@ -12,10 +12,10 @@ use opendqi_core::dq::{
     default_checks, default_feedback_checks, default_margin_activity_checks,
     default_margin_state_checks, default_recon_stats_checks, default_reconciliation_checks,
     default_sftr_checks, default_sftr_tr_activity_checks, default_sftr_tr_state_checks,
-    default_tr_activity_checks, default_tr_state_checks, finalize_issues, run_all,
-    run_all_feedback, run_all_margin_activity, run_all_margin_state, run_all_recon_stats,
+    default_tr_activity_checks, default_tr_state_checks, default_warnings_checks, finalize_issues,
+    run_all, run_all_feedback, run_all_margin_activity, run_all_margin_state, run_all_recon_stats,
     run_all_reconciliation, run_all_sftr, run_all_sftr_tr_activity, run_all_sftr_tr_state,
-    run_all_tr_activity, run_all_tr_state, CheckContext,
+    run_all_tr_activity, run_all_tr_state, run_all_warnings, CheckContext,
 };
 use opendqi_core::{
     DqDimension, DqIssue, EmirRecord, Regime, ScanSummary, Severity, SftrRecord, Thresholds,
@@ -24,8 +24,8 @@ use opendqi_io::{has_extension, read_emir_parquet, read_sftr_parquet};
 use opendqi_report::{write_issues_csv, write_report_html, write_summary_json};
 use opendqi_xml::{
     check_wellformedness, read_emir_feedback_xml, read_emir_mar_xml, read_emir_msr_xml,
-    read_emir_recon_stats_xml, read_emir_tr_state_xml, read_emir_xml, read_sftr_tr_state_xml,
-    read_sftr_xml,
+    read_emir_recon_stats_xml, read_emir_tr_state_xml, read_emir_warnings_xml, read_emir_xml,
+    read_sftr_tr_state_xml, read_sftr_xml,
 };
 
 /// What the user picked in the form.
@@ -70,6 +70,8 @@ pub enum UiOperation {
     Feedback,
     /// EMIR Reconciliation Statistics scan (auth.091). EMIR-only.
     ReconStats,
+    /// EMIR Data-Quality Warnings scan (auth.106). EMIR-only.
+    Warnings,
     /// EMIR Margin Activity Report scan (auth.108). EMIR-only.
     MarScan,
     /// EMIR Margin State Report scan (auth.109). EMIR-only.
@@ -95,6 +97,7 @@ impl UiOperation {
             "tr-activity-scan" | "tr_activity_scan" => Some(Self::TrActivityScan),
             "feedback" => Some(Self::Feedback),
             "recon-stats" | "recon_stats" => Some(Self::ReconStats),
+            "warnings" => Some(Self::Warnings),
             "mar-scan" | "mar_scan" => Some(Self::MarScan),
             "msr-scan" | "msr_scan" => Some(Self::MsrScan),
             "validate" => Some(Self::Validate),
@@ -111,6 +114,7 @@ impl UiOperation {
             Self::TrActivityScan => "tr-activity-scan",
             Self::Feedback => "feedback",
             Self::ReconStats => "recon-stats",
+            Self::Warnings => "warnings",
             Self::MarScan => "mar-scan",
             Self::MsrScan => "msr-scan",
             Self::Validate => "validate",
@@ -162,6 +166,12 @@ pub fn run_server_operation(
             UiRegime::Emir => run_emir_recon_stats_server(input, out_dir),
             UiRegime::Sftr => Err(anyhow!(
                 "recon-stats is EMIR-only (auth.091); pick a different operation for SFTR."
+            )),
+        },
+        UiOperation::Warnings => match regime {
+            UiRegime::Emir => run_emir_warnings_server(input, out_dir),
+            UiRegime::Sftr => Err(anyhow!(
+                "warnings is EMIR-only (auth.106); pick a different operation for SFTR."
             )),
         },
         UiOperation::MarScan => match regime {
@@ -886,6 +896,43 @@ fn run_emir_recon_stats_server(input: &Path, out_dir: &Path) -> Result<ScanArtif
         &default_reconciliation_checks(),
         &outcome.reconciliation_records,
         &[],
+        &ctx,
+    ));
+    finalize_issues(&mut issues, &ctx);
+    finalize_artifacts(
+        out_dir,
+        Regime::Emir,
+        UiRegime::Emir,
+        outcome.records.len() as u32,
+        &issues,
+        &[input.to_string_lossy().into_owned()],
+        started_at,
+        Utc::now(),
+    )
+}
+
+/// EMIR Data-Quality Warnings (auth.106) scan — server-side. Mirrors
+/// the CLI `opendqi emir warnings`; shared core, no duplicated logic.
+fn run_emir_warnings_server(input: &Path, out_dir: &Path) -> Result<ScanArtifacts> {
+    if !has_extension(input, "xml") {
+        return Err(anyhow!(
+            "warnings expects an XML input (auth.106). Got {}",
+            input.display()
+        ));
+    }
+    let started_at = Utc::now();
+    let outcome = read_emir_warnings_xml(input)
+        .with_context(|| format!("reading auth.106 file {}", input.display()))?;
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+    let mut issues = outcome.issues;
+    issues.extend(run_all_warnings(
+        &default_warnings_checks(),
+        &outcome.records,
         &ctx,
     ));
     finalize_issues(&mut issues, &ctx);

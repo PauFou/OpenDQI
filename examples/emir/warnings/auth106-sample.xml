@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic ISO 20022 auth.106 EMIR Derivatives Trade Warnings Report
+  fixture. Hand-authored — NOT derived from, and does not redistribute,
+  any ESMA or SWIFT example or schema.
+
+  Element paths follow the real ESMA EMIR REFIT usage guideline
+  auth.106.001.01_ESMAUG_DATWRN_1.1.0
+  (DerivativesTradeWarningsReportV01):
+  Document > DerivsTradWrnngsRpt > WrnngsSttstcs/Rpt
+  (one per reference date). Schema-shaped, not a fully XSD-valid
+  instance. See docs/auth-messages/emir-auth106.md.
+
+  OpenDQI models the REPORT-LEVEL aggregate and DERIVES the rates.
+  The per-counterparty Wrnngs breakdown (with CtrPtyId / TxDtls) is a
+  documented deferred subset and MUST NOT leak into the aggregate —
+  the huge Wrnngs values below prove the parser ignores them.
+
+  Derived rates (defaults: valuation/margin max 0.05, abnormal 0.01):
+    missing_valuation  80/1000 = 0.08  > 0.05 -> MISSING_VALUATION_HIGH
+    outdated_valuation 20/1000 = 0.02  < 0.05 -> (clean)
+    missing_margin     40/500  = 0.08  > 0.05 -> MISSING_MARGIN_INFO_HIGH
+    outdated_margin     5/500  = 0.01  < 0.05 -> (clean)
+    abnormal_values    60/2000 = 0.03  > 0.01 -> ABNORMAL_VALUES_HIGH
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.106.001.01">
+  <DerivsTradWrnngsRpt>
+    <WrnngsSttstcs>
+      <Rpt>
+        <RefDt>2026-05-13</RefDt>
+        <MssngValtn><Rpt>
+          <NbOfOutsdngDerivs>1000</NbOfOutsdngDerivs>
+          <NbOfOutsdngDerivsWthNoValtn>80</NbOfOutsdngDerivsWthNoValtn>
+          <NbOfOutsdngDerivsWthOutdtdValtn>20</NbOfOutsdngDerivsWthOutdtdValtn>
+          <Wrnngs>
+            <CtrPtyId><RptgCtrPty><LEI>LEIA0000000000000001</LEI></RptgCtrPty></CtrPtyId>
+            <NbOfOutsdngDerivs>999999</NbOfOutsdngDerivs>
+            <NbOfOutsdngDerivsWthNoValtn>999999</NbOfOutsdngDerivsWthNoValtn>
+            <NbOfOutsdngDerivsWthOutdtdValtn>999999</NbOfOutsdngDerivsWthOutdtdValtn>
+          </Wrnngs>
+        </Rpt></MssngValtn>
+        <MssngMrgnInf><Rpt>
+          <NbOfOutsdngDerivs>500</NbOfOutsdngDerivs>
+          <NbOfOutsdngDerivsWthNoMrgnInf>40</NbOfOutsdngDerivsWthNoMrgnInf>
+          <NbOfOutsdngDerivsWthOutdtdMrgnInf>5</NbOfOutsdngDerivsWthOutdtdMrgnInf>
+          <Wrnngs>
+            <CtrPtyId><RptgCtrPty><LEI>LEIA0000000000000001</LEI></RptgCtrPty></CtrPtyId>
+            <NbOfOutsdngDerivs>888888</NbOfOutsdngDerivs>
+            <NbOfOutsdngDerivsWthNoMrgnInf>888888</NbOfOutsdngDerivsWthNoMrgnInf>
+          </Wrnngs>
+        </Rpt></MssngMrgnInf>
+        <AbnrmlVals><Rpt>
+          <NbOfDerivsRptd>2000</NbOfDerivsRptd>
+          <NbOfDerivsRptdWthOtlrs>60</NbOfDerivsRptdWthOtlrs>
+          <Wrnngs>
+            <CtrPtyId><RptgCtrPty><LEI>LEIA0000000000000001</LEI></RptgCtrPty></CtrPtyId>
+            <NbOfDerivsRptd>777777</NbOfDerivsRptd>
+            <NbOfDerivsRptdWthOtlrs>777777</NbOfDerivsRptdWthOtlrs>
+          </Wrnngs>
+        </Rpt></AbnrmlVals>
+      </Rpt>
+    </WrnngsSttstcs>
+  </DerivsTradWrnngsRpt>
+</Document>

@@ -23,6 +23,8 @@ pub struct Thresholds {
     pub emir_rmt: EmirRmtThresholds,
     /// EMIR auth.091 reconciliation-statistics thresholds.
     pub recon_stats: ReconStatsThresholds,
+    /// EMIR auth.106 data-quality-warnings thresholds.
+    pub warnings: WarningsThresholds,
     /// Per-check-id severity overrides. Keys are full check IDs
     /// (e.g. `EMIR.COMP.UTI_MISSING`); values replace the check's
     /// default severity at issue-emission time. Empty by default.
@@ -50,6 +52,41 @@ impl Default for ReconStatsThresholds {
             pairing_rate_min: 0.85,
             recon_rate_min: 0.70,
             outstanding_unpaired_max: 1000,
+        }
+    }
+}
+
+/// EMIR auth.106 data-quality-warnings thresholds. Each `*_rate` is a
+/// derived ratio in `[0.0, 1.0]`; the corresponding `EMIR.WRN.*_HIGH`
+/// check fires when the rate **exceeds** the configured maximum.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WarningsThresholds {
+    /// `missing_valuation / outstanding_derivatives` above which
+    /// `EMIR.WRN.MISSING_VALUATION_HIGH` fires. Default: 0.05 (5 %).
+    pub missing_valuation_rate_max: f64,
+    /// `outdated_valuation / outstanding_derivatives` above which
+    /// `EMIR.WRN.OUTDATED_VALUATION_HIGH` fires. Default: 0.05.
+    pub outdated_valuation_rate_max: f64,
+    /// `missing_margin_info / outstanding_derivatives_margin` above
+    /// which `EMIR.WRN.MISSING_MARGIN_INFO_HIGH` fires. Default: 0.05.
+    pub missing_margin_rate_max: f64,
+    /// `outdated_margin_info / outstanding_derivatives_margin` above
+    /// which `EMIR.WRN.OUTDATED_MARGIN_INFO_HIGH` fires. Default: 0.05.
+    pub outdated_margin_rate_max: f64,
+    /// `abnormal_values / derivatives_reported` above which
+    /// `EMIR.WRN.ABNORMAL_VALUES_HIGH` fires. Default: 0.01 (1 %).
+    pub abnormal_values_rate_max: f64,
+}
+
+impl Default for WarningsThresholds {
+    fn default() -> Self {
+        Self {
+            missing_valuation_rate_max: 0.05,
+            outdated_valuation_rate_max: 0.05,
+            missing_margin_rate_max: 0.05,
+            outdated_margin_rate_max: 0.05,
+            abnormal_values_rate_max: 0.01,
         }
     }
 }

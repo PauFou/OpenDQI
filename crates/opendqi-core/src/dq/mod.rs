@@ -7,7 +7,7 @@ use crate::config::Thresholds;
 use crate::model::{
     DqDimension, DqIssue, EmirRecord, FeedbackRecord, MarginActivityRecord, MarginStateRecord,
     ReconStatsRecord, ReconciliationRecord, RejectionProfile, Severity, SftrRecord,
-    SftrTrStateRecord, TrStateRecord,
+    SftrTrStateRecord, TrStateRecord, TradeWarningsRecord,
 };
 
 mod abnormal_maturity;
@@ -1234,6 +1234,30 @@ pub fn run_all_recon_stats(
     let mut issues: Vec<DqIssue> = checks
         .par_iter()
         .flat_map_iter(|c| c.run(records, prior, ctx))
+        .collect();
+    finalize_issues(&mut issues, ctx);
+    issues
+}
+
+// ---- EMIR Data-Quality Warnings (auth.106) checks --------------
+
+mod emir_warnings;
+
+pub use emir_warnings::{
+    default_warnings_checks, EmirWrnAbnormalValuesHigh, EmirWrnMissingMarginInfoHigh,
+    EmirWrnMissingValuationHigh, EmirWrnOutdatedMarginInfoHigh, EmirWrnOutdatedValuationHigh,
+    WarningsCheck,
+};
+
+/// Run every EMIR auth.106 data-quality-warnings check.
+pub fn run_all_warnings(
+    checks: &[Box<dyn WarningsCheck>],
+    records: &[TradeWarningsRecord],
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    let mut issues: Vec<DqIssue> = checks
+        .par_iter()
+        .flat_map_iter(|c| c.run(records, ctx))
         .collect();
     finalize_issues(&mut issues, ctx);
     issues

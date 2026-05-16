@@ -14,10 +14,10 @@ use opendqi_core::dq::{
     default_margin_state_checks, default_margin_state_lifecycle_checks,
     default_pre_submission_checks, default_recon_stats_checks, default_reconciliation_checks,
     default_tr_activity_checks, default_tr_state_checks, default_tr_state_lifecycle_checks,
-    finalize_issues, run_all, run_all_feedback, run_all_lifecycle, run_all_margin_activity,
-    run_all_margin_state, run_all_margin_state_lifecycle, run_all_pre_submission,
-    run_all_recon_stats, run_all_reconciliation, run_all_tr_activity, run_all_tr_state,
-    run_all_tr_state_lifecycle, sort_issues, CheckContext,
+    default_warnings_checks, finalize_issues, run_all, run_all_feedback, run_all_lifecycle,
+    run_all_margin_activity, run_all_margin_state, run_all_margin_state_lifecycle,
+    run_all_pre_submission, run_all_recon_stats, run_all_reconciliation, run_all_tr_activity,
+    run_all_tr_state, run_all_tr_state_lifecycle, run_all_warnings, sort_issues, CheckContext,
 };
 use opendqi_core::{
     DqDimension, DqIssue, EmirRecord, MarginActivityRecord, MarginStateRecord, Regime, ScanSummary,
@@ -30,8 +30,8 @@ use opendqi_io::{
 use opendqi_report::{write_issues_csv, write_report_html, write_summary_json};
 use opendqi_xml::{
     check_wellformedness, read_emir_feedback_xml, read_emir_mar_xml, read_emir_msr_xml,
-    read_emir_recon_stats_xml, read_emir_reconciliation_xml, read_emir_tr_state_xml, read_emir_xml,
-    ExternalXmllintValidator, XsdValidator, XsdViolation,
+    read_emir_recon_stats_xml, read_emir_reconciliation_xml, read_emir_tr_state_xml,
+    read_emir_warnings_xml, read_emir_xml, ExternalXmllintValidator, XsdValidator, XsdViolation,
 };
 use tracing::{info, warn};
 
@@ -301,6 +301,25 @@ pub enum EmirAction {
         #[arg(long, value_name = "PATH")]
         email_config: Option<PathBuf>,
     },
+    /// Ingest an EMIR Data-Quality Warnings Report (ISO 20022
+    /// `auth.106`) and produce `EMIR.WRN.*` issues when the
+    /// missing-valuation / missing-margin-info / abnormal-values
+    /// rates exceed configurable thresholds. Outputs `summary.json`,
+    /// `warnings_issues.csv`, `warnings_report.html`.
+    Warnings {
+        /// Path to the `auth.106` XML file received from the TR.
+        input: PathBuf,
+        /// Optional config YAML overriding default thresholds.
+        #[arg(long)]
+        config: Option<PathBuf>,
+        /// Directory where reports are written.
+        #[arg(long)]
+        out: PathBuf,
+        /// Optional SMTP configuration YAML — emails the warnings
+        /// report after writing it. See `docs/email-notifications.md`.
+        #[arg(long, value_name = "PATH")]
+        email_config: Option<PathBuf>,
+    },
     /// Normalize EMIR XML/CSV input into a canonical Parquet file
     /// (Snappy-compressed). Schema is stable and analytics-friendly
     /// (DuckDB / Polars / PyArrow). See `docs/parquet-normalize.md`.
@@ -445,6 +464,15 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
                 &out,
                 email_config.as_deref(),
             )?;
+            Ok(ExitCode::SUCCESS)
+        }
+        EmirAction::Warnings {
+            input,
+            config,
+            out,
+            email_config,
+        } => {
+            run_warnings(&input, config.as_deref(), &out, email_config.as_deref())?;
             Ok(ExitCode::SUCCESS)
         }
         EmirAction::Normalize {
@@ -1036,6 +1064,101 @@ fn run_recon_stats(
         summary.records_processed, summary.issues_total, critical, high, summary.quality_score
     );
     println!("Report: {}", out.join("recon_stats_report.html").display());
+    Ok(())
+}
+
+fn run_warnings(
+    input: &Path,
+    config_path: Option<&Path>,
+    out: &Path,
+    email_config_path: Option<&Path>,
+) -> Result<()> {
+    let started_at = Utc::now();
+
+    let thresholds = match config_path {
+        Some(p) => {
+            let s = std::fs::read_to_string(p)
+                .with_context(|| format!("reading config {}", p.display()))?;
+            serde_yaml::from_str(&s).with_context(|| format!("parsing config {}", p.display()))?
+        }
+        None => Thresholds::default(),
+    };
+
+    let outcome = read_emir_warnings_xml(input)
+        .with_context(|| format!("reading auth.106 file {}", input.display()))?;
+    info!(
+        file = %input.display(),
+        records = outcome.records.len(),
+        format_issues = outcome.issues.len(),
+        "loaded EMIR auth.106 XML",
+    );
+
+    let mut issues: Vec<DqIssue> = outcome.issues;
+
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds,
+        today: now.date_naive(),
+        now,
+    };
+
+    let wrn_issues = run_all_warnings(&default_warnings_checks(), &outcome.records, &ctx);
+    info!(wrn_issues = wrn_issues.len(), "warnings checks run");
+    issues.extend(wrn_issues);
+    finalize_issues(&mut issues, &ctx);
+
+    let inputs = vec![input.to_path_buf()];
+    let sources = vec![input.to_string_lossy().into_owned()];
+    let summary = build_feedback_summary(
+        outcome.records.len(),
+        &issues,
+        &inputs,
+        started_at,
+        Utc::now(),
+    );
+
+    std::fs::create_dir_all(out)
+        .with_context(|| format!("creating output directory {}", out.display()))?;
+    write_summary_json(&out.join("summary.json"), &summary)?;
+    write_issues_csv(&out.join("warnings_issues.csv"), &issues)?;
+    write_report_html(
+        &out.join("warnings_report.html"),
+        &summary,
+        &issues,
+        &sources,
+    )?;
+
+    if let Some(path) = email_config_path {
+        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
+        let sent = opendqi_report::send_report_email(
+            &cfg,
+            &summary,
+            &out.join("warnings_report.html"),
+            &out.join("summary.json"),
+            &out.join("warnings_issues.csv"),
+        )?;
+        if sent {
+            info!(to = ?cfg.to, "warnings report emailed");
+        } else {
+            info!("email config is disabled — skipped send");
+        }
+    }
+
+    let critical = summary
+        .issues_by_severity
+        .get(&Severity::Critical)
+        .copied()
+        .unwrap_or(0);
+    let high = summary
+        .issues_by_severity
+        .get(&Severity::High)
+        .copied()
+        .unwrap_or(0);
+    println!(
+        "Scanned {} warnings record(s). {} issues ({} critical, {} high). Score: {:.1}/100.",
+        summary.records_processed, summary.issues_total, critical, high, summary.quality_score
+    );
+    println!("Report: {}", out.join("warnings_report.html").display());
     Ok(())
 }
 

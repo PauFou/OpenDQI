@@ -2,7 +2,7 @@
 
 OpenDQI's check loop fans out over the dimension `checks`, not
 `records`. Records are small structs (40-50 typed fields); the
-catalog is 195 checks (135 EMIR + 60 SFTR) running mostly O(n) over
+catalog is 200 checks (140 EMIR + 60 SFTR) running mostly O(n) over
 records. Parallelizing the **checks** dimension is the high-leverage
 choice: scheduling overhead amortises across `n_records` iterations
 of each check.
@@ -59,7 +59,7 @@ detection.
 ## Reference numbers
 
 Local-machine numbers (Apple Silicon, Rust stable, release build,
-`lto=thin`), measured 2026-05-15 against the full 195-check
+`lto=thin`), measured 2026-05-15 against the full 200-check
 catalog with the enriched deterministic generators. They scale
 roughly linearly with `n_records` once warm. **Indicative, not a
 benchmark contract** — re-run `cargo bench` on your hardware.

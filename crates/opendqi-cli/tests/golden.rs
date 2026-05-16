@@ -232,6 +232,15 @@ golden_test!(
     ])
 );
 golden_test!(
+    emir_warnings,
+    "emir-warnings",
+    a(&[
+        "emir",
+        "warnings",
+        &ex("examples/emir/warnings/auth106-sample.xml")
+    ])
+);
+golden_test!(
     emir_mar,
     "emir-mar",
     a(&[

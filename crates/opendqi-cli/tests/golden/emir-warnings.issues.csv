@@ -1,0 +1,4 @@
+check_id,regime,severity,dimension,record_id,uti,field,value,message,source_file,evidence_json
+EMIR.WRN.ABNORMAL_VALUES_HIGH,emir,high,accuracy,<WS>/examples/emir/warnings/auth106-sample.xml#wrn-1,,abnormal_values_rate,0.0300,Abnormal-values rate 3.00% > threshold 1.00% on 2026-05-13.,<WS>/examples/emir/warnings/auth106-sample.xml,
+EMIR.WRN.MISSING_MARGIN_INFO_HIGH,emir,high,completeness,<WS>/examples/emir/warnings/auth106-sample.xml#wrn-1,,missing_margin_rate,0.0800,Missing-margin-info rate 8.00% > threshold 5.00% on 2026-05-13.,<WS>/examples/emir/warnings/auth106-sample.xml,
+EMIR.WRN.MISSING_VALUATION_HIGH,emir,high,completeness,<WS>/examples/emir/warnings/auth106-sample.xml#wrn-1,,missing_valuation_rate,0.0800,Missing-valuation rate 8.00% > threshold 5.00% on 2026-05-13.,<WS>/examples/emir/warnings/auth106-sample.xml,

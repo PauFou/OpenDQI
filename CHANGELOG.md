@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Faithful EMIR `auth.106` data-quality warnings.** Real
+  `auth.106.001.01` is a *Derivatives Trade Warnings Report* (ESMA
+  **DATWRN**) — aggregate missing-valuation / missing-margin-info /
+  abnormal-values statistics, **not** a counterparty pairing report.
+  A schema-aligned parser (`crates/opendqi-xml/src/emir_warnings.rs`)
+  reads the real envelope and derives the report-level rates onto a
+  new `TradeWarningsRecord`; `opendqi emir warnings` (CLI and the
+  local web UI's warnings operation — shared core) runs 5 new
+  `EMIR.WRN.*` threshold checks (missing/outdated valuation & margin,
+  abnormal values) with configurable `WarningsThresholds`.
+  `DataSetActn=NOTX` → `EMIR.FMT.WRN_NO_RECORDS`. The per-counterparty
+  `Wrnngs` breakdown is a documented deferred subset. Covered by
+  inline + integration + golden + robustness tests. See
+  [`docs/auth-messages/emir-auth106.md`](docs/auth-messages/emir-auth106.md)
+  and [`docs/emir-warnings.md`](docs/emir-warnings.md). (The legacy
+  *synthetic* pairing path mislabelled `auth.106`/`auth.083` is
+  removed in the next increment.)
 - **Golden snapshot regression harness.** A dependency-free
   integration test (`crates/opendqi-cli/tests/golden.rs`) runs the
   real `opendqi` binary over the synthetic `examples/` fixtures for

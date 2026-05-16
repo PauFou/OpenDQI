@@ -17,8 +17,9 @@ use std::time::Duration;
 
 use opendqi_xml::{
     check_wellformedness, read_emir_feedback_xml, read_emir_mar_xml, read_emir_msr_xml,
-    read_emir_recon_stats_xml, read_emir_reconciliation_xml, read_emir_tr_state_xml, read_emir_xml,
-    read_sftr_reconciliation_xml, read_sftr_tr_state_xml, read_sftr_xml,
+    read_emir_recon_stats_xml, read_emir_reconciliation_xml, read_emir_tr_state_xml,
+    read_emir_warnings_xml, read_emir_xml, read_sftr_reconciliation_xml, read_sftr_tr_state_xml,
+    read_sftr_xml,
 };
 
 /// A named parser entry point adapted to `&Path -> ()` (return value
@@ -45,6 +46,9 @@ fn entry_points() -> Vec<Ep> {
         }),
         ("read_emir_recon_stats_xml", |p| {
             let _ = read_emir_recon_stats_xml(p);
+        }),
+        ("read_emir_warnings_xml", |p| {
+            let _ = read_emir_warnings_xml(p);
         }),
         ("read_emir_reconciliation_xml", |p| {
             let _ = read_emir_reconciliation_xml(p);
@@ -282,6 +286,7 @@ fn valid_fixtures() -> Vec<PathBuf> {
         "examples/emir/tr_state/auth107-sample.xml",
         "examples/emir/feedback/auth092-sample.xml",
         "examples/emir/recon_stats/auth091-sample.xml",
+        "examples/emir/warnings/auth106-sample.xml",
         "examples/emir/mar/auth108-sample.xml",
         "examples/sftr/iso20022/sample.xml",
         "examples/sftr/tr_state/auth079-sample.xml",
