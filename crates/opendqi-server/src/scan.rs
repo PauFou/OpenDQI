@@ -10,12 +10,13 @@ use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 use opendqi_core::dq::{
     default_checks, default_feedback_checks, default_margin_activity_checks,
-    default_margin_state_checks, default_recon_stats_checks, default_sftr_checks,
-    default_sftr_feedback_checks, default_sftr_tr_activity_checks, default_sftr_tr_state_checks,
-    default_tr_activity_checks, default_tr_state_checks, finalize_issues, run_all,
-    run_all_feedback, run_all_margin_activity, run_all_margin_state, run_all_recon_stats,
-    run_all_sftr, run_all_sftr_feedback, run_all_sftr_tr_activity, run_all_sftr_tr_state,
-    run_all_tr_activity, run_all_tr_state, CheckContext,
+    default_margin_state_checks, default_recon_stats_checks, default_reconciliation_checks,
+    default_sftr_checks, default_sftr_feedback_checks, default_sftr_tr_activity_checks,
+    default_sftr_tr_state_checks, default_tr_activity_checks, default_tr_state_checks,
+    finalize_issues, run_all, run_all_feedback, run_all_margin_activity, run_all_margin_state,
+    run_all_recon_stats, run_all_reconciliation, run_all_sftr, run_all_sftr_feedback,
+    run_all_sftr_tr_activity, run_all_sftr_tr_state, run_all_tr_activity, run_all_tr_state,
+    CheckContext,
 };
 use opendqi_core::{
     DqDimension, DqIssue, EmirRecord, Regime, ScanSummary, Severity, SftrRecord, Thresholds,
@@ -925,6 +926,14 @@ fn run_emir_recon_stats_server(input: &Path, out_dir: &Path) -> Result<ScanArtif
     issues.extend(run_all_recon_stats(
         &default_recon_stats_checks(),
         &outcome.records,
+        &[],
+        &ctx,
+    ));
+    // Per-transaction RcncltnRpt detail → EMIR.REC.* (same fold as the
+    // CLI `opendqi emir recon-stats`; shared core, no duplicated logic).
+    issues.extend(run_all_reconciliation(
+        &default_reconciliation_checks(),
+        &outcome.reconciliation_records,
         &[],
         &ctx,
     ));

@@ -39,6 +39,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   summary-only in `auth.080`). No model/check/store-schema change; the
   synthetic `auth.083`/`auth.106` paths are untouched. See
   [`docs/auth-messages/sftr-auth080.md`](docs/auth-messages/sftr-auth080.md).
+- **EMIR `auth.091` per-transaction reconciliation detail.** The
+  `auth.091` parser previously kept only the derived cohort
+  pairing/recon **rates**; it now *additionally* projects each
+  `TxDtls/RcncltnRpt` onto a `ReconciliationRecord` (UTI from
+  `TxId/UnqIdr/UnqTxIdr`; reporting/other counterparty from
+  `CtrPtyId`; pairing/recon status **inherited from the enclosing
+  cohort** `Pairg`/`Rcncltn`; `mismatched_fields` = the `MtchgCrit`
+  criterion names whose `Val1` ≠ `Val2`). `opendqi emir recon-stats`
+  (CLI and the local web UI's recon-stats operation — shared core)
+  runs the existing `EMIR.REC.*` checks on these and folds their
+  issues into `recon_stats_issues.csv`. All three `EMIR.REC.*` are
+  reachable from real auth.091. No `--store`/persistence, and no
+  canonical-model / check / store-schema change. See
+  [`docs/auth-messages/emir-auth091.md`](docs/auth-messages/emir-auth091.md).
 
 ## [0.3.0] - 2026-05-15
 

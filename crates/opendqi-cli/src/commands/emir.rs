@@ -966,6 +966,22 @@ fn run_recon_stats(
     );
     info!(rst_issues = rst_issues.len(), "recon-stats checks run");
     issues.extend(rst_issues);
+
+    // Per-transaction RcncltnRpt detail (UTI, cohort-inherited
+    // pairing/recon status, mismatched criterion names) → EMIR.REC.*.
+    let rec_issues = run_all_reconciliation(
+        &default_reconciliation_checks(),
+        &outcome.reconciliation_records,
+        &[],
+        &ctx,
+    );
+    info!(
+        recon_tx_records = outcome.reconciliation_records.len(),
+        rec_issues = rec_issues.len(),
+        "per-transaction reconciliation checks run",
+    );
+    issues.extend(rec_issues);
+
     finalize_issues(&mut issues, &ctx);
 
     let inputs = vec![input.to_path_buf()];

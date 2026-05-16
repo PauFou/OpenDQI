@@ -22,6 +22,19 @@
   LEI-B: PARD/RECO 100 -> pairing 1.00, recon 1.00 (clean).
   LEI-C: under a NoRptgRqrmnt cohort -> no Pairg/Rcncltn, rates None
          (proves NoRptgRqrmnt cohorts are excluded).
+
+  Each TxDtls/RcncltnRpt is ALSO projected onto a per-transaction
+  ReconciliationRecord (UTI from TxId/UnqIdr/UnqTxIdr; pairing/recon
+  status inherited from the enclosing cohort Pairg/Rcncltn;
+  mismatched_fields = MtchgCrit criterion names where Val1 != Val2).
+  These feed the existing EMIR.REC.* checks via emir recon-stats:
+    U-A-2 (PARD/NREC)  -> PAIRED/UNRECONCILED            -> UNRECONCILED_TRADE
+    U-A-3 (UNPR/RECO)  -> UNPAIRED/RECONCILED            -> UNPAIRED_TRADE
+    U-A-4 (UNPR/NREC)  -> UNPAIRED/UNRECONCILED + 2 mismatched criteria
+                          (CtrctTp scalar, CtrctVal nested) -> UNPAIRED_TRADE
+                          + UNRECONCILED_TRADE + FIELD_MISMATCH (x2)
+    U-B-1 (PARD/RECO)  -> PAIRED/RECONCILED, MtchgCrit all equal -> clean
+    U-A-1, U-C-1       -> clean / no status
 -->
 <Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.091.001.02">
   <DerivsTradRcncltnSttstclRpt>
@@ -42,7 +55,14 @@
         <TxDtls>
           <CtrPtyId><RptgCtrPty><LEI>LEIB0000000000000002</LEI></RptgCtrPty></CtrPtyId>
           <TtlNbOfTxs>100</TtlNbOfTxs>
-          <RcncltnRpt><TxId><UnqIdr><UnqTxIdr>U-B-1</UnqTxIdr></UnqIdr></TxId></RcncltnRpt>
+          <RcncltnRpt>
+            <TxId><UnqIdr><UnqTxIdr>U-B-1</UnqTxIdr></UnqIdr></TxId>
+            <MtchgCrit>
+              <CtrctMtchgCrit>
+                <CtrctTp><Val1>SWAP</Val1><Val2>SWAP</Val2></CtrctTp>
+              </CtrctMtchgCrit>
+            </MtchgCrit>
+          </RcncltnRpt>
         </TxDtls>
       </Rpt>
 
@@ -82,9 +102,25 @@
         </RptgRqrmnt></RcncltnCtgrs>
         <TtlNbOfTxs>20</TtlNbOfTxs>
         <TxDtls>
-          <CtrPtyId><RptgCtrPty><LEI>LEIA0000000000000001</LEI></RptgCtrPty></CtrPtyId>
+          <CtrPtyId>
+            <RptgCtrPty><LEI>LEIA0000000000000001</LEI></RptgCtrPty>
+            <OthrCtrPty><LEI>LEIZ0000000000000099</LEI></OthrCtrPty>
+          </CtrPtyId>
           <TtlNbOfTxs>20</TtlNbOfTxs>
-          <RcncltnRpt><TxId><UnqIdr><UnqTxIdr>U-A-4</UnqTxIdr></UnqIdr></TxId></RcncltnRpt>
+          <RcncltnRpt>
+            <TxId><UnqIdr><UnqTxIdr>U-A-4</UnqTxIdr></UnqIdr></TxId>
+            <MtchgCrit>
+              <CtrctMtchgCrit>
+                <CtrctTp><Val1>SWAP</Val1><Val2>OPTN</Val2></CtrctTp>
+              </CtrctMtchgCrit>
+              <ValtnMtchgCrit>
+                <CtrctVal>
+                  <Val1><Amt Ccy="EUR">1000000</Amt></Val1>
+                  <Val2><Amt Ccy="EUR">1200000</Amt></Val2>
+                </CtrctVal>
+              </ValtnMtchgCrit>
+            </MtchgCrit>
+          </RcncltnRpt>
         </TxDtls>
       </Rpt>
 

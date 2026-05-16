@@ -20,9 +20,12 @@
 //!          │  (or NoRptgRqrmnt — no Pairg/Rcncltn, contributes nothing)
 //!          ├─ TtlNbOfTxs                 (cohort total — context only)
 //!          └─ TxDtls (0..n)
-//!             ├─ CtrPtyId/RptgCtrPty/LEI
+//!             ├─ CtrPtyId/RptgCtrPty/LEI , CtrPtyId/OthrCtrPty/…/LEI
 //!             ├─ TtlNbOfTxs              ← per-pair count for THIS cohort
-//!             └─ RcncltnRpt (1..n)       (not modelled)
+//!             └─ RcncltnRpt (1..n)       ← per-transaction detail
+//!                ├─ TxId/UnqIdr/UnqTxIdr (or …/Prtry/Id)
+//!                └─ MtchgCrit/{CtrPty,Ctrct,Valtn,Tx}MtchgCrit
+//!                     /<criterion>/{Val1,Val2}
 //! ```
 //! `auth.091` carries **no explicit pairing/recon rate** and **no
 //! outstanding-paired/unpaired count**. OpenDQI accumulates the
@@ -30,13 +33,22 @@
 //! one `ReconStatsRecord` per counterparty LEI with the rates
 //! **derived** (`paired/(paired+unpaired)` etc). `outstanding_*` stays
 //! `None` → `EMIR.RST.OUTSTANDING_UNPAIRED_HIGH` is unreachable.
+//!
+//! Additionally, each `TxDtls/RcncltnRpt` is projected onto a per-tx
+//! `ReconciliationRecord` (UTI + counterparties; pairing/recon status
+//! **inherited from the enclosing cohort** `Pairg`/`Rcncltn`;
+//! `mismatched_fields` = the `MtchgCrit` criterion names whose
+//! `Val1` ≠ `Val2`). These feed the existing `EMIR.REC.*` checks via
+//! `opendqi emir recon-stats` — see `docs/auth-messages/emir-auth091.md`.
 
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::str::FromStr;
 
 use chrono::NaiveDate;
-use opendqi_core::{DqDimension, DqIssue, ReconStatsRecord, Regime, Severity};
+use opendqi_core::{
+    DqDimension, DqIssue, ReconStatsRecord, ReconciliationRecord, Regime, Severity,
+};
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::name::ResolveResult;
 use quick_xml::NsReader;
@@ -49,6 +61,11 @@ use crate::wellformed::check_wellformedness;
 pub struct ReconStatsXmlReadOutcome {
     /// Records extracted from the file (one per counterparty LEI).
     pub records: Vec<ReconStatsRecord>,
+    /// Per-transaction reconciliation detail derived from
+    /// `TxDtls/RcncltnRpt` (UTI, counterparties, cohort-inherited
+    /// pairing/recon status, mismatched criterion names). Feeds the
+    /// existing `EMIR.REC.*` checks.
+    pub reconciliation_records: Vec<ReconciliationRecord>,
     /// File-level data-quality / parse issues (format / namespace).
     pub issues: Vec<DqIssue>,
 }
@@ -62,6 +79,7 @@ pub fn read_emir_recon_stats_xml(path: &Path) -> anyhow::Result<ReconStatsXmlRea
     if let Err(err) = check_wellformedness(path) {
         return Ok(ReconStatsXmlReadOutcome {
             records: vec![],
+            reconciliation_records: vec![],
             issues: vec![fmt_issue(
                 "EMIR.FMT.XML_NOT_WELLFORMED",
                 Severity::Critical,
@@ -80,6 +98,7 @@ pub fn read_emir_recon_stats_xml(path: &Path) -> anyhow::Result<ReconStatsXmlRea
                 .unwrap_or_else(|| "(none)".into());
             Ok(ReconStatsXmlReadOutcome {
                 records: vec![],
+                reconciliation_records: vec![],
                 issues: vec![fmt_issue(
                     "EMIR.FMT.XML_UNSUPPORTED_NAMESPACE",
                     Severity::Warning,
@@ -142,6 +161,33 @@ fn has(pile: &[String], seg: &str) -> bool {
     pile.iter().any(|s| s == seg)
 }
 
+/// The four `MatchingCriteria16` sub-blocks; a direct child of any of
+/// these (while inside `MtchgCrit`) is a comparison criterion.
+const MTCHG_SUBBLOCKS: [&str; 4] = [
+    "CtrPtyMtchgCrit",
+    "CtrctMtchgCrit",
+    "ValtnMtchgCrit",
+    "TxMtchgCrit",
+];
+
+/// Map a cohort `Pairg` code to a `ReconciliationRecord.pairing_status`.
+fn pairing_status(code: Option<&str>) -> Option<String> {
+    match code {
+        Some("PARD") => Some("PAIRED".to_string()),
+        Some("UNPR") => Some("UNPAIRED".to_string()),
+        _ => None,
+    }
+}
+
+/// Map a cohort `Rcncltn` code to `reconciliation_status`.
+fn reconciliation_status(code: Option<&str>) -> Option<String> {
+    match code {
+        Some("RECO") => Some("RECONCILED".to_string()),
+        Some("NREC") => Some("UNRECONCILED".to_string()),
+        _ => None,
+    }
+}
+
 /// Per-counterparty accumulation of cohort transaction counts.
 #[derive(Default)]
 struct Accum {
@@ -170,10 +216,23 @@ fn parse(path: &Path) -> anyhow::Result<ReconStatsXmlReadOutcome> {
     // Current TxDtls (counterparty pair within the cohort).
     let mut txd_depth: Option<usize> = None;
     let mut txd_lei: Option<String> = None;
+    let mut txd_other_lei: Option<String> = None;
     let mut txd_count: Option<Decimal> = None;
 
     let mut acc: BTreeMap<String, Accum> = BTreeMap::new();
     let mut saw_dataset_actn = false;
+
+    // Per-transaction reconciliation detail (TxDtls/RcncltnRpt).
+    let mut reconciliation_records: Vec<ReconciliationRecord> = Vec::new();
+    let mut rcn_depth: Option<usize> = None;
+    let mut cur_rec: Option<ReconciliationRecord> = None;
+    let mut rcn_seq: usize = 0;
+    // Current MtchgCrit comparison criterion.
+    let mut crit_name: Option<String> = None;
+    let mut crit_depth: Option<usize> = None;
+    let mut crit_v1 = String::new();
+    let mut crit_v2 = String::new();
+    let mut in_val: Option<u8> = None;
 
     loop {
         match reader.read_resolved_event_into(&mut buf)? {
@@ -196,7 +255,52 @@ fn parse(path: &Path) -> anyhow::Result<ReconStatsXmlReadOutcome> {
                 {
                     txd_depth = Some(pile.len());
                     txd_lei = None;
+                    txd_other_lei = None;
                     txd_count = None;
+                }
+
+                // Per-transaction RcncltnRpt: open a ReconciliationRecord,
+                // seeded with the enclosing cohort's pairing/recon status
+                // and the current TxDtls counterparties.
+                if pile.last().map(String::as_str) == Some("RcncltnRpt")
+                    && txd_depth.is_some()
+                    && rcn_depth.is_none()
+                {
+                    rcn_depth = Some(pile.len());
+                    rcn_seq += 1;
+                    cur_rec = Some(ReconciliationRecord {
+                        source_file: Some(source_label.clone()),
+                        record_id: Some(format!("{source_label}#rcn-{rcn_seq}")),
+                        regime: Regime::Emir,
+                        reporting_counterparty: txd_lei.clone(),
+                        other_counterparty: txd_other_lei.clone(),
+                        pairing_status: pairing_status(cohort_pairg.as_deref()),
+                        reconciliation_status: reconciliation_status(cohort_rcncltn.as_deref()),
+                        ..Default::default()
+                    });
+                    crit_name = None;
+                    crit_depth = None;
+                    in_val = None;
+                } else if rcn_depth.is_some()
+                    && crit_depth.is_none()
+                    && has(&pile, "MtchgCrit")
+                    && pile.len() >= 2
+                    && MTCHG_SUBBLOCKS.contains(&pile[pile.len() - 2].as_str())
+                {
+                    // Direct child of a *MtchgCrit sub-block = a criterion.
+                    crit_name = pile.last().cloned();
+                    crit_depth = Some(pile.len());
+                    crit_v1.clear();
+                    crit_v2.clear();
+                    in_val = None;
+                } else if let Some(cd) = crit_depth {
+                    if pile.len() == cd + 1 {
+                        match pile.last().map(String::as_str) {
+                            Some("Val1") => in_val = Some(1),
+                            Some("Val2") => in_val = Some(2),
+                            _ => {}
+                        }
+                    }
                 }
             }
             (_, Event::Empty(e)) => {
@@ -208,11 +312,21 @@ fn parse(path: &Path) -> anyhow::Result<ReconStatsXmlReadOutcome> {
             (_, Event::Text(t)) => {
                 if let Ok(s) = t.unescape() {
                     text_buf.push_str(&s);
+                    match in_val {
+                        Some(1) => crit_v1.push_str(&s),
+                        Some(2) => crit_v2.push_str(&s),
+                        _ => {}
+                    }
                 }
             }
             (_, Event::CData(t)) => {
                 if let Ok(s) = std::str::from_utf8(t.as_ref()) {
                     text_buf.push_str(s);
+                    match in_val {
+                        Some(1) => crit_v1.push_str(s),
+                        Some(2) => crit_v2.push_str(s),
+                        _ => {}
+                    }
                 }
             }
             (_, Event::End(_)) => {
@@ -225,11 +339,35 @@ fn parse(path: &Path) -> anyhow::Result<ReconStatsXmlReadOutcome> {
                         } else if rpt_depth.is_some() {
                             let leaf = pile.last().map(String::as_str).unwrap_or("");
                             if txd_depth.is_some() {
-                                // Per-pair leaves.
-                                if leaf == "LEI" && has(&pile, "RptgCtrPty") {
+                                // Per-pair leaves (CtrPtyId precedes RcncltnRpt;
+                                // never read LEI/count from inside RcncltnRpt).
+                                if leaf == "LEI"
+                                    && has(&pile, "RptgCtrPty")
+                                    && !has(&pile, "RcncltnRpt")
+                                {
                                     txd_lei = Some(v.to_owned());
-                                } else if leaf == "TtlNbOfTxs" {
+                                } else if leaf == "LEI"
+                                    && has(&pile, "OthrCtrPty")
+                                    && !has(&pile, "RcncltnRpt")
+                                {
+                                    txd_other_lei = Some(v.to_owned());
+                                } else if leaf == "TtlNbOfTxs" && !has(&pile, "RcncltnRpt") {
                                     txd_count = Decimal::from_str(v).ok();
+                                } else if let Some(rec) = cur_rec.as_mut() {
+                                    // Per-transaction UTI from
+                                    // TxId/UnqIdr/{UnqTxIdr | Prtry/Id} —
+                                    // never the MtchgCrit UnqTxIdr criterion.
+                                    // UnqTxIdr is the schema-preferred choice
+                                    // arm, so first-seen wins.
+                                    let in_txid = has(&pile, "TxId") && !has(&pile, "MtchgCrit");
+                                    let is_uti = in_txid
+                                        && (leaf == "UnqTxIdr"
+                                            || (leaf == "Id"
+                                                && has(&pile, "Prtry")
+                                                && has(&pile, "UnqIdr")));
+                                    if is_uti && rec.uti.is_none() {
+                                        rec.uti = Some(v.to_owned());
+                                    }
                                 }
                             } else {
                                 // Cohort-level leaves.
@@ -248,6 +386,46 @@ fn parse(path: &Path) -> anyhow::Result<ReconStatsXmlReadOutcome> {
                                 }
                             }
                         }
+                    }
+                }
+
+                // Per-transaction MtchgCrit bookkeeping. The element
+                // being closed is still `pile.last()` (popped below).
+                if let Some(cd) = crit_depth {
+                    if pile.len() == cd + 1
+                        && matches!(pile.last().map(String::as_str), Some("Val1") | Some("Val2"))
+                    {
+                        in_val = None;
+                    } else if pile.len() == cd && pile.last() == crit_name.as_ref() {
+                        let differ = crit_v1.trim() != crit_v2.trim();
+                        let any = !crit_v1.trim().is_empty() || !crit_v2.trim().is_empty();
+                        if differ && any {
+                            if let (Some(rec), Some(name)) = (cur_rec.as_mut(), crit_name.as_ref())
+                            {
+                                if !rec.mismatched_fields.iter().any(|f| f == name) {
+                                    rec.mismatched_fields.push(name.clone());
+                                }
+                            }
+                        }
+                        crit_name = None;
+                        crit_depth = None;
+                        crit_v1.clear();
+                        crit_v2.clear();
+                        in_val = None;
+                    }
+                }
+                // Leaving a RcncltnRpt: emit the per-transaction record.
+                if let Some(rd) = rcn_depth {
+                    if pile.len() == rd {
+                        if let Some(rec) = cur_rec.take() {
+                            reconciliation_records.push(rec);
+                        }
+                        rcn_depth = None;
+                        crit_name = None;
+                        crit_depth = None;
+                        crit_v1.clear();
+                        crit_v2.clear();
+                        in_val = None;
                     }
                 }
 
@@ -320,7 +498,11 @@ fn parse(path: &Path) -> anyhow::Result<ReconStatsXmlReadOutcome> {
         ));
     }
 
-    Ok(ReconStatsXmlReadOutcome { records, issues })
+    Ok(ReconStatsXmlReadOutcome {
+        records,
+        reconciliation_records,
+        issues,
+    })
 }
 
 fn push_element(pile: &mut Vec<String>, is_leaf: &mut Vec<bool>, local: String) {
@@ -404,6 +586,98 @@ mod tests {
         assert_eq!(r.pairing_rate.unwrap().to_string(), "0.75");
         assert_eq!(r.recon_rate.unwrap().to_string(), "0.75");
         assert!(r.outstanding_unpaired.is_none(), "no source in auth.091");
+    }
+
+    // PARD/RECO cohort with a matched criterion (Val1==Val2) and a
+    // UNPR/NREC cohort with a scalar + a nested mismatched criterion.
+    const PER_TX_ENVELOPE: &[u8] = br#"<?xml version="1.0"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.091.001.02">
+  <DerivsTradRcncltnSttstclRpt>
+    <RcncltnSttstcs>
+      <Rpt>
+        <RefDt>2026-05-13</RefDt>
+        <RcncltnCtgrs><RptgRqrmnt>
+          <RptgTp>BOTH</RptgTp><Pairg>PARD</Pairg><Rcncltn>RECO</Rcncltn>
+        </RptgRqrmnt></RcncltnCtgrs>
+        <TtlNbOfTxs>10</TtlNbOfTxs>
+        <TxDtls>
+          <CtrPtyId><RptgCtrPty><LEI>LEIAAAAAAAAAAAAAAAAA1</LEI></RptgCtrPty></CtrPtyId>
+          <TtlNbOfTxs>10</TtlNbOfTxs>
+          <RcncltnRpt>
+            <TxId><UnqIdr><UnqTxIdr>U-1</UnqTxIdr></UnqIdr></TxId>
+            <MtchgCrit><CtrctMtchgCrit>
+              <CtrctTp><Val1>SWAP</Val1><Val2>SWAP</Val2></CtrctTp>
+            </CtrctMtchgCrit></MtchgCrit>
+          </RcncltnRpt>
+        </TxDtls>
+      </Rpt>
+      <Rpt>
+        <RefDt>2026-05-13</RefDt>
+        <RcncltnCtgrs><RptgRqrmnt>
+          <RptgTp>BOTH</RptgTp><Pairg>UNPR</Pairg><Rcncltn>NREC</Rcncltn>
+        </RptgRqrmnt></RcncltnCtgrs>
+        <TtlNbOfTxs>5</TtlNbOfTxs>
+        <TxDtls>
+          <CtrPtyId>
+            <RptgCtrPty><LEI>LEIAAAAAAAAAAAAAAAAA1</LEI></RptgCtrPty>
+            <OthrCtrPty><LEI>LEIZZZZZZZZZZZZZZZZZ9</LEI></OthrCtrPty>
+          </CtrPtyId>
+          <TtlNbOfTxs>5</TtlNbOfTxs>
+          <RcncltnRpt>
+            <TxId><UnqIdr><UnqTxIdr>U-2</UnqTxIdr></UnqIdr></TxId>
+            <MtchgCrit>
+              <CtrctMtchgCrit>
+                <CtrctTp><Val1>SWAP</Val1><Val2>OPTN</Val2></CtrctTp>
+              </CtrctMtchgCrit>
+              <ValtnMtchgCrit>
+                <CtrctVal>
+                  <Val1><Amt Ccy="EUR">100</Amt></Val1>
+                  <Val2><Amt Ccy="EUR">200</Amt></Val2>
+                </CtrctVal>
+              </ValtnMtchgCrit>
+            </MtchgCrit>
+          </RcncltnRpt>
+        </TxDtls>
+      </Rpt>
+    </RcncltnSttstcs>
+  </DerivsTradRcncltnSttstclRpt>
+</Document>"#;
+
+    #[test]
+    fn derives_per_transaction_reconciliation_records() {
+        let p = write_tmp("pertx.xml", PER_TX_ENVELOPE);
+        let out = read_emir_recon_stats_xml(&p).unwrap();
+        std::fs::remove_file(&p).unwrap();
+        assert!(out.issues.is_empty());
+        // Cohort rate derivation is unaffected by the per-tx detail.
+        assert_eq!(out.records.len(), 1);
+        assert!(out.records[0].pairing_rate.is_some());
+
+        assert_eq!(out.reconciliation_records.len(), 2);
+        let r1 = &out.reconciliation_records[0];
+        assert_eq!(r1.uti.as_deref(), Some("U-1"));
+        assert_eq!(r1.pairing_status.as_deref(), Some("PAIRED"));
+        assert_eq!(r1.reconciliation_status.as_deref(), Some("RECONCILED"));
+        assert!(r1.mismatched_fields.is_empty(), "Val1==Val2 ⇒ no mismatch");
+        assert_eq!(r1.regime, Regime::Emir);
+
+        let r2 = &out.reconciliation_records[1];
+        assert_eq!(r2.uti.as_deref(), Some("U-2"));
+        assert_eq!(r2.pairing_status.as_deref(), Some("UNPAIRED"));
+        assert_eq!(r2.reconciliation_status.as_deref(), Some("UNRECONCILED"));
+        assert_eq!(
+            r2.reporting_counterparty.as_deref(),
+            Some("LEIAAAAAAAAAAAAAAAAA1")
+        );
+        assert_eq!(
+            r2.other_counterparty.as_deref(),
+            Some("LEIZZZZZZZZZZZZZZZZZ9")
+        );
+        assert_eq!(
+            r2.mismatched_fields,
+            vec!["CtrctTp".to_string(), "CtrctVal".to_string()],
+            "scalar + nested Val1!=Val2 criteria, document order"
+        );
     }
 
     #[test]

@@ -39,7 +39,7 @@ parsers' leaf tables are designed to be edited in one place.
 | `auth.107.001.01` | Derivatives Trade State Report (TSR) | TR → firm | **schema-verified (subset)** | `opendqi emir tr-state-scan` via `crates/opendqi-xml/src/tr_state.rs`, aligned with `auth.107.001.01_ESMAUG_DATTSR_1.1.0`. Extracted-subset map, ignored branches and verification procedure in [`auth-messages/emir-auth107.md`](auth-messages/emir-auth107.md). Checks: [`tr-state-checks.md`](tr-state-checks.md). |
 | `auth.108.001.01` | Derivatives Trade Margin Data Report (MAR) | TR → firm | **schema-verified (subset)** | `opendqi emir mar-scan` via `crates/opendqi-xml/src/emir_mar.rs`, aligned with `auth.108.001.01_ESMAUG_DATMDA_1.1.0`; 8 `EMIR.MAR.*` checks. Extracted-subset map, ignored branches and verification in [`auth-messages/emir-auth108.md`](auth-messages/emir-auth108.md). Checks: [`emir-mar-msr.md`](emir-mar-msr.md). |
 | `auth.109.001.01` | Derivatives Trade Margin Data Transaction State Report (MSR) | TR → firm | **schema-verified (subset)** | `opendqi emir msr-scan` via `crates/opendqi-xml/src/emir_msr.rs`, aligned with `auth.109.001.01_ESMAUG_DATMDS_1.1.0`; 8 `EMIR.MSR.*` checks. Extracted-subset map, ignored branches and limits in [`auth-messages/emir-auth109.md`](auth-messages/emir-auth109.md). Checks: [`emir-mar-msr.md`](emir-mar-msr.md). |
-| `auth.091.001.02` | Derivatives Trade Reconciliation Statistical Report | TR → firm | **schema-verified (subset)** | `opendqi emir recon-stats` via `crates/opendqi-xml/src/emir_recon_stats.rs`, aligned with `auth.091.001.02_ESMAUG_DATREC_1.0.0`; 4 `EMIR.RST.*` checks. Rates are **derived** by accumulating cohort `TtlNbOfTxs` by `Pairg`/`Rcncltn` (no explicit rate fields); `outstanding_*` has no source → `OUTSTANDING_UNPAIRED_HIGH` unreachable. Map, derivation and limits in [`auth-messages/emir-auth091.md`](auth-messages/emir-auth091.md). Checks: [`emir-recon-stats.md`](emir-recon-stats.md). |
+| `auth.091.001.02` | Derivatives Trade Reconciliation Statistical Report | TR → firm | **schema-verified (subset)** | `opendqi emir recon-stats` via `crates/opendqi-xml/src/emir_recon_stats.rs`, aligned with `auth.091.001.02_ESMAUG_DATREC_1.0.0`; 4 `EMIR.RST.*` checks. Rates are **derived** by accumulating cohort `TtlNbOfTxs` by `Pairg`/`Rcncltn` (no explicit rate fields); `outstanding_*` has no source → `OUTSTANDING_UNPAIRED_HIGH` unreachable. The per-transaction `TxDtls/RcncltnRpt`/`MtchgCrit` detail is now also projected onto `ReconciliationRecord` (cohort-inherited status; `Val1`≠`Val2` mismatch) and `recon-stats` folds the resulting `EMIR.REC.*` issues into `recon_stats_issues.csv`. Map, derivation and limits in [`auth-messages/emir-auth091.md`](auth-messages/emir-auth091.md). Checks: [`emir-recon-stats.md`](emir-recon-stats.md). |
 | `auth.106.001.NN` | Data-quality Warnings (official) | TR → firm | **placeholder (matching-style)** | See "Naming caveat" below. |
 
 ## SFTR
@@ -113,10 +113,11 @@ projection — the messages are not per-UTI feeds:
   `feedback` path is retained only as an inert placeholder.
 
 The faithful re-model is proceeding as a sequenced milestone: the
-`auth.092` validation-rule list (done) and the real `auth.080` parser
-(done) are shipped; remaining items (EMIR `auth.091` per-transaction
-detail; deleting the now-inert synthetic SFTR-feedback command/checks)
-are tracked there.
+`auth.092` validation-rule list (done), the real `auth.080` parser
+(done) and the EMIR `auth.091` per-transaction `RcncltnRpt`/`MtchgCrit`
+detail (done) are shipped; the only remaining tracked item is the
+optional deletion of the now-inert synthetic SFTR-feedback
+command/checks.
 
 ## Adding a new auth.* message
 
