@@ -9,42 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **XSD-conformance reliability gate.** Each schema-verified message
-  now ships a **fully XSD-valid** conformance fixture
-  (`examples/emir/conformance/auth0{30,91,92}-valid.xml`,
-  `auth1{06,07,08,09}-valid.xml`,
-  `examples/sftr/conformance/auth0{52,79,80}-valid.xml` — all 10
-  schema-verified messages). The new
-  `crates/opendqi-xml/tests/xsd_conformance.rs` strictly validates
-  each against the **real ESMA XSD** via `xmllint` (reusing
-  `ExternalXmllintValidator`) **and** round-trips it through the
-  parser (records produced, no format issues) — closing the last
-  reliability caveat that parsers had only seen schema-shaped
-  *subset* fixtures. The gate is **developer/preflight-local and
-  self-skips in public CI**: it activates only when `xmllint` is
-  present and `OPENDQI_XSD_DIR` points at locally-extracted real ESMA
-  XSDs (SWIFT-licensed, gitignored, never committed). The lean
-  parser/golden/robustness fixtures are unchanged (still documented
-  schema-shaped subsets). See
-  [`docs/xsd-validation.md`](docs/xsd-validation.md).
+### Changed
 
-- **Faithful EMIR `auth.106` data-quality warnings.** Real
-  `auth.106.001.01` is a *Derivatives Trade Warnings Report* (ESMA
-  **DATWRN**) — aggregate missing-valuation / missing-margin-info /
-  abnormal-values statistics, **not** a counterparty pairing report.
-  A schema-aligned parser (`crates/opendqi-xml/src/emir_warnings.rs`)
-  reads the real envelope and derives the report-level rates onto a
-  new `TradeWarningsRecord`; `opendqi emir warnings` (CLI and the
-  local web UI's warnings operation — shared core) runs 5 new
-  `EMIR.WRN.*` threshold checks (missing/outdated valuation & margin,
-  abnormal values) with configurable `WarningsThresholds`.
-  `DataSetActn=NOTX` → `EMIR.FMT.WRN_NO_RECORDS`. The per-counterparty
-  `Wrnngs` breakdown is a documented deferred subset. Covered by
-  inline + integration + golden + robustness tests. See
-  [`docs/auth-messages/emir-auth106.md`](docs/auth-messages/emir-auth106.md)
-  and [`docs/emir-warnings.md`](docs/emir-warnings.md). (The legacy
-  *synthetic* pairing path mislabelled `auth.106`/`auth.083` is
-  removed in the next increment.)
+### Removed
+
+## [0.5.0] - 2026-05-16
+
+Reliability hardening — a golden snapshot regression harness, an
+adversarial parser-robustness suite, and a parse-path panic-freedom
+audit. Backwards-compatible: no canonical-model, check-ID or
+store-schema change.
+
+### Added
+
 - **Golden snapshot regression harness.** A dependency-free
   integration test (`crates/opendqi-cli/tests/golden.rs`) runs the
   real `opendqi` binary over the synthetic `examples/` fixtures for
@@ -80,6 +57,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   change. The panic-freedom invariant is now documented in
   [`docs/reliability.md`](docs/reliability.md).
 
+## [0.6.0] - 2026-05-16
+
+Faithful EMIR `auth.106` data-quality warnings, plus removal of the
+synthetic `auth.106`/`auth.083` reconciliation path. **Breaking:** the
+`opendqi emir reconcile` subcommand no longer exists (EMIR has no
+counterparty reconciliation message).
+
+### Added
+
+- **Faithful EMIR `auth.106` data-quality warnings.** Real
+  `auth.106.001.01` is a *Derivatives Trade Warnings Report* (ESMA
+  **DATWRN**) — aggregate missing-valuation / missing-margin-info /
+  abnormal-values statistics, **not** a counterparty pairing report.
+  A schema-aligned parser (`crates/opendqi-xml/src/emir_warnings.rs`)
+  reads the real envelope and derives the report-level rates onto a
+  new `TradeWarningsRecord`; `opendqi emir warnings` (CLI and the
+  local web UI's warnings operation — shared core) runs 5 new
+  `EMIR.WRN.*` threshold checks (missing/outdated valuation & margin,
+  abnormal values) with configurable `WarningsThresholds`.
+  `DataSetActn=NOTX` → `EMIR.FMT.WRN_NO_RECORDS`. The per-counterparty
+  `Wrnngs` breakdown is a documented deferred subset. Covered by
+  inline + integration + golden + robustness tests. See
+  [`docs/auth-messages/emir-auth106.md`](docs/auth-messages/emir-auth106.md)
+  and [`docs/emir-warnings.md`](docs/emir-warnings.md). (The legacy
+  *synthetic* pairing path mislabelled `auth.106`/`auth.083` is
+  removed below.)
+
 ### Removed
 
 - **Synthetic `auth.106`/`auth.083` reconciliation path.** Reading the
@@ -101,6 +105,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   model or the `reconciliations` store changed. Completes the
   Milestone 0.6 faithful `auth.106`/`auth.083` re-model. See
   [`docs/auth-messages.md`](docs/auth-messages.md).
+
+## [0.7.0] - 2026-05-16
+
+XSD-conformance reliability gate — every schema-verified message now
+has a fully-XSD-valid conformance fixture validated against the real
+ESMA XSD. Backwards-compatible: no canonical-model, check-ID or
+store-schema change.
+
+### Added
+
+- **XSD-conformance reliability gate.** Each schema-verified message
+  now ships a **fully XSD-valid** conformance fixture
+  (`examples/emir/conformance/auth0{30,91,92}-valid.xml`,
+  `auth1{06,07,08,09}-valid.xml`,
+  `examples/sftr/conformance/auth0{52,79,80}-valid.xml` — all 10
+  schema-verified messages). The new
+  `crates/opendqi-xml/tests/xsd_conformance.rs` strictly validates
+  each against the **real ESMA XSD** via `xmllint` (reusing
+  `ExternalXmllintValidator`) **and** round-trips it through the
+  parser (records produced, no format issues) — closing the last
+  reliability caveat that parsers had only seen schema-shaped
+  *subset* fixtures. The gate is **developer/preflight-local and
+  self-skips in public CI**: it activates only when `xmllint` is
+  present and `OPENDQI_XSD_DIR` points at locally-extracted real ESMA
+  XSDs (SWIFT-licensed, gitignored, never committed). The lean
+  parser/golden/robustness fixtures are unchanged (still documented
+  schema-shaped subsets). See
+  [`docs/xsd-validation.md`](docs/xsd-validation.md).
+
+### Changed
+
+- Workspace version `0.4.0` → `0.7.0`.
 
 ## [0.4.0] - 2026-05-16
 
@@ -358,7 +394,10 @@ sends back, and turns them into reproducible HTML / JSON / CSV
 - No SWIFT-licensed XSDs or real client data are committed; all
   fixtures are synthetic.
 
-[Unreleased]: https://github.com/PauFou/OpenDQI/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/PauFou/OpenDQI/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/PauFou/OpenDQI/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/PauFou/OpenDQI/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/PauFou/OpenDQI/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/PauFou/OpenDQI/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/PauFou/OpenDQI/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/PauFou/OpenDQI/compare/v0.1.0...v0.2.0
