@@ -1,0 +1,16 @@
+{
+  "regime": "sftr",
+  "files_processed": 1,
+  "records_processed": 2,
+  "issues_total": 3,
+  "issues_by_severity": {
+    "high": 3
+  },
+  "issues_by_dimension": {
+    "completeness": 2,
+    "validity": 1
+  },
+  "quality_score": 85.0,
+  "started_at": "1970-01-01T00:00:00Z",
+  "finished_at": "1970-01-01T00:00:00Z"
+}

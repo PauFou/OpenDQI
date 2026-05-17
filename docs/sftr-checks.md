@@ -1,22 +1,24 @@
 # SFTR data-quality checks
 
 OpenDQI ships **44 single-batch SFTR checks** (this document —
-including `SFTR.COMP.SECURITY_ID_MISSING`), plus **14 post-TR
-checks** (6 TSR + 5 TAR + 3 reconciliation), plus **2 `SFTR.PSC.*`
-pre-submission checks** (rejection-profile-driven; see
-[`pre-submission-checks.md`](pre-submission-checks.md)) — live total
-of **60 SFTR checks**, plus
-SFTR post-TR intelligence layers — `auth.083` reconciliation,
-`auth.079` TSR, `auth.052` TAR, `auth.052 + auth.079` audit, and
-CSV-vs-TSR book-reconcile. (SFTR has **no** feedback message — the
-synthetic `SFTR.FBK.*` layer was removed in Milestone 0.4.) The
+including `SFTR.COMP.SECURITY_ID_MISSING`), plus **16 post-TR
+checks** (6 TSR + 5 TAR + 3 reconciliation + 2 missing-collateral),
+plus **2 `SFTR.PSC.*` pre-submission checks** (rejection-profile-driven;
+see [`pre-submission-checks.md`](pre-submission-checks.md)) — live
+total of **62 SFTR checks**, plus
+SFTR post-TR intelligence layers — `auth.080` reconciliation,
+`auth.083` missing-collateral, `auth.079` TSR, `auth.052` TAR,
+`auth.052 + auth.079` audit, and CSV-vs-TSR book-reconcile. (SFTR has
+**no** feedback message — the synthetic `SFTR.FBK.*` layer was removed
+in Milestone 0.4.) The
 single-batch catalog below covers
 `opendqi sftr scan`; see
 [`tr-state-checks.md`](tr-state-checks.md),
 [`tr-activity-checks.md`](tr-activity-checks.md),
 [`tr-audit.md`](tr-audit.md),
 [`tr-feedback.md`](tr-feedback.md),
-[`tr-reconciliation.md`](tr-reconciliation.md), and
+[`tr-reconciliation.md`](tr-reconciliation.md),
+[`sftr-missing-collateral.md`](sftr-missing-collateral.md), and
 [`book-reconcile.md`](book-reconcile.md) for the post-TR layers.
 
 The catalog mirrors the EMIR check coverage — same dimensions,

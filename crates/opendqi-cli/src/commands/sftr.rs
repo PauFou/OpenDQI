@@ -9,9 +9,10 @@ use chrono::Utc;
 use clap::Subcommand;
 use opendqi_core::dq::compute_sftr_book_reconcile_issues;
 use opendqi_core::dq::{
-    default_sftr_checks, default_sftr_lifecycle_checks, default_sftr_pre_submission_checks,
-    default_sftr_reconciliation_checks, default_sftr_tr_activity_checks,
-    default_sftr_tr_state_checks, default_sftr_tr_state_lifecycle_checks, finalize_issues,
+    default_missing_collateral_checks, default_sftr_checks, default_sftr_lifecycle_checks,
+    default_sftr_pre_submission_checks, default_sftr_reconciliation_checks,
+    default_sftr_tr_activity_checks, default_sftr_tr_state_checks,
+    default_sftr_tr_state_lifecycle_checks, finalize_issues, run_all_missing_collateral,
     run_all_sftr, run_all_sftr_lifecycle, run_all_sftr_pre_submission, run_all_sftr_reconciliation,
     run_all_sftr_tr_activity, run_all_sftr_tr_state, run_all_sftr_tr_state_lifecycle, sort_issues,
     CheckContext,
@@ -26,8 +27,8 @@ use opendqi_io::{
 };
 use opendqi_report::{write_issues_csv, write_report_html, write_summary_json};
 use opendqi_xml::{
-    check_wellformedness, read_sftr_reconciliation_xml, read_sftr_tr_state_xml, read_sftr_xml,
-    ExternalXmllintValidator, XsdValidator, XsdViolation,
+    check_wellformedness, read_sftr_missing_collateral_xml, read_sftr_reconciliation_xml,
+    read_sftr_tr_state_xml, read_sftr_xml, ExternalXmllintValidator, XsdValidator, XsdViolation,
 };
 use tracing::{info, warn};
 
@@ -201,6 +202,23 @@ pub enum SftrAction {
         #[arg(long, value_name = "PATH")]
         email_config: Option<PathBuf>,
     },
+    /// Ingest an SFTR Missing Collateral Request (`auth.083`, the TR
+    /// asking the firm to provide the collateral missing for listed
+    /// SFTs) and produce `SFTR.MCR.*` issues: one actionable request
+    /// per `TxId`, plus a flag for requests with no UTI. Outputs
+    /// `summary.json`, `missing_collateral_issues.csv`,
+    /// `missing_collateral_report.html`.
+    MissingCollateral {
+        /// Path to the `auth.083` XML file.
+        input: PathBuf,
+        /// Directory where reports are written.
+        #[arg(long)]
+        out: PathBuf,
+        /// Optional SMTP configuration YAML — emails the SFTR
+        /// missing-collateral report. See `docs/email-notifications.md`.
+        #[arg(long, value_name = "PATH")]
+        email_config: Option<PathBuf>,
+    },
     /// Normalize SFTR XML/CSV input into a canonical Parquet file
     /// (Snappy-compressed). Schema is stable and analytics-friendly.
     /// See `docs/parquet-normalize.md`.
@@ -294,6 +312,14 @@ pub fn run(action: SftrAction) -> Result<ExitCode> {
             email_config,
         } => {
             run_book_reconcile(&book, &tsr, &mapping, &out, email_config.as_deref())?;
+            Ok(ExitCode::SUCCESS)
+        }
+        SftrAction::MissingCollateral {
+            input,
+            out,
+            email_config,
+        } => {
+            run_missing_collateral(&input, &out, email_config.as_deref())?;
             Ok(ExitCode::SUCCESS)
         }
         SftrAction::Normalize {
@@ -522,6 +548,100 @@ fn run_scan(
         summary.quality_score
     );
     println!("Report: {}", out.join("report.html").display());
+    Ok(())
+}
+
+fn run_missing_collateral(
+    input: &Path,
+    out: &Path,
+    email_config_path: Option<&Path>,
+) -> Result<()> {
+    let started_at = Utc::now();
+    let outcome = read_sftr_missing_collateral_xml(input)
+        .with_context(|| format!("reading SFTR missing-collateral file {}", input.display()))?;
+    info!(
+        file = %input.display(),
+        records = outcome.records.len(),
+        format_issues = outcome.issues.len(),
+        "loaded SFTR auth.083 Missing Collateral Request XML",
+    );
+
+    let mut issues: Vec<DqIssue> = outcome.issues;
+
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+    let mcr_issues =
+        run_all_missing_collateral(&default_missing_collateral_checks(), &outcome.records, &ctx);
+    info!(
+        missing_collateral_issues = mcr_issues.len(),
+        "missing-collateral checks run"
+    );
+    issues.extend(mcr_issues);
+    finalize_issues(&mut issues, &ctx);
+
+    let inputs = vec![input.to_path_buf()];
+    let sources = vec![input.to_string_lossy().into_owned()];
+    let summary = build_feedback_summary(
+        outcome.records.len(),
+        &issues,
+        &inputs,
+        started_at,
+        Utc::now(),
+    );
+
+    std::fs::create_dir_all(out)
+        .with_context(|| format!("creating output directory {}", out.display()))?;
+    write_summary_json(&out.join("summary.json"), &summary)?;
+    write_issues_csv(&out.join("missing_collateral_issues.csv"), &issues)?;
+    write_report_html(
+        &out.join("missing_collateral_report.html"),
+        &summary,
+        &issues,
+        &sources,
+    )?;
+
+    if let Some(path) = email_config_path {
+        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
+        let sent = opendqi_report::send_report_email(
+            &cfg,
+            &summary,
+            &out.join("missing_collateral_report.html"),
+            &out.join("summary.json"),
+            &out.join("missing_collateral_issues.csv"),
+        )?;
+        if sent {
+            info!(to = ?cfg.to, "SFTR missing-collateral report emailed");
+        } else {
+            info!("email config is disabled — skipped send");
+        }
+    }
+
+    let critical = summary
+        .issues_by_severity
+        .get(&Severity::Critical)
+        .copied()
+        .unwrap_or(0);
+    let high = summary
+        .issues_by_severity
+        .get(&Severity::High)
+        .copied()
+        .unwrap_or(0);
+    println!(
+        "Ingested {} SFTR missing-collateral request(s). {} issues ({} critical, {} high). Score: {:.1}/100.",
+        summary.records_processed,
+        summary.issues_total,
+        critical,
+        high,
+        summary.quality_score
+    );
+    println!(
+        "Report: {}",
+        out.join("missing_collateral_report.html").display()
+    );
     Ok(())
 }
 

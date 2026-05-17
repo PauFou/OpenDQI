@@ -10,12 +10,13 @@ use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 use opendqi_core::dq::{
     default_checks, default_feedback_checks, default_margin_activity_checks,
-    default_margin_state_checks, default_recon_stats_checks, default_reconciliation_checks,
-    default_sftr_checks, default_sftr_tr_activity_checks, default_sftr_tr_state_checks,
-    default_tr_activity_checks, default_tr_state_checks, default_warnings_checks, finalize_issues,
-    run_all, run_all_feedback, run_all_margin_activity, run_all_margin_state, run_all_recon_stats,
-    run_all_reconciliation, run_all_sftr, run_all_sftr_tr_activity, run_all_sftr_tr_state,
-    run_all_tr_activity, run_all_tr_state, run_all_warnings, CheckContext,
+    default_margin_state_checks, default_missing_collateral_checks, default_recon_stats_checks,
+    default_reconciliation_checks, default_sftr_checks, default_sftr_tr_activity_checks,
+    default_sftr_tr_state_checks, default_tr_activity_checks, default_tr_state_checks,
+    default_warnings_checks, finalize_issues, run_all, run_all_feedback, run_all_margin_activity,
+    run_all_margin_state, run_all_missing_collateral, run_all_recon_stats, run_all_reconciliation,
+    run_all_sftr, run_all_sftr_tr_activity, run_all_sftr_tr_state, run_all_tr_activity,
+    run_all_tr_state, run_all_warnings, CheckContext,
 };
 use opendqi_core::{
     DqDimension, DqIssue, EmirRecord, Regime, ScanSummary, Severity, SftrRecord, Thresholds,
@@ -25,7 +26,7 @@ use opendqi_report::{write_issues_csv, write_report_html, write_summary_json};
 use opendqi_xml::{
     check_wellformedness, read_emir_feedback_xml, read_emir_mar_xml, read_emir_msr_xml,
     read_emir_recon_stats_xml, read_emir_tr_state_xml, read_emir_warnings_xml, read_emir_xml,
-    read_sftr_tr_state_xml, read_sftr_xml,
+    read_sftr_missing_collateral_xml, read_sftr_tr_state_xml, read_sftr_xml,
 };
 
 /// What the user picked in the form.
@@ -76,6 +77,8 @@ pub enum UiOperation {
     MarScan,
     /// EMIR Margin State Report scan (auth.109). EMIR-only.
     MsrScan,
+    /// SFTR Missing Collateral Request scan (auth.083). SFTR-only.
+    MissingCollateral,
     /// XML well-formedness validation (regime-agnostic). v1 doesn't
     /// expose an XSD picker; the schema validation remains CLI-only.
     Validate,
@@ -100,6 +103,7 @@ impl UiOperation {
             "warnings" => Some(Self::Warnings),
             "mar-scan" | "mar_scan" => Some(Self::MarScan),
             "msr-scan" | "msr_scan" => Some(Self::MsrScan),
+            "missing-collateral" | "missing_collateral" => Some(Self::MissingCollateral),
             "validate" => Some(Self::Validate),
             "book-reconcile" | "book_reconcile" => Some(Self::BookReconcile),
             "tr-audit" | "tr_audit" => Some(Self::TrAudit),
@@ -117,6 +121,7 @@ impl UiOperation {
             Self::Warnings => "warnings",
             Self::MarScan => "mar-scan",
             Self::MsrScan => "msr-scan",
+            Self::MissingCollateral => "missing-collateral",
             Self::Validate => "validate",
             Self::BookReconcile => "book-reconcile",
             Self::TrAudit => "tr-audit",
@@ -184,6 +189,12 @@ pub fn run_server_operation(
             UiRegime::Emir => run_emir_msr_server(input, out_dir),
             UiRegime::Sftr => Err(anyhow!(
                 "msr-scan is EMIR-only (auth.109); pick a different operation for SFTR."
+            )),
+        },
+        UiOperation::MissingCollateral => match regime {
+            UiRegime::Sftr => run_sftr_missing_collateral_server(input, out_dir),
+            UiRegime::Emir => Err(anyhow!(
+                "missing-collateral is SFTR-only (auth.083); pick a different operation for EMIR."
             )),
         },
         UiOperation::Validate => run_validate_server(input, regime, out_dir),
@@ -940,6 +951,44 @@ fn run_emir_warnings_server(input: &Path, out_dir: &Path) -> Result<ScanArtifact
         out_dir,
         Regime::Emir,
         UiRegime::Emir,
+        outcome.records.len() as u32,
+        &issues,
+        &[input.to_string_lossy().into_owned()],
+        started_at,
+        Utc::now(),
+    )
+}
+
+/// SFTR Missing Collateral Request (auth.083) scan — server-side.
+/// Mirrors the CLI `opendqi sftr missing-collateral`; shared core, no
+/// duplicated logic.
+fn run_sftr_missing_collateral_server(input: &Path, out_dir: &Path) -> Result<ScanArtifacts> {
+    if !has_extension(input, "xml") {
+        return Err(anyhow!(
+            "missing-collateral expects an XML input (auth.083). Got {}",
+            input.display()
+        ));
+    }
+    let started_at = Utc::now();
+    let outcome = read_sftr_missing_collateral_xml(input)
+        .with_context(|| format!("reading auth.083 file {}", input.display()))?;
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+    let mut issues = outcome.issues;
+    issues.extend(run_all_missing_collateral(
+        &default_missing_collateral_checks(),
+        &outcome.records,
+        &ctx,
+    ));
+    finalize_issues(&mut issues, &ctx);
+    finalize_artifacts(
+        out_dir,
+        Regime::Sftr,
+        UiRegime::Sftr,
         outcome.records.len() as u32,
         &issues,
         &[input.to_string_lossy().into_owned()],

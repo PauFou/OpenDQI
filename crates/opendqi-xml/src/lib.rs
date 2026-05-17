@@ -19,6 +19,7 @@ pub mod emir_warnings;
 pub mod feedback;
 pub mod reconciliation;
 pub mod sftr;
+pub mod sftr_missing_collateral;
 pub mod sftr_tr_state;
 pub mod tr_state;
 pub mod wellformed;
@@ -32,6 +33,9 @@ pub use emir_warnings::{read_emir_warnings_xml, WarningsXmlReadOutcome};
 pub use feedback::{read_emir_feedback_xml, FeedbackXmlReadOutcome};
 pub use reconciliation::{read_sftr_reconciliation_xml, ReconciliationXmlReadOutcome};
 pub use sftr::{read_sftr_xml, SftrXmlReadOutcome};
+pub use sftr_missing_collateral::{
+    read_sftr_missing_collateral_xml, MissingCollateralXmlReadOutcome,
+};
 pub use sftr_tr_state::{read_sftr_tr_state_xml, SftrTrStateXmlReadOutcome};
 pub use tr_state::{read_emir_tr_state_xml, TrStateXmlReadOutcome};
 pub use wellformed::{check_wellformedness, WellformednessError};

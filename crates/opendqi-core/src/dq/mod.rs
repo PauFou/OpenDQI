@@ -6,8 +6,8 @@ use rayon::prelude::*;
 use crate::config::Thresholds;
 use crate::model::{
     DqDimension, DqIssue, EmirRecord, FeedbackRecord, MarginActivityRecord, MarginStateRecord,
-    ReconStatsRecord, ReconciliationRecord, RejectionProfile, Severity, SftrRecord,
-    SftrTrStateRecord, TrStateRecord, TradeWarningsRecord,
+    MissingCollateralRecord, ReconStatsRecord, ReconciliationRecord, RejectionProfile, Severity,
+    SftrRecord, SftrTrStateRecord, TrStateRecord, TradeWarningsRecord,
 };
 
 mod abnormal_maturity;
@@ -1253,6 +1253,29 @@ pub use emir_warnings::{
 pub fn run_all_warnings(
     checks: &[Box<dyn WarningsCheck>],
     records: &[TradeWarningsRecord],
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    let mut issues: Vec<DqIssue> = checks
+        .par_iter()
+        .flat_map_iter(|c| c.run(records, ctx))
+        .collect();
+    finalize_issues(&mut issues, ctx);
+    issues
+}
+
+// ---- SFTR Missing Collateral Request (auth.083) checks ---------
+
+mod sftr_missing_collateral;
+
+pub use sftr_missing_collateral::{
+    default_missing_collateral_checks, MissingCollateralCheck, SftrMcrMissingCollateralRequested,
+    SftrMcrMissingUtiOnRequest,
+};
+
+/// Run every SFTR auth.083 Missing Collateral Request check.
+pub fn run_all_missing_collateral(
+    checks: &[Box<dyn MissingCollateralCheck>],
+    records: &[MissingCollateralRecord],
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
     let mut issues: Vec<DqIssue> = checks

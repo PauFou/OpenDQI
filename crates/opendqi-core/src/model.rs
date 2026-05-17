@@ -945,6 +945,51 @@ impl Default for TradeWarningsRecord {
     }
 }
 
+/// One transaction from an SFTR Missing Collateral Request
+/// (ISO 20022 `auth.083`,
+/// `SecuritiesFinancingReportingMissingCollateralRequestV02`). The TR
+/// asks the firm to provide the missing collateral for this SFT — one
+/// record per `TxId`. See `docs/auth-messages/sftr-auth083.md`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MissingCollateralRecord {
+    /// Source file path (or other origin label).
+    pub source_file: Option<String>,
+    /// Stable identifier of the line within the source.
+    pub record_id: Option<String>,
+    /// Regulatory regime — always `Regime::Sftr`.
+    pub regime: Regime,
+    /// UTI of the SFT (`UnqTradIdr`) — optional in the message.
+    pub uti: Option<String>,
+    /// Reporting counterparty LEI (`RptgCtrPty/LEI`).
+    pub reporting_counterparty: Option<String>,
+    /// Other counterparty — `OthrCtrPty/Lgl/LEI` or, for a natural
+    /// person, `OthrCtrPty/Ntrl/Id/Id`.
+    pub other_counterparty: Option<String>,
+    /// Master agreement type code (`MstrAgrmt/Tp/Tp`).
+    pub master_agreement_type: Option<String>,
+    /// Master agreement version (`MstrAgrmt/Vrsn`).
+    pub master_agreement_version: Option<String>,
+    /// Catch-all of XML leaves that were not promoted to typed fields.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub raw_fields: BTreeMap<String, String>,
+}
+
+impl Default for MissingCollateralRecord {
+    fn default() -> Self {
+        Self {
+            source_file: None,
+            record_id: None,
+            regime: Regime::Sftr,
+            uti: None,
+            reporting_counterparty: None,
+            other_counterparty: None,
+            master_agreement_type: None,
+            master_agreement_version: None,
+            raw_fields: BTreeMap::new(),
+        }
+    }
+}
+
 /// Post-TR rejection profile loaded from `rejection_profile.yml`
 /// (the YAML emitted by `opendqi feedback analytics`). Used to drive
 /// the `EMIR.PSC.*` pre-submission check family so that historical

@@ -21,8 +21,12 @@ The browser opens to a minimal upload form:
     checks remain CLI-only. (SFTR has no feedback message —
     selecting SFTR for this operation returns an error.)
   - *Reconciliation Statistics* — auth.091 (EMIR only).
+  - *Data-Quality Warnings* — auth.106 (EMIR only).
   - *Margin Activity Report* — auth.108 (EMIR only).
   - *Margin State Report* — auth.109 (EMIR only).
+  - *Missing Collateral Request* — auth.083 (SFTR only). One
+    actionable `SFTR.MCR.*` issue per requested SFT; selecting EMIR
+    for this operation returns an error.
   - *Validate* — XML well-formedness only. XSD schema validation
     remains CLI-only (`opendqi {emir,sftr} validate --xsd <path>`).
   - *Book vs TSR reconciliation* — **multi-file**: book CSV +
@@ -36,7 +40,7 @@ The browser opens to a minimal upload form:
 - **Regime** — EMIR or SFTR.
 - **File / multi-file** — single-file operations use the `File`
   picker; book-reconcile and tr-audit use the named fields in the
-  multi-file box (10 operations total).
+  multi-file box (12 operations total).
 - **File** — drop or pick an `.xml` or `.parquet` file.
 - **Run** — submits to `POST /api/scan` carrying the chosen operation
   in the multipart form.

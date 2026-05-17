@@ -64,7 +64,7 @@ SWIFT-licensed XSDs are gitignored) — see
 | `auth.052.001.02` | SFT Trade Report | firm → TR | verified | `opendqi sftr scan` via `crates/opendqi-xml/src/sftr/iso20022.rs`. Also re-used by `opendqi sftr tr-activity-scan` for TR replays. |
 | `auth.080.001.02` | SFT Reconciliation Status Advice | TR → firm | **schema-verified (subset)** | `opendqi sftr reconcile` via `crates/opendqi-xml/src/reconciliation.rs`, aligned with `auth.080.001.02_ESMAUG_SFTREC_1.1.0` (re-homed from `sftr feedback` — it is reconciliation, not feedback). Derive map onto `ReconciliationRecord`, ignored branches and documented limits in [`auth-messages/sftr-auth080.md`](auth-messages/sftr-auth080.md). |
 | `auth.079.001.02` | Securities Financing Transaction State Report (SFTR TSR) | TR → firm | **schema-verified (subset)** | `opendqi sftr tr-state-scan` via `crates/opendqi-xml/src/sftr_tr_state.rs`, aligned with `auth.079.001.02_ESMAUG_SFTTRS_1.1.0`; 6 `SFTR.TST.*` + 6 `SFTR.MSR.MGLD_*` checks. Extracted-subset map, the 4-way loan choice, ignored branches and documented limits in [`auth-messages/sftr-auth079.md`](auth-messages/sftr-auth079.md). |
-| `auth.083.001.02` | SFT Missing Collateral Request | TR → firm | **not yet** | Real `auth.083` is a per-UTI *Missing Collateral Request* — **not** reconciliation and not the "SFTR analog of `auth.106`". The old synthetic `auth.083` pairing path was removed; a faithful parser is a future item. SFTR reconciliation is the real `auth.080` (above). |
+| `auth.083.001.02` | SFT Missing Collateral Request | TR → firm | **schema-verified (subset)** | `opendqi sftr missing-collateral` via `crates/opendqi-xml/src/sftr_missing_collateral.rs`, aligned with `auth.083.001.02_ESMAUG_1.0.0`; 2 `SFTR.MCR.*` checks. A TR→firm operational request (one `TxId` per SFT needing collateral) — **not** reconciliation (that is the real `auth.080`) and not the "SFTR analog of `auth.106`". Derive map onto the new `MissingCollateralRecord` (incl. the natural-person `OthrCtrPty/Ntrl` branch), ignored fields and documented limits in [`auth-messages/sftr-auth083.md`](auth-messages/sftr-auth083.md). Checks: [`sftr-missing-collateral.md`](sftr-missing-collateral.md). |
 
 ## Resolved — `auth.106` / `auth.083` were never reconciliation
 
@@ -81,9 +81,11 @@ Milestone 0.6 showed both were mislabelled:
   `opendqi emir warnings` →
   [`auth-messages/emir-auth106.md`](auth-messages/emir-auth106.md).
 - **`auth.083`** is `SecuritiesFinancingReportingMissingCollateralRequestV02`
-  — a per-UTI *Missing Collateral Request*, not reconciliation and
-  not the SFTR analog of `auth.106`. A faithful parser is a future
-  item; only the dishonest "reconciliation" claim was removed.
+  — a per-`TxId` *Missing Collateral Request* (TR→firm operational
+  request), not reconciliation and not the SFTR analog of `auth.106`.
+  It is now faithfully modelled via `opendqi sftr missing-collateral`
+  (Milestone 0.8) →
+  [`auth-messages/sftr-auth083.md`](auth-messages/sftr-auth083.md).
 
 Resolution (M0.6): the synthetic `opendqi emir reconcile` command, the
 synthetic `auth.106`/`auth.083` parser path and the synthetic fixtures

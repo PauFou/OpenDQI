@@ -55,6 +55,38 @@ fn unique_dir(tag: &str) -> PathBuf {
     p
 }
 
+/// Replace the volatile day-count in the margin-state staleness
+/// message (`… is <N> days old (threshold <M>).`, where `<N>` =
+/// `today − state_as_of` and so grows by one every calendar day) with
+/// a stable placeholder. Same determinism intent as `mask_today`;
+/// anchored on the fixed `" days old (threshold"` suffix and only the
+/// drifting `<N>` is masked (the configured `<M>` threshold is kept).
+fn mask_days_old(s: &str) -> String {
+    let suffix = " days old (threshold";
+    let mut out = String::with_capacity(s.len());
+    let mut cursor = 0usize;
+    while let Some(rel) = s[cursor..].find(suffix) {
+        let j = cursor + rel;
+        // Walk left over the run of ASCII digits forming `<N>`.
+        let bytes = s.as_bytes();
+        let mut num_start = j;
+        while num_start > 0 && bytes[num_start - 1].is_ascii_digit() {
+            num_start -= 1;
+        }
+        if num_start < j {
+            out.push_str(&s[cursor..num_start]);
+            out.push_str("<DAYS>");
+        } else {
+            // No digits before the suffix — emit verbatim.
+            out.push_str(&s[cursor..j]);
+        }
+        out.push_str(suffix);
+        cursor = j + suffix.len();
+    }
+    out.push_str(&s[cursor..]);
+    out
+}
+
 /// Zero the RFC3339 string value of `"<key>"<ws>:<ws>"..."` in a JSON
 /// blob (tolerates pretty-printer whitespace after the key/colon).
 fn zero_json_ts(s: &str, key: &str) -> String {
@@ -86,11 +118,46 @@ fn zero_json_ts(s: &str, key: &str) -> String {
 
 fn normalize(content: &str, ws: &str, tmp: &str, is_summary: bool) -> String {
     let mut t = content.replace(ws, "<WS>").replace(tmp, "<TMP>");
+    t = mask_today(&t);
+    t = mask_days_old(&t);
     if is_summary {
         t = zero_json_ts(&t, "started_at");
         t = zero_json_ts(&t, "finished_at");
     }
     t
+}
+
+/// Replace the run-date in `today=YYYY-MM-DD` (emitted by the
+/// maturity-in-past checks via `ctx.today`) with a stable placeholder,
+/// so goldens stay deterministic across calendar-day boundaries — the
+/// same intent as `zero_json_ts` for wall-clock timestamps. Targeted
+/// (only the `today=` token) to avoid masking unrelated data dates.
+fn mask_today(s: &str) -> String {
+    let tok = "today=";
+    let mut out = String::with_capacity(s.len());
+    let mut rest = s;
+    while let Some(i) = rest.find(tok) {
+        let after = i + tok.len();
+        let date = &rest[after..];
+        let looks_like_date = date.len() >= 10
+            && date.as_bytes()[..10].iter().enumerate().all(|(k, &b)| {
+                if k == 4 || k == 7 {
+                    b == b'-'
+                } else {
+                    b.is_ascii_digit()
+                }
+            });
+        if looks_like_date {
+            out.push_str(&rest[..after]);
+            out.push_str("<DATE>");
+            rest = &rest[after + 10..];
+        } else {
+            out.push_str(&rest[..after]);
+            rest = &rest[after..];
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 fn golden_path(case: &str, ext: &str) -> PathBuf {
@@ -329,6 +396,15 @@ golden_test!(
         "sftr",
         "tr-activity-scan",
         &ex("examples/sftr/tr_activity/auth052-tar-sample.xml")
+    ])
+);
+golden_test!(
+    sftr_missing_collateral,
+    "sftr-missing-collateral",
+    a(&[
+        "sftr",
+        "missing-collateral",
+        &ex("examples/sftr/missing_collateral/auth083-sample.xml")
     ])
 );
 golden_test!(

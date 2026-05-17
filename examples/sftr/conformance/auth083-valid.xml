@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic, fully XSD-valid ISO 20022 auth.083 conformance fixture.
+  Hand-authored (scaffolded) — NOT derived from, and does not
+  redistribute, any ESMA/SWIFT example or schema; only public ISO
+  20022 element names + synthetic values. Unlike the lean parser
+  fixtures, this instance is COMPLETE and validates against the real
+  ESMA XSD (gated by crates/opendqi-xml/tests/xsd_conformance.rs when
+  OPENDQI_XSD_DIR is set). See docs/xsd-validation.md.
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.083.001.02">
+  <SctiesFincgRptgMssngCollReq>
+    <TxId>
+      <RptgCtrPty>
+        <LEI>ABCDEFGHIJKLMNOPQR99</LEI>
+      </RptgCtrPty>
+      <OthrCtrPty>
+        <Lgl>
+          <LEI>ZYXWVUTSRQPONMLKJI88</LEI>
+        </Lgl>
+      </OthrCtrPty>
+      <UnqTradIdr>OPENDQI-SFTR-MCR-CONFORMANCE-0001</UnqTradIdr>
+      <MstrAgrmt>
+        <Tp>
+          <Tp>GMRA</Tp>
+        </Tp>
+        <Vrsn>2011</Vrsn>
+        <OthrMstrAgrmtDtls>SYNTHETIC MASTER AGREEMENT NOTE</OthrMstrAgrmtDtls>
+      </MstrAgrmt>
+    </TxId>
+    <TxId>
+      <RptgCtrPty>
+        <LEI>ABCDEFGHIJKLMNOPQR99</LEI>
+      </RptgCtrPty>
+      <OthrCtrPty>
+        <Ntrl>
+          <Id>
+            <Id>NATURAL-PERSON-CONFORMANCE-0002</Id>
+          </Id>
+        </Ntrl>
+      </OthrCtrPty>
+    </TxId>
+  </SctiesFincgRptgMssngCollReq>
+</Document>

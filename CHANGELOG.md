@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Milestone 0.8 — faithful SFTR `auth.083` Missing Collateral
+  Request.** New `opendqi sftr missing-collateral <auth083.xml>`
+  command (and an SFTR-only *Missing Collateral Request* web-UI
+  operation) ingesting the real
+  `SecuritiesFinancingReportingMissingCollateralRequestV02`
+  (`auth.083.001.02_ESMAUG_1.0.0`, schema-verified subset, namespace
+  `urn:iso:std:iso:20022:tech:xsd:auth.083.001.02`) — the TR→firm
+  request asking the firm to supply the collateral missing for a list
+  of SFTs. One `MissingCollateralRecord` per `TxId` (UTI,
+  reporting/other counterparty incl. the natural-person
+  `OthrCtrPty/Ntrl/Id/Id` branch, master-agreement type/version) and
+  2 `SFTR.MCR.*` checks: `MISSING_COLLATERAL_REQUESTED`
+  (Completeness/High, one per request) and `MISSING_UTI_ON_REQUEST`
+  (Validity/High, when the request omits the UTI). SFTR check total
+  60 → 62, workspace 200 → 202; web-UI operations 11 → 12. This was
+  the last real ESMA message marked "not yet" — the SFTR TR-message
+  surface is now complete. The `auth.083` XSD-conformance case joins
+  the local-only gate (`xsd_conformance`, 11/11 with
+  `OPENDQI_XSD_DIR` set). Docs:
+  [`docs/sftr-missing-collateral.md`](docs/sftr-missing-collateral.md),
+  [`docs/auth-messages/sftr-auth083.md`](docs/auth-messages/sftr-auth083.md).
+
 ### Changed
 
 ### Removed

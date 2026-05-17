@@ -18,7 +18,8 @@ use std::time::Duration;
 use opendqi_xml::{
     check_wellformedness, read_emir_feedback_xml, read_emir_mar_xml, read_emir_msr_xml,
     read_emir_recon_stats_xml, read_emir_tr_state_xml, read_emir_warnings_xml, read_emir_xml,
-    read_sftr_reconciliation_xml, read_sftr_tr_state_xml, read_sftr_xml,
+    read_sftr_missing_collateral_xml, read_sftr_reconciliation_xml, read_sftr_tr_state_xml,
+    read_sftr_xml,
 };
 
 /// A named parser entry point adapted to `&Path -> ()` (return value
@@ -51,6 +52,9 @@ fn entry_points() -> Vec<Ep> {
         }),
         ("read_sftr_reconciliation_xml", |p| {
             let _ = read_sftr_reconciliation_xml(p);
+        }),
+        ("read_sftr_missing_collateral_xml", |p| {
+            let _ = read_sftr_missing_collateral_xml(p);
         }),
         ("read_emir_mar_xml", |p| {
             let _ = read_emir_mar_xml(p);
@@ -287,6 +291,7 @@ fn valid_fixtures() -> Vec<PathBuf> {
         "examples/sftr/iso20022/sample.xml",
         "examples/sftr/tr_state/auth079-sample.xml",
         "examples/sftr/reconciliation/auth080-sample.xml",
+        "examples/sftr/missing_collateral/auth083-sample.xml",
     ]
     .iter()
     .map(|r| ws.join(r))

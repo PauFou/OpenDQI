@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic ISO 20022 auth.083 SFTR Missing Collateral Request
+  fixture. Hand-authored — NOT derived from, and does not redistribute,
+  any ESMA or SWIFT example or schema.
+
+  Element paths follow the real ESMA SFTR usage guideline
+  auth.083.001.02_ESMAUG_1.0.0
+  (SecuritiesFinancingReportingMissingCollateralRequestV02):
+  Document > SctiesFincgRptgMssngCollReq > TxId(1..n)/{RptgCtrPty/LEI,
+  OthrCtrPty (Lgl/LEI | Ntrl/Id/Id), UnqTradIdr?, MstrAgrmt?}.
+  Schema-shaped, not a fully XSD-valid instance. See
+  docs/auth-messages/sftr-auth083.md.
+
+  auth.083 is a TR -> firm operational request: the TR asks the firm
+  to provide the collateral missing for each listed SFT. Ingested by
+  `opendqi sftr missing-collateral`. Every TxId yields
+  SFTR.MCR.MISSING_COLLATERAL_REQUESTED; a TxId without UnqTradIdr also
+  yields SFTR.MCR.MISSING_UTI_ON_REQUEST (the request cannot be tied to
+  a booked SFT).
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.083.001.02">
+  <SctiesFincgRptgMssngCollReq>
+
+    <!-- 1. Legal-entity other CP, with UTI + master agreement.
+         -> MISSING_COLLATERAL_REQUESTED only. -->
+    <TxId>
+      <RptgCtrPty><LEI>RPTGLEI0000000000001</LEI></RptgCtrPty>
+      <OthrCtrPty><Lgl><LEI>OTHRLEI0000000000002</LEI></Lgl></OthrCtrPty>
+      <UnqTradIdr>OPENDQI-SFTR-MCR-0001</UnqTradIdr>
+      <MstrAgrmt><Tp><Tp>GMRA</Tp></Tp><Vrsn>2011</Vrsn></MstrAgrmt>
+    </TxId>
+
+    <!-- 2. Natural-person other CP, no UTI.
+         -> MISSING_COLLATERAL_REQUESTED + MISSING_UTI_ON_REQUEST. -->
+    <TxId>
+      <RptgCtrPty><LEI>RPTGLEI0000000000001</LEI></RptgCtrPty>
+      <OthrCtrPty><Ntrl><Id><Id>NATURAL-PERSON-0002</Id></Id></Ntrl></OthrCtrPty>
+    </TxId>
+
+  </SctiesFincgRptgMssngCollReq>
+</Document>
