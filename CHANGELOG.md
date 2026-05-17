@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Removed
+
+## [0.9.0] - 2026-05-17
+
+Post-TR intelligence depth + web-UI parity. EMIR `auth.106` is now
+modelled at all three levels — report-level, per-counterparty
+(`Wrnngs`) and per-UTI (`Wrnngs/TxDtls`) — with the amount `Ccy`
+currency attribute preserved; SFTR `auth.083` gains the
+`--tsr`/`--store` trade-state cross-reference (CLI) and its optional
+web-UI companion, plus `OthrMstrAgrmtDtls`. Backwards-compatible:
+additive checks / records / CLI flags / web-UI companion only — no
+existing canonical-model, check-ID, output or store-schema change
+(the `auth.106` parser enrichment is output-invisible). Workspace
+202 → 213 checks (EMIR 140 → 148, SFTR 62 → 65).
+
+### Added
+
 - **Web UI parity for the SFTR `auth.083` cross-reference.** The
   desktop `missing-collateral` operation now accepts an optional
   `auth.079` TSR companion (the shared `file_tsr` upload): when
@@ -515,7 +534,8 @@ sends back, and turns them into reproducible HTML / JSON / CSV
 - No SWIFT-licensed XSDs or real client data are committed; all
   fixtures are synthetic.
 
-[Unreleased]: https://github.com/PauFou/OpenDQI/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/PauFou/OpenDQI/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/PauFou/OpenDQI/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/PauFou/OpenDQI/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/PauFou/OpenDQI/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/PauFou/OpenDQI/compare/v0.5.0...v0.6.0
