@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Removed
+
+## [0.8.0] - 2026-05-17
+
+Faithful SFTR `auth.083` Missing Collateral Request — the last real
+ESMA message marked "not yet"; the SFTR TR-message surface is now
+complete. Backwards-compatible: additive model / checks / CLI / web-UI
+op; no existing canonical-model, check-ID or store-schema change.
+
+### Added
+
 - **Milestone 0.8 — faithful SFTR `auth.083` Missing Collateral
   Request.** New `opendqi sftr missing-collateral <auth083.xml>`
   command (and an SFTR-only *Missing Collateral Request* web-UI
@@ -32,6 +45,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [`docs/auth-messages/sftr-auth083.md`](docs/auth-messages/sftr-auth083.md).
 
 ### Changed
+
+- **Golden snapshot harness is now calendar-day-stable.** The
+  deterministic-output goldens embed `ctx.today` (maturity-in-past
+  messages) and a `today − state_as_of` day-count (margin-state
+  staleness), so they previously drifted across midnight. `normalize()`
+  now masks `today=YYYY-MM-DD` → `today=<DATE>` and `… is <N> days old
+  (threshold <M>)` → `<DAYS>` (the configured `<M>` is kept). Only the
+  two affected goldens (`emir-msr`, `sftr-scan`) changed, and only
+  those placeholder substitutions — no behavioural output change.
 
 ### Removed
 
@@ -416,7 +438,8 @@ sends back, and turns them into reproducible HTML / JSON / CSV
 - No SWIFT-licensed XSDs or real client data are committed; all
   fixtures are synthetic.
 
-[Unreleased]: https://github.com/PauFou/OpenDQI/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/PauFou/OpenDQI/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/PauFou/OpenDQI/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/PauFou/OpenDQI/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/PauFou/OpenDQI/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/PauFou/OpenDQI/compare/v0.4.0...v0.5.0
