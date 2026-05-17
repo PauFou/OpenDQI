@@ -273,6 +273,7 @@ fn parse(path: &Path) -> anyhow::Result<WarningsXmlReadOutcome> {
     let mut pile: Vec<String> = Vec::new();
     let mut is_leaf: Vec<bool> = Vec::new();
     let mut text_buf = String::new();
+    let mut attrs_buf: Vec<(String, String)> = Vec::new();
 
     let mut rpt_depth: Option<usize> = None;
     let mut acc = Accum::default();
@@ -304,6 +305,12 @@ fn parse(path: &Path) -> anyhow::Result<WarningsXmlReadOutcome> {
                 let local = local_name(&e);
                 push_element(&mut pile, &mut is_leaf, local);
                 text_buf.clear();
+                // Attributes belong to the element just opened; a leaf
+                // element's Start immediately precedes its Text/End
+                // (no nested element), so at the leaf-commit below
+                // `attrs_buf` holds exactly that leaf's attributes
+                // (e.g. the `Ccy` on `<Amt Ccy="EUR">`).
+                attrs_buf = collect_attrs(&e);
 
                 // The OUTER per-RefDt Rpt (DetailedStatisticsPerCounterparty17).
                 // Inner category `Rpt`s reuse the name but never reopen
@@ -451,7 +458,9 @@ fn parse(path: &Path) -> anyhow::Result<WarningsXmlReadOutcome> {
                                 tx.other_counterparty = Some(v.to_owned());
                             } else {
                                 let key = pile[td - 1..].join("/");
-                                tx.raw_fields.entry(key).or_insert_with(|| v.to_owned());
+                                tx.raw_fields
+                                    .entry(key)
+                                    .or_insert_with(|| encode_value(v, &attrs_buf));
                             }
                         }
                     }
@@ -550,6 +559,39 @@ fn local_name(e: &BytesStart<'_>) -> String {
     String::from_utf8_lossy(e.local_name().as_ref()).into_owned()
 }
 
+/// Collect an element's attributes as `(local-name, value)` pairs.
+/// Verbatim copy of the `emir/iso20022.rs` idiom for cross-parser
+/// consistency.
+fn collect_attrs(e: &BytesStart<'_>) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for attr in e.attributes().flatten() {
+        let key = String::from_utf8_lossy(attr.key.local_name().as_ref()).into_owned();
+        let value = attr
+            .unescape_value()
+            .map(|c| c.into_owned())
+            .unwrap_or_default();
+        out.push((key, value));
+    }
+    out
+}
+
+/// Encode a leaf value with its attributes: bare `text` when there are
+/// none, else `text|key=value|…` (e.g. `1000.00|Ccy=EUR`). Verbatim
+/// copy of the `emir/iso20022.rs` `raw_fields` catch-all idiom.
+fn encode_value(text: &str, attrs: &[(String, String)]) -> String {
+    if attrs.is_empty() {
+        return text.to_owned();
+    }
+    let mut out = String::from(text);
+    for (k, v) in attrs {
+        out.push('|');
+        out.push_str(k);
+        out.push('=');
+        out.push_str(v);
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -579,6 +621,7 @@ mod tests {
                 <OthrCtrPty><Lgl><LEI>OTHRBBBBBBBBBBBBBBB2</LEI></Lgl></OthrCtrPty>
                 <UnqIdr><UnqTxIdr>UTIWRNTX0000000000001</UnqTxIdr></UnqIdr>
               </TxId>
+              <ValtnAmt><Amt><Amt Ccy="USD">123456.78</Amt></Amt></ValtnAmt>
               <ValtnTmStmp>2026-05-12T09:00:00Z</ValtnTmStmp>
             </TxDtls>
           </Wrnngs>
@@ -664,6 +707,14 @@ mod tests {
         assert_eq!(
             tx.raw_fields.get("TxDtls/ValtnTmStmp").map(String::as_str),
             Some("2026-05-12T09:00:00Z")
+        );
+        // The `Ccy` attribute on the amount leaf is preserved
+        // alongside the value via the `text|key=value` encoding.
+        assert_eq!(
+            tx.raw_fields
+                .get("TxDtls/ValtnAmt/Amt/Amt")
+                .map(String::as_str),
+            Some("123456.78|Ccy=USD")
         );
     }
 

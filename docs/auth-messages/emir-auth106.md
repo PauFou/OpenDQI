@@ -118,15 +118,18 @@ enumerated. Operational, not statistical (one issue per record, like
 
 These drive the 3 `EMIR.WRN.TX_*` checks (one issue per flagged
 transaction, by category — see [`../emir-warnings.md`](../emir-warnings.md)),
-folded into the same `warnings_issues.csv`. The `Ccy` currency
-**attribute** of amount leaves is not captured (the streaming parser
-reads element text, not attributes) — the numeric amount text is kept
-in `raw_fields`.
+folded into the same `warnings_issues.csv`. Amount leaves keep their
+`Ccy` currency **attribute** alongside the numeric value via the
+`text|Ccy=XXX` `encode_value` encoding (e.g.
+`raw_fields["TxDtls/ValtnAmt/Amt/Amt"] = "1000.00|Ccy=EUR"`) — the
+same idiom as the `auth.030`/`auth.052` catch-all parsers.
 
 ## Fields ignored / known unsupported branches
 
-`Wrnngs/TxDtls/NtnlQty`, `DerivEvtTmStmp`, amount-leaf `Ccy`
-attributes, and the per-category `DataSetActn` no-activity branches.
+Only the per-category `DataSetActn` no-activity branches (intentional
+Info-path behaviour, not a fidelity gap). All `TxDtls` leaves —
+including `NtnlQty` and `DerivEvtTmStmp` (kept as text) and the
+amount `Ccy` attribute — are preserved in `raw_fields`.
 
 ### Documented limitations
 
@@ -139,8 +142,10 @@ attributes, and the per-category `DataSetActn` no-activity branches.
   `(RefDt, LEI)`) and the per-UTI level (`WarningsTransactionRecord`,
   one per `Wrnngs/TxDtls`) are all modelled. Per-counterparty and
   per-UTI values never leak into the report-level aggregate
-  (guaranteed by integration assertions). Only `NtnlQty`,
-  `DerivEvtTmStmp` and amount `Ccy` attributes remain unmodelled.
+  (guaranteed by integration assertions). Every `TxDtls` leaf is
+  preserved — typed where it has a consumer, else verbatim in
+  `raw_fields` (amount `Ccy` attributes included via `text|Ccy=XXX`).
+  Nothing in `auth.106` is unmodelled now.
 - **Single reference date assumption.** One record per `Rpt`; the
   schema permits one `Rpt` per report.
 - **Not a full XSD validation** — same documented "subset" stance as

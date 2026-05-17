@@ -130,9 +130,23 @@ fn derives_rates_and_fires_high_rate_checks() {
         by_uti["UTIWRNMRG00000000002"].warning_category.as_deref(),
         Some("MissingMargin")
     );
+    let abn = by_uti["UTIWRNABN00000000003"];
+    assert_eq!(abn.warning_category.as_deref(), Some("AbnormalValue"));
+
+    // The `Ccy` attribute on amount leaves is preserved alongside the
+    // numeric value via the `text|key=value` encoding (both the new
+    // MssngValtn `ValtnAmt` and the AbnrmlVals `NtnlAmt`).
     assert_eq!(
-        by_uti["UTIWRNABN00000000003"].warning_category.as_deref(),
-        Some("AbnormalValue")
+        val.raw_fields
+            .get("TxDtls/ValtnAmt/Amt/Amt")
+            .map(String::as_str),
+        Some("123456.78|Ccy=USD")
+    );
+    assert_eq!(
+        abn.raw_fields
+            .get("TxDtls/NtnlAmt/FrstLeg/Amt/Amt")
+            .map(String::as_str),
+        Some("999000000.00|Ccy=EUR")
     );
 
     let tx_issues = run_all_warnings_transaction(

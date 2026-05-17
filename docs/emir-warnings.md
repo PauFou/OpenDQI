@@ -62,7 +62,10 @@ Operational, not statistical: the TR explicitly enumerated these
 transactions, so each flagged `TxDtls` yields **one** issue (same
 shape as `EMIR.REC.*`), filtered by category. The UTI is set on the
 issue; the counterparty LEI is named in the message. Folded into the
-same `warnings_issues.csv`.
+same `warnings_issues.csv`. The per-transaction context (valuation /
+collateral timestamps, notional, action/event metadata) is preserved
+in the record's `raw_fields`, including amount-leaf `Ccy` currency
+attributes via the `text|Ccy=XXX` encoding.
 
 | Check ID | Dimension | Severity | Fires |
 |---|---|---|---|

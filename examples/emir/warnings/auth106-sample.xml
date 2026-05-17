@@ -22,7 +22,9 @@
 
   Each Wrnngs block carries one TxDtls (UTIWRNVAL.../UTIWRNMRG...
   /UTIWRNABN...) -> one issue each: EMIR.WRN.TX_MISSING_VALUATION,
-  EMIR.WRN.TX_MISSING_MARGIN, EMIR.WRN.TX_ABNORMAL_VALUE.
+  EMIR.WRN.TX_MISSING_MARGIN, EMIR.WRN.TX_ABNORMAL_VALUE. The amount
+  leaves carry a Ccy attribute (ValtnAmt USD, NtnlAmt EUR); the
+  per-UTI raw_fields preserves it as "value|Ccy=XXX".
 
   Report-level derived rates (defaults: valuation/margin max 0.05,
   abnormal 0.01):
@@ -57,6 +59,7 @@
                 <OthrCtrPty><Lgl><LEI>OTHRB000000000000002</LEI></Lgl></OthrCtrPty>
                 <UnqIdr><UnqTxIdr>UTIWRNVAL00000000001</UnqTxIdr></UnqIdr>
               </TxId>
+              <ValtnAmt><Amt><Amt Ccy="USD">123456.78</Amt></Amt></ValtnAmt>
               <ValtnTmStmp>2026-05-12T09:00:00Z</ValtnTmStmp>
             </TxDtls>
           </Wrnngs>

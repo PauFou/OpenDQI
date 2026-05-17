@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **EMIR `auth.106` amount `Ccy` currency now preserved.** The
+  warnings parser captured element text only, so the `Ccy` attribute
+  on `Wrnngs/TxDtls` amount leaves (`ValtnAmt`, `NtnlAmt`) was
+  dropped. It is now kept alongside the value in the per-UTI
+  `raw_fields` via the codebase `text|Ccy=XXX` `encode_value` idiom
+  (the same convention as the `auth.030`/`auth.052` catch-all
+  parsers). This closes the last documented `auth.106` limitation —
+  every `TxDtls` leaf is now preserved (`NtnlQty`/`DerivEvtTmStmp`
+  were already kept as text). No model, check, count, or output
+  change (`raw_fields` is not in `issues.csv`/`summary.json`);
+  attribute-free leaves serialise byte-identically. Docs:
+  [`docs/emir-warnings.md`](docs/emir-warnings.md),
+  [`docs/auth-messages/emir-auth106.md`](docs/auth-messages/emir-auth106.md).
 - **EMIR `auth.106` per-counterparty `Wrnngs` detail.** The
   Data-Quality Warnings parser now also models the per-counterparty
   breakdown: one `WarningsCounterpartyRecord` per `(RefDt, CtrPty
