@@ -44,12 +44,13 @@ Document
          ├─ MssngValtn  (choice: DataSetActn | Rpt):
          │     NbOfOutsdngDerivs, NbOfOutsdngDerivsWthNoValtn,
          │     NbOfOutsdngDerivsWthOutdtdValtn
-         │     [+ Wrnngs(0..500000): CtrPtyId, …counts, TxDtls — deferred]
+         │     [+ Wrnngs(0..500000): CtrPtyId, …counts  — modelled;
+         │        Wrnngs/TxDtls(per-UTI) — deferred]
          ├─ MssngMrgnInf (choice: DataSetActn | Rpt):
          │     NbOfOutsdngDerivs, NbOfOutsdngDerivsWthNoMrgnInf,
-         │     NbOfOutsdngDerivsWthOutdtdMrgnInf  [+ Wrnngs — deferred]
+         │     NbOfOutsdngDerivsWthOutdtdMrgnInf  [+ Wrnngs — modelled]
          └─ AbnrmlVals  (choice: DataSetActn | Rpt):
-               NbOfDerivsRptd, NbOfDerivsRptdWthOtlrs  [+ Wrnngs — deferred]
+               NbOfDerivsRptd, NbOfDerivsRptdWthOtlrs  [+ Wrnngs — modelled]
 ```
 
 Accepted root namespace:
@@ -77,12 +78,33 @@ category `Rpt` counts only (the per-counterparty `Wrnngs` breakdown is
 `WrnngsSttstcs/DataSetActn = NOTX` → zero records + Info
 `EMIR.FMT.WRN_NO_RECORDS`.
 
+## Per-counterparty derivation → `WarningsCounterpartyRecord`
+
+The `Wrnngs` breakdown is **also** modelled, separately from the
+report-level aggregate above. One `WarningsCounterpartyRecord` per
+`(RefDt, CtrPty LEI)` — the three `MssngValtn` / `MssngMrgnInf` /
+`AbnrmlVals` `Wrnngs` blocks for the same LEI are merged (each
+contributes a disjoint set of count categories):
+
+| Canonical field | Source |
+|---|---|
+| `reporting_date` | the enclosing `WrnngsSttstcs/Rpt/RefDt` |
+| `counterparty_lei` | `Wrnngs/CtrPtyId/RptgCtrPty/LEI` |
+| the count + derived-rate fields | the same `NbOf*` leaves as the report-level table, taken from inside each `Wrnngs` block |
+| `regime` | `Emir` |
+
+These records drive the 5 `EMIR.WRN.CTRPTY_*_HIGH` checks (same rate
+semantics and thresholds as the report-level family, applied per
+counterparty — see [`../emir-warnings.md`](../emir-warnings.md)). They
+are folded into the same `warnings_issues.csv` (shared core, same
+precedent as the auth.091 per-transaction fold).
+
 ## Fields ignored / known unsupported branches
 
-The per-counterparty **`Wrnngs`** lists
-(`MissingValuationsData2` / `MissingMarginData2` /
-`AbnormalValuesData4`, 0..500000 each — `CtrPtyId`, per-counterparty
-counts, and the per-UTI `TxDtls`) and the per-category `DataSetActn`
+The deeper per-UTI `Wrnngs/TxDtls` level
+(`MissingValuationsTransactionData2` / `MissingMarginTransactionData2`
+/ `AbnormalValuesTransactionData2` — per-transaction UTI, valuation
+amount/timestamp, etc.) and the per-category `DataSetActn`
 no-activity branches.
 
 ### Documented limitations
@@ -90,12 +112,15 @@ no-activity branches.
 - **Derived rates.** The real message has no rate field; the rates
   are computed from the report-level counts (a defensible
   interpretation, not a verbatim mapping).
-- **Report-level only.** The per-counterparty `Wrnngs` breakdown
-  (with LEIs and per-UTI `TxDtls`) is a deferred subset →
-  `counterparty_lei` is `None` and the `EMIR.WRN.*` checks operate on
-  the report aggregate. A per-counterparty / per-UTI model is a
-  separate future increment (same precedent as the `auth.091`
-  per-transaction detail).
+- **Two levels modelled; per-UTI deferred.** The report-level
+  aggregate (`TradeWarningsRecord`, `counterparty_lei` `None`) and the
+  per-counterparty aggregate (`WarningsCounterpartyRecord`, one per
+  `(RefDt, LEI)`) are both modelled. The deeper per-UTI `Wrnngs/TxDtls`
+  level (UTI + valuation amount/timestamp per transaction) remains a
+  documented deferred subset — a clean future increment, same
+  precedent as the `auth.091` per-transaction detail. Per-counterparty
+  values never leak into the report-level aggregate (guaranteed by an
+  integration assertion).
 - **Single reference date assumption.** One record per `Rpt`; the
   schema permits one `Rpt` per report.
 - **Not a full XSD validation** — same documented "subset" stance as

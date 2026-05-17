@@ -945,6 +945,82 @@ impl Default for TradeWarningsRecord {
     }
 }
 
+/// One per-counterparty line from the `Wrnngs` breakdown of an EMIR
+/// Data-Quality Warnings Report (ISO 20022 `auth.106`). The TR breaks
+/// the report-level statistics down per reporting counterparty; this
+/// record carries that per-LEI view for one reference date (the three
+/// `MssngValtn` / `MssngMrgnInf` / `AbnrmlVals` sub-reports for the
+/// same LEI are merged). The deeper per-UTI `TxDtls` level is a
+/// documented deferred subset (see `docs/auth-messages/emir-auth106.md`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WarningsCounterpartyRecord {
+    /// Source file path (or other origin label).
+    pub source_file: Option<String>,
+    /// Stable identifier of the line within the source.
+    pub record_id: Option<String>,
+    /// Regulatory regime — always `Regime::Emir` for v1.
+    pub regime: Regime,
+    /// Reference date the warnings statistics cover.
+    pub reporting_date: Option<NaiveDate>,
+    /// LEI of the counterparty this `Wrnngs` block is for.
+    pub counterparty_lei: Option<String>,
+    /// Outstanding derivatives considered for missing-valuation.
+    pub outstanding_derivatives: Option<i64>,
+    /// Outstanding derivatives with no valuation reported.
+    pub missing_valuation: Option<i64>,
+    /// Outstanding derivatives whose valuation is outdated.
+    pub outdated_valuation: Option<i64>,
+    /// Outstanding derivatives considered for missing-margin-info.
+    pub outstanding_derivatives_margin: Option<i64>,
+    /// Outstanding derivatives with no margin information reported.
+    pub missing_margin_info: Option<i64>,
+    /// Outstanding derivatives whose margin information is outdated.
+    pub outdated_margin_info: Option<i64>,
+    /// Derivatives reported considered for the abnormal-values check.
+    pub derivatives_reported: Option<i64>,
+    /// Derivatives reported whose notional is an abnormal outlier.
+    pub abnormal_values: Option<i64>,
+    /// Derived: `missing_valuation / outstanding_derivatives`.
+    pub missing_valuation_rate: Option<Decimal>,
+    /// Derived: `outdated_valuation / outstanding_derivatives`.
+    pub outdated_valuation_rate: Option<Decimal>,
+    /// Derived: `missing_margin_info / outstanding_derivatives_margin`.
+    pub missing_margin_rate: Option<Decimal>,
+    /// Derived: `outdated_margin_info / outstanding_derivatives_margin`.
+    pub outdated_margin_rate: Option<Decimal>,
+    /// Derived: `abnormal_values / derivatives_reported`.
+    pub abnormal_values_rate: Option<Decimal>,
+    /// Catch-all of XML leaves that were not promoted to typed fields.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub raw_fields: BTreeMap<String, String>,
+}
+
+impl Default for WarningsCounterpartyRecord {
+    fn default() -> Self {
+        Self {
+            source_file: None,
+            record_id: None,
+            regime: Regime::Emir,
+            reporting_date: None,
+            counterparty_lei: None,
+            outstanding_derivatives: None,
+            missing_valuation: None,
+            outdated_valuation: None,
+            outstanding_derivatives_margin: None,
+            missing_margin_info: None,
+            outdated_margin_info: None,
+            derivatives_reported: None,
+            abnormal_values: None,
+            missing_valuation_rate: None,
+            outdated_valuation_rate: None,
+            missing_margin_rate: None,
+            outdated_margin_rate: None,
+            abnormal_values_rate: None,
+            raw_fields: BTreeMap::new(),
+        }
+    }
+}
+
 /// One transaction from an SFTR Missing Collateral Request
 /// (ISO 20022 `auth.083`,
 /// `SecuritiesFinancingReportingMissingCollateralRequestV02`). The TR

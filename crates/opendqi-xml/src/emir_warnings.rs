@@ -26,28 +26,35 @@
 //!                NbOfDerivsRptd, NbOfDerivsRptdWthOtlrs
 //! ```
 //! OpenDQI models the **report-level aggregate** (one
-//! `TradeWarningsRecord` per `RefDt`) and **derives** the
-//! missing/outdated/abnormal *rates* from the counts. The
-//! per-counterparty `Wrnngs` breakdown (0..500000, with `CtrPtyId` and
-//! per-UTI `TxDtls`) is a documented deferred subset, never read here
-//! (`counterparty_lei` stays `None`).
+//! `TradeWarningsRecord` per `RefDt`, `counterparty_lei` always `None`,
+//! rates derived from the counts) AND the **per-counterparty
+//! aggregate** (one `WarningsCounterpartyRecord` per `(RefDt, CtrPty
+//! LEI)`, merging the three `MssngValtn`/`MssngMrgnInf`/`AbnrmlVals`
+//! `Wrnngs` blocks for that LEI). The deeper per-UTI `Wrnngs/TxDtls`
+//! level remains a documented deferred subset, never read here.
 
 use std::path::Path;
 
 use chrono::NaiveDate;
-use opendqi_core::{DqDimension, DqIssue, Regime, Severity, TradeWarningsRecord};
+use opendqi_core::{
+    DqDimension, DqIssue, Regime, Severity, TradeWarningsRecord, WarningsCounterpartyRecord,
+};
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::name::ResolveResult;
 use quick_xml::NsReader;
 use rust_decimal::Decimal;
+use std::collections::BTreeMap;
 
 use crate::wellformed::check_wellformedness;
 
 /// Outcome of reading one auth.106 XML file.
 #[derive(Debug, Default)]
 pub struct WarningsXmlReadOutcome {
-    /// Records extracted from the file (one per reference-date report).
+    /// Report-level records (one per reference-date report).
     pub records: Vec<TradeWarningsRecord>,
+    /// Per-counterparty records (one per `(RefDt, CtrPty LEI)`), from
+    /// the `Wrnngs` breakdown. Empty when the file carries no `Wrnngs`.
+    pub counterparty_records: Vec<WarningsCounterpartyRecord>,
     /// File-level data-quality / parse issues (format / namespace).
     pub issues: Vec<DqIssue>,
 }
@@ -61,6 +68,7 @@ pub fn read_emir_warnings_xml(path: &Path) -> anyhow::Result<WarningsXmlReadOutc
     if let Err(err) = check_wellformedness(path) {
         return Ok(WarningsXmlReadOutcome {
             records: vec![],
+            counterparty_records: vec![],
             issues: vec![fmt_issue(
                 "EMIR.FMT.XML_NOT_WELLFORMED",
                 Severity::Critical,
@@ -79,6 +87,7 @@ pub fn read_emir_warnings_xml(path: &Path) -> anyhow::Result<WarningsXmlReadOutc
                 .unwrap_or_else(|| "(none)".into());
             Ok(WarningsXmlReadOutcome {
                 records: vec![],
+                counterparty_records: vec![],
                 issues: vec![fmt_issue(
                     "EMIR.FMT.XML_UNSUPPORTED_NAMESPACE",
                     Severity::Warning,
@@ -186,6 +195,67 @@ fn finalize(acc: Accum, source_label: &str, idx: usize) -> TradeWarningsRecord {
     }
 }
 
+/// Per-counterparty accumulation for one `Wrnngs` LEI within a
+/// `RefDt` report. The three `MssngValtn` / `MssngMrgnInf` /
+/// `AbnrmlVals` `Wrnngs` blocks for the same LEI merge into one of
+/// these (each block contributes a disjoint set of count categories).
+#[derive(Default)]
+struct CpAccum {
+    outsdng_valtn: Option<i64>,
+    missing_valtn: Option<i64>,
+    outdated_valtn: Option<i64>,
+    outsdng_mrgn: Option<i64>,
+    missing_mrgn: Option<i64>,
+    outdated_mrgn: Option<i64>,
+    derivs_rptd: Option<i64>,
+    abnormal: Option<i64>,
+}
+
+impl CpAccum {
+    /// Merge another block's counts in (later `Some` wins; the three
+    /// blocks set disjoint fields so there is no real conflict).
+    fn merge(&mut self, o: CpAccum) {
+        self.outsdng_valtn = o.outsdng_valtn.or(self.outsdng_valtn);
+        self.missing_valtn = o.missing_valtn.or(self.missing_valtn);
+        self.outdated_valtn = o.outdated_valtn.or(self.outdated_valtn);
+        self.outsdng_mrgn = o.outsdng_mrgn.or(self.outsdng_mrgn);
+        self.missing_mrgn = o.missing_mrgn.or(self.missing_mrgn);
+        self.outdated_mrgn = o.outdated_mrgn.or(self.outdated_mrgn);
+        self.derivs_rptd = o.derivs_rptd.or(self.derivs_rptd);
+        self.abnormal = o.abnormal.or(self.abnormal);
+    }
+}
+
+fn finalize_cp(
+    lei: String,
+    acc: CpAccum,
+    ref_date: Option<NaiveDate>,
+    source_label: &str,
+    seq: usize,
+) -> WarningsCounterpartyRecord {
+    WarningsCounterpartyRecord {
+        source_file: Some(source_label.to_owned()),
+        record_id: Some(format!("{source_label}#wrn-cp-{seq}")),
+        regime: Regime::Emir,
+        reporting_date: ref_date,
+        counterparty_lei: Some(lei),
+        missing_valuation_rate: rate(acc.missing_valtn, acc.outsdng_valtn),
+        outdated_valuation_rate: rate(acc.outdated_valtn, acc.outsdng_valtn),
+        missing_margin_rate: rate(acc.missing_mrgn, acc.outsdng_mrgn),
+        outdated_margin_rate: rate(acc.outdated_mrgn, acc.outsdng_mrgn),
+        abnormal_values_rate: rate(acc.abnormal, acc.derivs_rptd),
+        outstanding_derivatives: acc.outsdng_valtn,
+        missing_valuation: acc.missing_valtn,
+        outdated_valuation: acc.outdated_valtn,
+        outstanding_derivatives_margin: acc.outsdng_mrgn,
+        missing_margin_info: acc.missing_mrgn,
+        outdated_margin_info: acc.outdated_mrgn,
+        derivatives_reported: acc.derivs_rptd,
+        abnormal_values: acc.abnormal,
+        raw_fields: Default::default(),
+    }
+}
+
 fn parse(path: &Path) -> anyhow::Result<WarningsXmlReadOutcome> {
     let source_label = path.to_string_lossy().into_owned();
     let mut reader = NsReader::from_file(path)?;
@@ -200,6 +270,17 @@ fn parse(path: &Path) -> anyhow::Result<WarningsXmlReadOutcome> {
     let mut acc = Accum::default();
     let mut records: Vec<TradeWarningsRecord> = Vec::new();
     let mut saw_dataset_actn = false;
+
+    // Per-counterparty `Wrnngs` accumulation, keyed by CtrPty LEI
+    // within the current `RefDt` report. `cur_cp`/`cur_cp_lei` hold
+    // the block currently being read; on the `Wrnngs` close it is
+    // merged into `cp_acc` (one LEI appears once per sub-report).
+    let mut cp_acc: BTreeMap<String, CpAccum> = BTreeMap::new();
+    let mut cur_cp: Option<CpAccum> = None;
+    let mut cur_cp_lei: Option<String> = None;
+    let mut wrnngs_depth: Option<usize> = None;
+    let mut cp_seq: usize = 0;
+    let mut counterparty_records: Vec<WarningsCounterpartyRecord> = Vec::new();
 
     loop {
         match reader.read_resolved_event_into(&mut buf)? {
@@ -217,6 +298,18 @@ fn parse(path: &Path) -> anyhow::Result<WarningsXmlReadOutcome> {
                 {
                     rpt_depth = Some(pile.len());
                     acc = Accum::default();
+                    cp_acc.clear();
+                }
+
+                // Open a per-counterparty `Wrnngs` block (only inside
+                // the outer report; `TxDtls` is deferred — ignored).
+                if pile.last().map(String::as_str) == Some("Wrnngs")
+                    && rpt_depth.is_some()
+                    && wrnngs_depth.is_none()
+                {
+                    wrnngs_depth = Some(pile.len());
+                    cur_cp = Some(CpAccum::default());
+                    cur_cp_lei = None;
                 }
             }
             (_, Event::Empty(e)) => {
@@ -265,14 +358,67 @@ fn parse(path: &Path) -> anyhow::Result<WarningsXmlReadOutcome> {
                                 "NbOfDerivsRptdWthOtlrs" => acc.abnormal = n(),
                                 _ => {}
                             }
+                        } else if rpt_depth.is_some()
+                            && has(&pile, "Wrnngs")
+                            && !has(&pile, "TxDtls")
+                        {
+                            // Per-counterparty `Wrnngs` aggregate. The
+                            // per-UTI `TxDtls` level stays deferred
+                            // (guarded out above).
+                            let leaf = pile.last().map(String::as_str).unwrap_or("");
+                            let n = || v.parse::<i64>().ok();
+                            if leaf == "LEI" && has(&pile, "CtrPtyId") && has(&pile, "RptgCtrPty") {
+                                cur_cp_lei = Some(v.to_owned());
+                            } else if let Some(cp) = cur_cp.as_mut() {
+                                match leaf {
+                                    "NbOfOutsdngDerivs" if has(&pile, "MssngValtn") => {
+                                        cp.outsdng_valtn = n();
+                                    }
+                                    "NbOfOutsdngDerivs" if has(&pile, "MssngMrgnInf") => {
+                                        cp.outsdng_mrgn = n();
+                                    }
+                                    "NbOfOutsdngDerivsWthNoValtn" => cp.missing_valtn = n(),
+                                    "NbOfOutsdngDerivsWthOutdtdValtn" => cp.outdated_valtn = n(),
+                                    "NbOfOutsdngDerivsWthNoMrgnInf" => cp.missing_mrgn = n(),
+                                    "NbOfOutsdngDerivsWthOutdtdMrgnInf" => cp.outdated_mrgn = n(),
+                                    "NbOfDerivsRptd" => cp.derivs_rptd = n(),
+                                    "NbOfDerivsRptdWthOtlrs" => cp.abnormal = n(),
+                                    _ => {}
+                                }
+                            }
                         }
                     }
                 }
 
+                // Close the current `Wrnngs` block: merge its counts
+                // into the per-LEI accumulator (one LEI recurs across
+                // the three sub-reports).
+                if pile.last().map(String::as_str) == Some("Wrnngs")
+                    && Some(pile.len()) == wrnngs_depth
+                {
+                    if let (Some(lei), Some(cp)) = (cur_cp_lei.take(), cur_cp.take()) {
+                        cp_acc.entry(lei).or_default().merge(cp);
+                    }
+                    cur_cp = None;
+                    cur_cp_lei = None;
+                    wrnngs_depth = None;
+                }
+
                 if let Some(rd) = rpt_depth {
                     if pile.len() == rd {
+                        let ref_date = acc.ref_date;
                         let idx = records.len();
                         records.push(finalize(std::mem::take(&mut acc), &source_label, idx));
+                        for (lei, cp) in std::mem::take(&mut cp_acc) {
+                            cp_seq += 1;
+                            counterparty_records.push(finalize_cp(
+                                lei,
+                                cp,
+                                ref_date,
+                                &source_label,
+                                cp_seq,
+                            ));
+                        }
                         rpt_depth = None;
                     }
                 }
@@ -298,7 +444,11 @@ fn parse(path: &Path) -> anyhow::Result<WarningsXmlReadOutcome> {
         ));
     }
 
-    Ok(WarningsXmlReadOutcome { records, issues })
+    Ok(WarningsXmlReadOutcome {
+        records,
+        counterparty_records,
+        issues,
+    })
 }
 
 fn push_element(pile: &mut Vec<String>, is_leaf: &mut Vec<bool>, local: String) {
@@ -380,11 +530,30 @@ mod tests {
         assert_eq!(r.missing_margin_info, Some(10));
         assert_eq!(r.derivatives_reported, Some(2000));
         assert_eq!(r.abnormal_values, Some(40));
-        assert_eq!(r.counterparty_lei, None, "Wrnngs LEI is deferred");
+        assert_eq!(
+            r.counterparty_lei, None,
+            "report-level aggregate carries no LEI"
+        );
         assert_eq!(r.missing_valuation_rate.unwrap().to_string(), "0.08");
         assert_eq!(r.outdated_valuation_rate.unwrap().to_string(), "0.02");
         assert_eq!(r.missing_margin_rate.unwrap().to_string(), "0.02");
         assert_eq!(r.abnormal_values_rate.unwrap().to_string(), "0.02");
+
+        // The per-counterparty `Wrnngs` block IS now modelled
+        // (separately from the report-level aggregate above).
+        assert_eq!(out.counterparty_records.len(), 1);
+        let cp = &out.counterparty_records[0];
+        assert_eq!(
+            cp.counterparty_lei.as_deref(),
+            Some("LEIAAAAAAAAAAAAAAAAA1")
+        );
+        assert_eq!(
+            cp.reporting_date.map(|d| d.to_string()).as_deref(),
+            Some("2026-05-13")
+        );
+        assert_eq!(cp.outstanding_derivatives, Some(999999));
+        assert_eq!(cp.missing_valuation, Some(999999));
+        assert_eq!(cp.missing_valuation_rate.unwrap().to_string(), "1");
     }
 
     #[test]

@@ -27,10 +27,12 @@ Optional flags:
 
 Outputs `summary.json`, `warnings_issues.csv`, `warnings_report.html`.
 
-## Checks (5)
+## Checks (10)
 
 Each fires when the **derived rate exceeds** the configured maximum
 (see `WarningsThresholds` in `crates/opendqi-core/src/config.rs`).
+
+### Report-level (5) — one per `RefDt`
 
 | Check ID | Dimension | Severity | Rate (default max) |
 |---|---|---|---|
@@ -40,11 +42,24 @@ Each fires when the **derived rate exceeds** the configured maximum
 | `EMIR.WRN.OUTDATED_MARGIN_INFO_HIGH` | Timeliness | High | `outdated_margin_info / outstanding_derivatives_margin` (0.05) |
 | `EMIR.WRN.ABNORMAL_VALUES_HIGH` | Accuracy | High | `abnormal_values / derivatives_reported` (0.01) |
 
+### Per-counterparty (5) — one per `(RefDt, CtrPty LEI)`
+
+Same rate semantics and thresholds, applied to the `Wrnngs`
+breakdown; the offending counterparty LEI is named in the issue.
+Folded into the same `warnings_issues.csv`.
+
+| Check ID | Dimension | Severity | Rate (default max) |
+|---|---|---|---|
+| `EMIR.WRN.CTRPTY_MISSING_VALUATION_HIGH` | Completeness | High | per-CP `missing_valuation / outstanding_derivatives` (0.05) |
+| `EMIR.WRN.CTRPTY_OUTDATED_VALUATION_HIGH` | Timeliness | High | per-CP `outdated_valuation / outstanding_derivatives` (0.05) |
+| `EMIR.WRN.CTRPTY_MISSING_MARGIN_INFO_HIGH` | Completeness | High | per-CP `missing_margin_info / outstanding_derivatives_margin` (0.05) |
+| `EMIR.WRN.CTRPTY_OUTDATED_MARGIN_INFO_HIGH` | Timeliness | High | per-CP `outdated_margin_info / outstanding_derivatives_margin` (0.05) |
+| `EMIR.WRN.CTRPTY_ABNORMAL_VALUES_HIGH` | Accuracy | High | per-CP `abnormal_values / derivatives_reported` (0.01) |
+
 A `WrnngsSttstcs/DataSetActn = "NOTX"` no-activity report yields zero
 records plus one informational `EMIR.FMT.WRN_NO_RECORDS`.
 
-The per-counterparty `Wrnngs` breakdown (with LEIs and per-UTI
-`TxDtls`) is a documented deferred subset — these checks operate on
-the report-level aggregate. See
-[`auth-messages/emir-auth106.md`](auth-messages/emir-auth106.md) for
-the derive map and limits.
+The deeper per-UTI `Wrnngs/TxDtls` level is a documented deferred
+subset — the per-counterparty checks operate on the per-CP aggregate.
+See [`auth-messages/emir-auth106.md`](auth-messages/emir-auth106.md)
+for the derive map and limits.

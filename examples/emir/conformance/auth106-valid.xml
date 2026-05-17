@@ -19,7 +19,7 @@
             <NbOfOutsdngDerivsWthNoValtn>1000</NbOfOutsdngDerivsWthNoValtn>
             <NbOfOutsdngDerivsWthOutdtdValtn>1000</NbOfOutsdngDerivsWthOutdtdValtn>
             <Wrnngs>
-              <CtrPtyId/>
+              <CtrPtyId><RptgCtrPty><LEI>ABCDEFGHIJKLMNOPQR99</LEI></RptgCtrPty></CtrPtyId>
               <NbOfOutsdngDerivs>1000</NbOfOutsdngDerivs>
               <NbOfOutsdngDerivsWthNoValtn>1000</NbOfOutsdngDerivsWthNoValtn>
               <NbOfOutsdngDerivsWthOutdtdValtn>1000</NbOfOutsdngDerivsWthOutdtdValtn>
@@ -32,7 +32,7 @@
             <NbOfOutsdngDerivsWthNoMrgnInf>1000</NbOfOutsdngDerivsWthNoMrgnInf>
             <NbOfOutsdngDerivsWthOutdtdMrgnInf>1000</NbOfOutsdngDerivsWthOutdtdMrgnInf>
             <Wrnngs>
-              <CtrPtyId/>
+              <CtrPtyId><RptgCtrPty><LEI>ABCDEFGHIJKLMNOPQR99</LEI></RptgCtrPty></CtrPtyId>
               <NbOfOutsdngDerivs>1000</NbOfOutsdngDerivs>
               <NbOfOutsdngDerivsWthNoMrgnInf>1000</NbOfOutsdngDerivsWthNoMrgnInf>
               <NbOfOutsdngDerivsWthOutdtdMrgnInf>1000</NbOfOutsdngDerivsWthOutdtdMrgnInf>
@@ -44,7 +44,7 @@
             <NbOfDerivsRptd>1000</NbOfDerivsRptd>
             <NbOfDerivsRptdWthOtlrs>1000</NbOfDerivsRptdWthOtlrs>
             <Wrnngs>
-              <CtrPtyId/>
+              <CtrPtyId><RptgCtrPty><LEI>ABCDEFGHIJKLMNOPQR99</LEI></RptgCtrPty></CtrPtyId>
               <NbOfDerivsRptd>1000</NbOfDerivsRptd>
               <NbOfDerivsRptdWthOtlrs>1000</NbOfDerivsRptdWthOtlrs>
             </Wrnngs>

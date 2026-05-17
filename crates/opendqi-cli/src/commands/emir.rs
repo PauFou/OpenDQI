@@ -14,10 +14,11 @@ use opendqi_core::dq::{
     default_margin_state_checks, default_margin_state_lifecycle_checks,
     default_pre_submission_checks, default_recon_stats_checks, default_reconciliation_checks,
     default_tr_activity_checks, default_tr_state_checks, default_tr_state_lifecycle_checks,
-    default_warnings_checks, finalize_issues, run_all, run_all_feedback, run_all_lifecycle,
-    run_all_margin_activity, run_all_margin_state, run_all_margin_state_lifecycle,
-    run_all_pre_submission, run_all_recon_stats, run_all_reconciliation, run_all_tr_activity,
-    run_all_tr_state, run_all_tr_state_lifecycle, run_all_warnings, sort_issues, CheckContext,
+    default_warnings_checks, default_warnings_counterparty_checks, finalize_issues, run_all,
+    run_all_feedback, run_all_lifecycle, run_all_margin_activity, run_all_margin_state,
+    run_all_margin_state_lifecycle, run_all_pre_submission, run_all_recon_stats,
+    run_all_reconciliation, run_all_tr_activity, run_all_tr_state, run_all_tr_state_lifecycle,
+    run_all_warnings, run_all_warnings_counterparty, sort_issues, CheckContext,
 };
 use opendqi_core::{
     DqDimension, DqIssue, EmirRecord, MarginActivityRecord, MarginStateRecord, Regime, ScanSummary,
@@ -1074,6 +1075,19 @@ fn run_warnings(
     let wrn_issues = run_all_warnings(&default_warnings_checks(), &outcome.records, &ctx);
     info!(wrn_issues = wrn_issues.len(), "warnings checks run");
     issues.extend(wrn_issues);
+    // Fold the per-counterparty `Wrnngs` issues into the same report
+    // (shared core; same precedent as recon-stats' per-tx fold).
+    let cp_issues = run_all_warnings_counterparty(
+        &default_warnings_counterparty_checks(),
+        &outcome.counterparty_records,
+        &ctx,
+    );
+    info!(
+        warnings_counterparty_issues = cp_issues.len(),
+        counterparty_records = outcome.counterparty_records.len(),
+        "per-counterparty warnings checks run"
+    );
+    issues.extend(cp_issues);
     finalize_issues(&mut issues, &ctx);
 
     let inputs = vec![input.to_path_buf()];

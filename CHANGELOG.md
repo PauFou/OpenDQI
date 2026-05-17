@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **EMIR `auth.106` per-counterparty `Wrnngs` detail.** The
+  Data-Quality Warnings parser now also models the per-counterparty
+  breakdown: one `WarningsCounterpartyRecord` per `(RefDt, CtrPty
+  LEI)`, merging the three `MssngValtn` / `MssngMrgnInf` / `AbnrmlVals`
+  `Wrnngs` blocks for that LEI. Drives 5 new
+  `EMIR.WRN.CTRPTY_*_HIGH` checks (same rate semantics/thresholds as
+  the report-level family, applied per counterparty, LEI named in the
+  issue), folded into the same `warnings_issues.csv` (CLI + web UI;
+  shared core). EMIR check total 140 → 145, workspace 202 → 207. The
+  report-level aggregate and the 5 existing `EMIR.WRN.*` checks are
+  unchanged; per-counterparty values never leak into the aggregate
+  (integration-asserted). The deeper per-UTI `Wrnngs/TxDtls` level
+  stays a documented deferred subset. Docs:
+  [`docs/emir-warnings.md`](docs/emir-warnings.md),
+  [`docs/auth-messages/emir-auth106.md`](docs/auth-messages/emir-auth106.md).
+
 ### Changed
 
 ### Removed

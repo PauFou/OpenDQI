@@ -11,17 +11,27 @@
   (one per reference date). Schema-shaped, not a fully XSD-valid
   instance. See docs/auth-messages/emir-auth106.md.
 
-  OpenDQI models the REPORT-LEVEL aggregate and DERIVES the rates.
-  The per-counterparty Wrnngs breakdown (with CtrPtyId / TxDtls) is a
-  documented deferred subset and MUST NOT leak into the aggregate —
-  the huge Wrnngs values below prove the parser ignores them.
+  OpenDQI models the REPORT-LEVEL aggregate (one TradeWarningsRecord
+  per RefDt, no LEI) AND the PER-COUNTERPARTY aggregate (one
+  WarningsCounterpartyRecord per RefDt+LEI, merging the three Wrnngs
+  blocks for that LEI). The per-counterparty values MUST NOT leak into
+  the report-level aggregate — the huge Wrnngs values below prove the
+  two are kept separate. The deeper per-UTI Wrnngs/TxDtls level stays
+  a documented deferred subset.
 
-  Derived rates (defaults: valuation/margin max 0.05, abnormal 0.01):
+  Report-level derived rates (defaults: valuation/margin max 0.05,
+  abnormal 0.01):
     missing_valuation  80/1000 = 0.08  > 0.05 -> MISSING_VALUATION_HIGH
     outdated_valuation 20/1000 = 0.02  < 0.05 -> (clean)
     missing_margin     40/500  = 0.08  > 0.05 -> MISSING_MARGIN_INFO_HIGH
     outdated_margin     5/500  = 0.01  < 0.05 -> (clean)
     abnormal_values    60/2000 = 0.03  > 0.01 -> ABNORMAL_VALUES_HIGH
+
+  Per-counterparty LEIA0000000000000001 (merged across the 3 Wrnngs
+  blocks): valuation 999999/999999, missing margin 888888/888888,
+  abnormal 777777/777777 = rate 1.0 -> the four CTRPTY_* checks with
+  a numerator+denominator fire (outdated-margin has no per-CP
+  numerator here -> clean).
 -->
 <Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.106.001.01">
   <DerivsTradWrnngsRpt>

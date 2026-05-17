@@ -7,7 +7,7 @@ use crate::config::Thresholds;
 use crate::model::{
     DqDimension, DqIssue, EmirRecord, FeedbackRecord, MarginActivityRecord, MarginStateRecord,
     MissingCollateralRecord, ReconStatsRecord, ReconciliationRecord, RejectionProfile, Severity,
-    SftrRecord, SftrTrStateRecord, TrStateRecord, TradeWarningsRecord,
+    SftrRecord, SftrTrStateRecord, TrStateRecord, TradeWarningsRecord, WarningsCounterpartyRecord,
 };
 
 mod abnormal_maturity;
@@ -1244,15 +1244,32 @@ pub fn run_all_recon_stats(
 mod emir_warnings;
 
 pub use emir_warnings::{
-    default_warnings_checks, EmirWrnAbnormalValuesHigh, EmirWrnMissingMarginInfoHigh,
-    EmirWrnMissingValuationHigh, EmirWrnOutdatedMarginInfoHigh, EmirWrnOutdatedValuationHigh,
-    WarningsCheck,
+    default_warnings_checks, default_warnings_counterparty_checks, EmirWrnAbnormalValuesHigh,
+    EmirWrnCtrptyAbnormalValuesHigh, EmirWrnCtrptyMissingMarginInfoHigh,
+    EmirWrnCtrptyMissingValuationHigh, EmirWrnCtrptyOutdatedMarginInfoHigh,
+    EmirWrnCtrptyOutdatedValuationHigh, EmirWrnMissingMarginInfoHigh, EmirWrnMissingValuationHigh,
+    EmirWrnOutdatedMarginInfoHigh, EmirWrnOutdatedValuationHigh, WarningsCheck,
+    WarningsCounterpartyCheck,
 };
 
 /// Run every EMIR auth.106 data-quality-warnings check.
 pub fn run_all_warnings(
     checks: &[Box<dyn WarningsCheck>],
     records: &[TradeWarningsRecord],
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    let mut issues: Vec<DqIssue> = checks
+        .par_iter()
+        .flat_map_iter(|c| c.run(records, ctx))
+        .collect();
+    finalize_issues(&mut issues, ctx);
+    issues
+}
+
+/// Run every EMIR auth.106 **per-counterparty** `Wrnngs` check.
+pub fn run_all_warnings_counterparty(
+    checks: &[Box<dyn WarningsCounterpartyCheck>],
+    records: &[WarningsCounterpartyRecord],
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
     let mut issues: Vec<DqIssue> = checks

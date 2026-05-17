@@ -13,10 +13,11 @@ use opendqi_core::dq::{
     default_margin_state_checks, default_missing_collateral_checks, default_recon_stats_checks,
     default_reconciliation_checks, default_sftr_checks, default_sftr_tr_activity_checks,
     default_sftr_tr_state_checks, default_tr_activity_checks, default_tr_state_checks,
-    default_warnings_checks, finalize_issues, run_all, run_all_feedback, run_all_margin_activity,
-    run_all_margin_state, run_all_missing_collateral, run_all_recon_stats, run_all_reconciliation,
-    run_all_sftr, run_all_sftr_tr_activity, run_all_sftr_tr_state, run_all_tr_activity,
-    run_all_tr_state, run_all_warnings, CheckContext,
+    default_warnings_checks, default_warnings_counterparty_checks, finalize_issues, run_all,
+    run_all_feedback, run_all_margin_activity, run_all_margin_state, run_all_missing_collateral,
+    run_all_recon_stats, run_all_reconciliation, run_all_sftr, run_all_sftr_tr_activity,
+    run_all_sftr_tr_state, run_all_tr_activity, run_all_tr_state, run_all_warnings,
+    run_all_warnings_counterparty, CheckContext,
 };
 use opendqi_core::{
     DqDimension, DqIssue, EmirRecord, Regime, ScanSummary, Severity, SftrRecord, Thresholds,
@@ -944,6 +945,11 @@ fn run_emir_warnings_server(input: &Path, out_dir: &Path) -> Result<ScanArtifact
     issues.extend(run_all_warnings(
         &default_warnings_checks(),
         &outcome.records,
+        &ctx,
+    ));
+    issues.extend(run_all_warnings_counterparty(
+        &default_warnings_counterparty_checks(),
+        &outcome.counterparty_records,
         &ctx,
     ));
     finalize_issues(&mut issues, &ctx);
