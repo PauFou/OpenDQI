@@ -194,7 +194,9 @@ pub fn run_server_operation(
             )),
         },
         UiOperation::MissingCollateral => match regime {
-            UiRegime::Sftr => run_sftr_missing_collateral_server(input, out_dir),
+            // Single-file path (no companion); the optional `auth.079`
+            // TSR cross-ref is wired through `run_server_dispatch`.
+            UiRegime::Sftr => run_sftr_missing_collateral_server(input, None, out_dir),
             UiRegime::Emir => Err(anyhow!(
                 "missing-collateral is SFTR-only (auth.083); pick a different operation for EMIR."
             )),
@@ -249,6 +251,21 @@ pub fn run_server_dispatch(
                 }
                 // SFTR has no rejection-feedback message → TAR+TSR only.
                 UiRegime::Sftr => run_sftr_tr_audit_server(tar, tsr, out_dir),
+            }
+        }
+        UiOperation::MissingCollateral => {
+            // Optionally multi-file: the auth.083 `file` is required;
+            // an `auth.079` `file_tsr` companion is optional (its
+            // presence enables the 3 `SFTR.MCR.*` cross-ref checks).
+            let input = saved.get("file").ok_or_else(|| {
+                anyhow!("missing-collateral requires a `file` (auth.083 XML) upload")
+            })?;
+            let tsr = saved.get("file_tsr").map(PathBuf::as_path);
+            match regime {
+                UiRegime::Sftr => run_sftr_missing_collateral_server(input, tsr, out_dir),
+                UiRegime::Emir => Err(anyhow!(
+                    "missing-collateral is SFTR-only (auth.083); pick a different operation for EMIR."
+                )),
             }
         }
         _ => {
@@ -974,7 +991,13 @@ fn run_emir_warnings_server(input: &Path, out_dir: &Path) -> Result<ScanArtifact
 /// SFTR Missing Collateral Request (auth.083) scan — server-side.
 /// Mirrors the CLI `opendqi sftr missing-collateral`; shared core, no
 /// duplicated logic.
-fn run_sftr_missing_collateral_server(input: &Path, out_dir: &Path) -> Result<ScanArtifacts> {
+fn run_sftr_missing_collateral_server(
+    input: &Path,
+    tsr: Option<&Path>,
+    out_dir: &Path,
+) -> Result<ScanArtifacts> {
+    use opendqi_xml::read_sftr_tr_state_xml;
+
     if !has_extension(input, "xml") {
         return Err(anyhow!(
             "missing-collateral expects an XML input (auth.083). Got {}",
@@ -984,6 +1007,19 @@ fn run_sftr_missing_collateral_server(input: &Path, out_dir: &Path) -> Result<Sc
     let started_at = Utc::now();
     let outcome = read_sftr_missing_collateral_xml(input)
         .with_context(|| format!("reading auth.083 file {}", input.display()))?;
+
+    // Optional companion SFTR TSR (auth.079): when supplied, the
+    // requested UTIs are cross-referenced against the firm's TR state
+    // (the 3 `SFTR.MCR.*` cross-ref checks). Store-backed cross-ref
+    // stays CLI-only — the web UI has no history store.
+    let tsr_outcome = match tsr {
+        Some(p) => Some(
+            read_sftr_tr_state_xml(p)
+                .with_context(|| format!("reading companion SFTR TSR {}", p.display()))?,
+        ),
+        None => None,
+    };
+
     let now = Utc::now();
     let ctx = CheckContext {
         thresholds: Thresholds::default(),
@@ -991,22 +1027,28 @@ fn run_sftr_missing_collateral_server(input: &Path, out_dir: &Path) -> Result<Sc
         now,
     };
     let mut issues = outcome.issues;
-    // Web UI v1: no companion/store cross-ref (CLI-only, FBK
-    // precedent) — the cross-ref check no-ops on `None`.
+    if let Some(o) = &tsr_outcome {
+        issues.extend(o.issues.clone());
+    }
     issues.extend(run_all_missing_collateral(
         &default_missing_collateral_checks(),
         &outcome.records,
-        None,
+        tsr_outcome.as_ref().map(|o| o.records.as_slice()),
         &ctx,
     ));
     finalize_issues(&mut issues, &ctx);
+
+    let mut sources = vec![input.to_string_lossy().into_owned()];
+    if let Some(p) = tsr {
+        sources.push(p.to_string_lossy().into_owned());
+    }
     finalize_artifacts(
         out_dir,
         Regime::Sftr,
         UiRegime::Sftr,
         outcome.records.len() as u32,
         &issues,
-        &[input.to_string_lossy().into_owned()],
+        &sources,
         started_at,
         Utc::now(),
     )

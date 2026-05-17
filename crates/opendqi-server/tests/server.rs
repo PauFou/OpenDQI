@@ -505,3 +505,133 @@ async fn post_scan_with_tr_audit_emir_succeeds() {
     let resp = app.oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::SEE_OTHER);
 }
+
+#[tokio::test]
+async fn post_scan_with_missing_collateral_sftr_succeeds() {
+    // Single-file (no companion): the 2 base SFTR.MCR.* checks run;
+    // the cross-ref checks do NOT (no TSR).
+    let app = build_router();
+    let mcr = std::fs::read("../../examples/sftr/missing_collateral/auth083-sample.xml")
+        .expect("auth083 fixture");
+    let boundary = "------OpenDqiTestBoundary";
+    let mut body = Vec::new();
+    body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+    body.extend_from_slice(
+        b"Content-Disposition: form-data; name=\"operation\"\r\n\r\nmissing-collateral\r\n",
+    );
+    body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+    body.extend_from_slice(b"Content-Disposition: form-data; name=\"regime\"\r\n\r\nsftr\r\n");
+    body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+    body.extend_from_slice(
+        b"Content-Disposition: form-data; name=\"file\"; filename=\"auth083.xml\"\r\nContent-Type: application/xml\r\n\r\n",
+    );
+    body.extend_from_slice(&mcr);
+    body.extend_from_slice(b"\r\n");
+    body.extend_from_slice(format!("--{boundary}--\r\n").as_bytes());
+
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri("/api/scan")
+        .header(
+            header::CONTENT_TYPE,
+            format!("multipart/form-data; boundary={boundary}"),
+        )
+        .body(Body::from(body))
+        .unwrap();
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+    let location = resp
+        .headers()
+        .get(header::LOCATION)
+        .and_then(|h| h.to_str().ok())
+        .expect("redirect location header")
+        .to_string();
+
+    let req = Request::builder()
+        .method(Method::GET)
+        .uri(format!("{location}/issues.csv"))
+        .body(Body::empty())
+        .unwrap();
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    let csv = std::str::from_utf8(&body).unwrap();
+    assert!(
+        csv.contains("SFTR.MCR.MISSING_COLLATERAL_REQUESTED"),
+        "base check missing: {csv}"
+    );
+    // No companion → cross-ref checks must NOT appear.
+    assert!(!csv.contains("SFTR.MCR.COLLATERAL_PRESENT_IN_TSR"));
+    assert!(!csv.contains("SFTR.MCR.STILL_MISSING_IN_TSR"));
+    assert!(!csv.contains("SFTR.MCR.REQUESTED_UTI_NOT_IN_TSR"));
+}
+
+#[tokio::test]
+async fn post_scan_with_missing_collateral_sftr_tsr_companion_runs_cross_ref() {
+    // With the optional auth.079 `file_tsr` companion the cross-ref
+    // runs. The auth083 sample UTI is absent from the auth079 sample
+    // → SFTR.MCR.REQUESTED_UTI_NOT_IN_TSR (same as the M0.9 CLI smoke).
+    let app = build_router();
+    let mcr = std::fs::read("../../examples/sftr/missing_collateral/auth083-sample.xml")
+        .expect("auth083 fixture");
+    let tsr =
+        std::fs::read("../../examples/sftr/tr_state/auth079-sample.xml").expect("auth079 fixture");
+    let boundary = "------OpenDqiTestBoundary";
+    let mut body = Vec::new();
+    let part = |b: &mut Vec<u8>, field: &str, filename: &str, data: &[u8]| {
+        b.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+        b.extend_from_slice(
+            format!(
+                "Content-Disposition: form-data; name=\"{field}\"; filename=\"{filename}\"\r\nContent-Type: application/xml\r\n\r\n"
+            )
+            .as_bytes(),
+        );
+        b.extend_from_slice(data);
+        b.extend_from_slice(b"\r\n");
+    };
+    body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+    body.extend_from_slice(
+        b"Content-Disposition: form-data; name=\"operation\"\r\n\r\nmissing-collateral\r\n",
+    );
+    body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+    body.extend_from_slice(b"Content-Disposition: form-data; name=\"regime\"\r\n\r\nsftr\r\n");
+    part(&mut body, "file", "auth083.xml", &mcr);
+    part(&mut body, "file_tsr", "auth079.xml", &tsr);
+    body.extend_from_slice(format!("--{boundary}--\r\n").as_bytes());
+
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri("/api/scan")
+        .header(
+            header::CONTENT_TYPE,
+            format!("multipart/form-data; boundary={boundary}"),
+        )
+        .body(Body::from(body))
+        .unwrap();
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+    let location = resp
+        .headers()
+        .get(header::LOCATION)
+        .and_then(|h| h.to_str().ok())
+        .expect("redirect location header")
+        .to_string();
+
+    let req = Request::builder()
+        .method(Method::GET)
+        .uri(format!("{location}/issues.csv"))
+        .body(Body::empty())
+        .unwrap();
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    let csv = std::str::from_utf8(&body).unwrap();
+    assert!(
+        csv.contains("SFTR.MCR.MISSING_COLLATERAL_REQUESTED"),
+        "base check missing: {csv}"
+    );
+    assert!(
+        csv.contains("SFTR.MCR.REQUESTED_UTI_NOT_IN_TSR"),
+        "companion cross-ref did not fire: {csv}"
+    );
+}

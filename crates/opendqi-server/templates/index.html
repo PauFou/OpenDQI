@@ -14,7 +14,7 @@
       <option value="warnings">Data-Quality Warnings (auth.106 — EMIR only)</option>
       <option value="mar-scan">Margin Activity Report (auth.108 — EMIR only)</option>
       <option value="msr-scan">Margin State Report (auth.109 — EMIR only)</option>
-      <option value="missing-collateral">Missing Collateral Request (auth.083 — SFTR only)</option>
+      <option value="missing-collateral">Missing Collateral Request (auth.083 — SFTR only; optional auth.079 TSR companion for cross-ref)</option>
       <option value="validate">Validate (XML well-formedness only — XSD via CLI)</option>
       <option value="book-reconcile">Book vs TSR reconciliation (multi-file)</option>
       <option value="tr-audit">TR audit — EMIR: TAR+TSR+feedback / SFTR: TAR+TSR (multi-file)</option>
@@ -30,10 +30,10 @@
     <input id="file" name="file" type="file" accept=".xml,.parquet">
 
     <fieldset style="margin-top:1rem;border:1px solid #e5e7eb;border-radius:0.4rem;padding:0.75rem;">
-      <legend style="font-size:0.8rem;color:var(--muted);">Multi-file operations (book-reconcile / tr-audit)</legend>
+      <legend style="font-size:0.8rem;color:var(--muted);">Multi-file operations (book-reconcile / tr-audit / missing-collateral)</legend>
       <label for="file_book">Book export (CSV) — book-reconcile</label>
       <input id="file_book" name="file_book" type="file" accept=".csv">
-      <label for="file_tsr">TSR (auth.107 EMIR / auth.079 SFTR XML) — book-reconcile &amp; tr-audit</label>
+      <label for="file_tsr">TSR (auth.107 EMIR / auth.079 SFTR XML) — book-reconcile &amp; tr-audit; optional auth.079 companion for SFTR missing-collateral cross-ref</label>
       <input id="file_tsr" name="file_tsr" type="file" accept=".xml">
       <label for="file_mapping">CSV mapping (YAML) — book-reconcile</label>
       <input id="file_mapping" name="file_mapping" type="file" accept=".yml,.yaml">
@@ -48,7 +48,11 @@
   <p style="margin-top:1.5rem;font-size:0.9rem;color:var(--muted);">
     Single-file operations use the <strong>File</strong> picker.
     <strong>Book vs TSR reconciliation</strong> uses the three fields
-    in the box (book CSV + TSR XML + mapping YAML). <code>tr-audit</code>
+    in the box (book CSV + TSR XML + mapping YAML).
+    <strong>SFTR missing-collateral</strong> takes the auth.083 file
+    in the <strong>File</strong> picker and, optionally, an auth.079
+    TSR in <code>file_tsr</code> to run the cross-reference (the
+    store-backed cross-ref stays CLI-only). <code>tr-audit</code>
     remains CLI-only — see <code>opendqi emir --help</code>.
   </p>
 </section>

@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Web UI parity for the SFTR `auth.083` cross-reference.** The
+  desktop `missing-collateral` operation now accepts an optional
+  `auth.079` TSR companion (the shared `file_tsr` upload): when
+  present, the 3 `SFTR.MCR.*` cross-reference checks
+  (`COLLATERAL_PRESENT_IN_TSR` / `STILL_MISSING_IN_TSR` /
+  `REQUESTED_UTI_NOT_IN_TSR`) run in the web UI, matching the CLI
+  `--tsr`. Single-file uploads still run the 2 base checks only. The
+  store-backed cross-ref stays CLI-only (the web UI has no history
+  store). Server-only change — no model/check/count change; mirrors
+  the existing multi-file dispatch (`tr-audit`/`book-reconcile`).
+  Docs: [`docs/desktop-web-ui.md`](docs/desktop-web-ui.md),
+  [`docs/auth-messages/sftr-auth083.md`](docs/auth-messages/sftr-auth083.md).
+
 - **EMIR `auth.106` amount `Ccy` currency now preserved.** The
   warnings parser captured element text only, so the `Ccy` attribute
   on `Wrnngs/TxDtls` amount leaves (`ValtnAmt`, `NtnlAmt`) was

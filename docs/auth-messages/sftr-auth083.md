@@ -109,9 +109,11 @@ branches exist in this small message.
 - **Natural-person other counterparty** is captured as the raw
   `Ntrl/Id/Id` text (no name/birth structure — the schema only carries
   a `Max50Text` id here).
-- **Cross-ref is CLI-only.** The web UI v1 runs the parse + the two
-  base `SFTR.MCR.*` checks only; the `--tsr`/`--store` cross-reference
-  is CLI-only (same precedent as the EMIR feedback store checks).
+- **Web UI: companion TSR supported; store-backed stays CLI-only.**
+  The desktop UI runs the cross-reference when an optional `auth.079`
+  TSR companion is uploaded (the shared `file_tsr` input); the
+  `--store`-backed cross-reference remains CLI-only — the web UI has
+  no history store.
 - **No `--prior` trend.** The cross-ref is a point-in-time match
   against the latest TR state, not a multi-batch trend.
 - **Not a full XSD validation** — same documented "subset" stance as
