@@ -1,5 +1,7 @@
 //! Benchmarks the check loop (`run_all` / `run_all_sftr`) at 1k, 10k,
-//! and 100k synthetic records. Run with:
+//! 100k, and 1M synthetic records (the 1M point is the
+//! "millions of records" scale data point; Criterion auto-reduces
+//! the sample size for the slow case). Run with:
 //!
 //! ```text
 //! cargo bench -p opendqi-core --bench check_loop
@@ -118,7 +120,7 @@ fn bench_emir(c: &mut Criterion) {
     let checks = default_checks();
     let ctx = ctx();
     let mut group = c.benchmark_group("run_all_emir");
-    for &n in &[1_000usize, 10_000, 100_000] {
+    for &n in &[1_000usize, 10_000, 100_000, 1_000_000] {
         group.throughput(Throughput::Elements(n as u64));
         group.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, &n| {
             let records = gen_synthetic_emir(n);
@@ -132,7 +134,7 @@ fn bench_sftr(c: &mut Criterion) {
     let checks = default_sftr_checks();
     let ctx = ctx();
     let mut group = c.benchmark_group("run_all_sftr");
-    for &n in &[1_000usize, 10_000, 100_000] {
+    for &n in &[1_000usize, 10_000, 100_000, 1_000_000] {
         group.throughput(Throughput::Elements(n as u64));
         group.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, &n| {
             let records = gen_synthetic_sftr(n);

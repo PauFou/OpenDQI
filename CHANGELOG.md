@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Large-input scale benchmark + end-to-end memory/time harness
+  (tooling).** First increment of the performance/scale work
+  ("measure before optimize"): the `check_loop` criterion bench now
+  covers **1M** records (EMIR + SFTR), a dependency-free streamed
+  synthetic ISO-20022 XML generator
+  (`opendqi-core/examples/gen_synthetic_xml.rs`) and an opt-in
+  `scripts/bench-scale.sh` measure the **whole `opendqi scan`
+  pipeline** (parse + checks + write) wall-time and peak RSS; the
+  baseline is recorded in [`docs/performance.md`](docs/performance.md).
+  Deliberate local release tool — **not** wired into
+  `scripts/preflight.sh` or CI (those stay debug). Tooling only: no
+  check / model / output / count change; no optimization yet (the
+  baseline drives the deferred streaming / incremental-scan work).
+
 ### Changed
 
 ### Removed

@@ -2,7 +2,7 @@
 
 OpenDQI's check loop fans out over the dimension `checks`, not
 `records`. Records are small structs (40-50 typed fields); the
-catalog is 200 checks (140 EMIR + 60 SFTR) running mostly O(n) over
+catalog is 213 checks (148 EMIR + 65 SFTR) running mostly O(n) over
 records. Parallelizing the **checks** dimension is the high-leverage
 choice: scheduling overhead amortises across `n_records` iterations
 of each check.
@@ -43,12 +43,14 @@ Criterion is set up as a dev-dependency on `opendqi-core`:
 cargo bench -p opendqi-core --bench check_loop
 ```
 
-Two suites are exercised at 1k, 10k, and 100k synthetic records each:
+Two suites are exercised at 1k, 10k, 100k, and **1M** synthetic
+records each (the 1M point is the "millions of records" scale data
+point; Criterion auto-reduces the sample size for the slow case):
 
-- `run_all_emir/{1000,10000,100000}` — `default_checks()` (the full
-  135-check EMIR single-batch catalog).
-- `run_all_sftr/{1000,10000,100000}` — `default_sftr_checks()` (the
-  60-check SFTR catalog).
+- `run_all_emir/{1000,10000,100000,1000000}` — `default_checks()`
+  (the full 148-check EMIR single-batch catalog).
+- `run_all_sftr/{1000,10000,100000,1000000}` — `default_sftr_checks()`
+  (the 65-check SFTR catalog).
 
 The synthetic generators are **deterministic** (index-driven, no
 RNG) and populate ~30 typed fields per record so the vast majority
@@ -69,20 +71,85 @@ benchmark contract** — re-run `cargo bench` on your hardware.
 | `run_all_emir` | 1 000 | ~2.4 ms | ~411 k records/s |
 | `run_all_emir` | 10 000 | ~23.4 ms | ~428 k records/s |
 | `run_all_emir` | 100 000 | ~320 ms | ~312 k records/s |
+| `run_all_emir` | 1 000 000 | ~13.7 s † | ~73 k records/s † |
 | `run_all_sftr` | 1 000 | ~1.5 ms | ~684 k records/s |
 | `run_all_sftr` | 10 000 | ~12.8 ms | ~779 k records/s |
 | `run_all_sftr` | 100 000 | ~164 ms | ~609 k records/s |
+| `run_all_sftr` | 1 000 000 | ~3.0 s † | ~335 k records/s † |
 
-SFTR is faster per record because its catalog is smaller (60 vs
-135 checks). These numbers are lower than the pre-0.1.0 baseline
+† The 1M rows were measured 2026-05-17 against the **current
+213-check** catalog (148 EMIR / 65 SFTR) via `cargo bench … --
+--quick` (indicative single-shot); the 1k/10k/100k rows are the
+prior 2026-05-15 figures (200-check catalog) — kept for trend, not
+rewritten. Per-record throughput drops sharply at 1M (EMIR ~73 k vs
+~312 k at 100k) as the working set far exceeds cache and allocation
+pressure rises — re-run `cargo bench` for current numbers.
+
+SFTR is faster per record because its catalog is smaller (65 vs
+148 checks). These numbers are lower than the pre-0.1.0 baseline
 because the generators now populate far more fields, so more checks
 do real work per record (a more honest figure than the old
-sparse-record bench). Throughput dips slightly at 100k as the
-working set exceeds L2/L3 cache; it remains comfortably linear.
-Both layers process 100 k records in well under half a second, so a
-million-record batch runs in a few seconds. The loop is
-`rayon`-parallelised over the *checks* dimension — throughput scales
-with available cores.
+sparse-record bench). Throughput is roughly linear up to 100k
+(both layers process 100k in well under half a second), then
+**degrades super-linearly at 1M** as the working set far exceeds
+cache and allocation pressure rises — SFTR 1M ≈ 3 s but EMIR 1M
+≈ 14 s (the larger 148-check catalog amplifies the cache effect).
+The loop is `rayon`-parallelised over the *checks* dimension —
+throughput scales with available cores, but the 1M cliff (and the
+end-to-end peak-RSS finding below) is what the deferred perf work
+targets.
+
+## End-to-end scale baseline (parse + checks + write; peak RSS)
+
+The check-loop numbers above measure only the in-memory check
+dimension. The real scale/memory question — the goal of the
+performance/scale work — is the **whole `opendqi scan` pipeline**:
+discover → parse XML → run all checks → write `summary.json` /
+`issues.csv` / `report.html`, holding the full batch `Vec` in memory.
+
+`scripts/bench-scale.sh` is a deliberate, opt-in **local release**
+tool (intentionally **not** in `scripts/preflight.sh` or CI, which
+stay debug per build hygiene). It generates synthetic
+`auth.030`/`auth.052` XML via the dependency-free
+`opendqi-core/examples/gen_synthetic_xml.rs` (deterministic,
+streamed), runs the release binary under a peak-RSS + wall-time
+wrapper, and prints a table. Generated data goes to a temp dir and is
+never committed.
+
+```bash
+./scripts/bench-scale.sh            # full: emir|sftr × 100k, 1M
+./scripts/bench-scale.sh --smoke    # fast plumbing check (N=200)
+```
+
+**Peak-RSS portability:** the script targets macOS `/usr/bin/time -l`
+("maximum resident set size" in **bytes**). On Linux substitute
+`/usr/bin/time -v` ("Maximum resident set size" in **KB**) — see the
+script header. The numbers below were captured on the same
+Apple-Silicon box as the check-loop table; **indicative, not a
+contract**.
+
+Captured 2026-05-17, same Apple-Silicon box, release `lto=thin`,
+single synthetic input file per run:
+
+| Pipeline (parse + checks + write) | Records | Wall time | Peak RSS |
+|---|---|---|---|
+| `opendqi emir scan` | 100 000 | ~5.2 s | ~0.8 GiB |
+| `opendqi emir scan` | 1 000 000 | ~80 s | **~3.9 GiB** |
+| `opendqi sftr scan` | 100 000 | ~1.8 s | ~0.33 GiB |
+| `opendqi sftr scan` | 1 000 000 | ~26 s | ~2.1 GiB |
+
+Reproducible (the generator is index-driven, no RNG) — re-run
+`./scripts/bench-scale.sh` on your hardware. **This is the key
+finding that motivates the chantier:** unlike the check loop (fast,
+linear, cache-bound), the full scan's **peak RSS grows ~linearly
+with record count** — a 1M-record EMIR batch holds ~3.9 GiB resident
+(the entire `Vec<EmirRecord>` + every `DqIssue` + the in-memory
+report build, none of it streamed). Wall time is dominated by XML
+parse + report materialisation, not the (already-parallel) check
+loop. Peak RSS, not throughput, is the binding constraint for
+"millions of records / memory-bounded processing"; this baseline is
+the primary input for the deferred memory-bounded / streaming and
+incremental-scan increments.
 
 ## Conventions
 
@@ -107,5 +174,12 @@ with available cores.
 - **`sort_issues`**: stays single-threaded. The cost is dominated
   by collection growth, not the sort itself.
 
-Future milestones may revisit these if needed (e.g. very large
-single files, batches > 1 M records).
+The end-to-end baseline above shows the binding constraint is **peak
+memory**, not the check loop: the whole batch is materialised as one
+`Vec<*Record>` and the full issue list + report are built in memory,
+so RSS grows ~linearly (~3.9 GiB at 1M EMIR records). The deferred
+performance increments — memory-bounded / streaming scan and an
+incremental (changed-inputs-only) scan mode — are scoped against
+**this measured baseline**; re-run `scripts/bench-scale.sh` after
+each to quantify the improvement. (This milestone only *measures* —
+no optimization yet, by design.)
