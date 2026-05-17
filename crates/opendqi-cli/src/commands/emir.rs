@@ -14,11 +14,13 @@ use opendqi_core::dq::{
     default_margin_state_checks, default_margin_state_lifecycle_checks,
     default_pre_submission_checks, default_recon_stats_checks, default_reconciliation_checks,
     default_tr_activity_checks, default_tr_state_checks, default_tr_state_lifecycle_checks,
-    default_warnings_checks, default_warnings_counterparty_checks, finalize_issues, run_all,
-    run_all_feedback, run_all_lifecycle, run_all_margin_activity, run_all_margin_state,
+    default_warnings_checks, default_warnings_counterparty_checks,
+    default_warnings_transaction_checks, finalize_issues, run_all, run_all_feedback,
+    run_all_lifecycle, run_all_margin_activity, run_all_margin_state,
     run_all_margin_state_lifecycle, run_all_pre_submission, run_all_recon_stats,
     run_all_reconciliation, run_all_tr_activity, run_all_tr_state, run_all_tr_state_lifecycle,
-    run_all_warnings, run_all_warnings_counterparty, sort_issues, CheckContext,
+    run_all_warnings, run_all_warnings_counterparty, run_all_warnings_transaction, sort_issues,
+    CheckContext,
 };
 use opendqi_core::{
     DqDimension, DqIssue, EmirRecord, MarginActivityRecord, MarginStateRecord, Regime, ScanSummary,
@@ -1088,6 +1090,18 @@ fn run_warnings(
         "per-counterparty warnings checks run"
     );
     issues.extend(cp_issues);
+    // Per-UTI `Wrnngs/TxDtls` issues — same report, same CSV.
+    let tx_issues = run_all_warnings_transaction(
+        &default_warnings_transaction_checks(),
+        &outcome.transaction_records,
+        &ctx,
+    );
+    info!(
+        warnings_transaction_issues = tx_issues.len(),
+        transaction_records = outcome.transaction_records.len(),
+        "per-UTI warnings checks run"
+    );
+    issues.extend(tx_issues);
     finalize_issues(&mut issues, &ctx);
 
     let inputs = vec![input.to_path_buf()];

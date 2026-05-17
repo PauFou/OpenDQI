@@ -30,14 +30,17 @@
 //! rates derived from the counts) AND the **per-counterparty
 //! aggregate** (one `WarningsCounterpartyRecord` per `(RefDt, CtrPty
 //! LEI)`, merging the three `MssngValtn`/`MssngMrgnInf`/`AbnrmlVals`
-//! `Wrnngs` blocks for that LEI). The deeper per-UTI `Wrnngs/TxDtls`
-//! level remains a documented deferred subset, never read here.
+//! `Wrnngs` blocks for that LEI) AND the **per-UTI** level (one
+//! `WarningsTransactionRecord` per `Wrnngs/TxDtls` — each transaction
+//! the TR explicitly flagged for missing valuation / missing margin /
+//! abnormal value).
 
 use std::path::Path;
 
 use chrono::NaiveDate;
 use opendqi_core::{
     DqDimension, DqIssue, Regime, Severity, TradeWarningsRecord, WarningsCounterpartyRecord,
+    WarningsTransactionRecord,
 };
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::name::ResolveResult;
@@ -55,6 +58,9 @@ pub struct WarningsXmlReadOutcome {
     /// Per-counterparty records (one per `(RefDt, CtrPty LEI)`), from
     /// the `Wrnngs` breakdown. Empty when the file carries no `Wrnngs`.
     pub counterparty_records: Vec<WarningsCounterpartyRecord>,
+    /// Per-UTI records (one per `Wrnngs/TxDtls` — each transaction the
+    /// TR flagged). Empty when the file carries no `TxDtls`.
+    pub transaction_records: Vec<WarningsTransactionRecord>,
     /// File-level data-quality / parse issues (format / namespace).
     pub issues: Vec<DqIssue>,
 }
@@ -69,6 +75,7 @@ pub fn read_emir_warnings_xml(path: &Path) -> anyhow::Result<WarningsXmlReadOutc
         return Ok(WarningsXmlReadOutcome {
             records: vec![],
             counterparty_records: vec![],
+            transaction_records: vec![],
             issues: vec![fmt_issue(
                 "EMIR.FMT.XML_NOT_WELLFORMED",
                 Severity::Critical,
@@ -88,6 +95,7 @@ pub fn read_emir_warnings_xml(path: &Path) -> anyhow::Result<WarningsXmlReadOutc
             Ok(WarningsXmlReadOutcome {
                 records: vec![],
                 counterparty_records: vec![],
+                transaction_records: vec![],
                 issues: vec![fmt_issue(
                     "EMIR.FMT.XML_UNSUPPORTED_NAMESPACE",
                     Severity::Warning,
@@ -282,6 +290,14 @@ fn parse(path: &Path) -> anyhow::Result<WarningsXmlReadOutcome> {
     let mut cp_seq: usize = 0;
     let mut counterparty_records: Vec<WarningsCounterpartyRecord> = Vec::new();
 
+    // Per-UTI `Wrnngs/TxDtls` accumulation — one record per flagged
+    // transaction. `cur_tx` is the TxDtls currently being read;
+    // pushed on the `TxDtls` close (LEI still in scope).
+    let mut txd_depth: Option<usize> = None;
+    let mut cur_tx: Option<WarningsTransactionRecord> = None;
+    let mut tx_seq: usize = 0;
+    let mut transaction_records: Vec<WarningsTransactionRecord> = Vec::new();
+
     loop {
         match reader.read_resolved_event_into(&mut buf)? {
             (_, Event::Start(e)) => {
@@ -310,6 +326,35 @@ fn parse(path: &Path) -> anyhow::Result<WarningsXmlReadOutcome> {
                     wrnngs_depth = Some(pile.len());
                     cur_cp = Some(CpAccum::default());
                     cur_cp_lei = None;
+                }
+
+                // Open a per-UTI `TxDtls` (inside a `Wrnngs`). The
+                // enclosing CtrPty LEI was already read into
+                // `cur_cp_lei` (CtrPtyId precedes TxDtls in document
+                // order); `acc.ref_date` is set (RefDt precedes the
+                // sub-reports).
+                if pile.last().map(String::as_str) == Some("TxDtls")
+                    && wrnngs_depth.is_some()
+                    && txd_depth.is_none()
+                {
+                    txd_depth = Some(pile.len());
+                    let category = if has(&pile, "MssngValtn") {
+                        "MissingValuation"
+                    } else if has(&pile, "MssngMrgnInf") {
+                        "MissingMargin"
+                    } else if has(&pile, "AbnrmlVals") {
+                        "AbnormalValue"
+                    } else {
+                        "Unknown"
+                    };
+                    cur_tx = Some(WarningsTransactionRecord {
+                        source_file: Some(source_label.clone()),
+                        regime: Regime::Emir,
+                        reporting_date: acc.ref_date,
+                        counterparty_lei: cur_cp_lei.clone(),
+                        warning_category: Some(category.to_owned()),
+                        ..Default::default()
+                    });
                 }
             }
             (_, Event::Empty(e)) => {
@@ -386,8 +431,43 @@ fn parse(path: &Path) -> anyhow::Result<WarningsXmlReadOutcome> {
                                     _ => {}
                                 }
                             }
+                        } else if let (Some(td), Some(tx)) = (txd_depth, cur_tx.as_mut()) {
+                            // Per-UTI `Wrnngs/TxDtls`. UTI + other-CP
+                            // promoted to typed fields; the rest of the
+                            // heterogeneous context kept verbatim in
+                            // `raw_fields`, keyed by the path from
+                            // `TxDtls` down (the `emir_msr.rs` idiom).
+                            let leaf = pile.last().map(String::as_str).unwrap_or("");
+                            // `TxId/UnqIdr/UnqTxIdr` (the UTI) or, when
+                            // proprietary, `TxId/UnqIdr/Prtry/Id`.
+                            let is_uti = leaf == "UnqTxIdr"
+                                || (leaf == "Id" && has(&pile, "UnqIdr") && has(&pile, "Prtry"));
+                            if is_uti && tx.uti.is_none() {
+                                tx.uti = Some(v.to_owned());
+                            } else if leaf == "LEI"
+                                && has(&pile, "OthrCtrPty")
+                                && tx.other_counterparty.is_none()
+                            {
+                                tx.other_counterparty = Some(v.to_owned());
+                            } else {
+                                let key = pile[td - 1..].join("/");
+                                tx.raw_fields.entry(key).or_insert_with(|| v.to_owned());
+                            }
                         }
                     }
+                }
+
+                // Close the current `TxDtls`: emit the per-UTI record
+                // (LEI / RefDt still in scope — Wrnngs not yet closed).
+                if pile.last().map(String::as_str) == Some("TxDtls")
+                    && Some(pile.len()) == txd_depth
+                {
+                    if let Some(mut tx) = cur_tx.take() {
+                        tx_seq += 1;
+                        tx.record_id = Some(format!("{source_label}#wrn-tx-{tx_seq}"));
+                        transaction_records.push(tx);
+                    }
+                    txd_depth = None;
                 }
 
                 // Close the current `Wrnngs` block: merge its counts
@@ -447,6 +527,7 @@ fn parse(path: &Path) -> anyhow::Result<WarningsXmlReadOutcome> {
     Ok(WarningsXmlReadOutcome {
         records,
         counterparty_records,
+        transaction_records,
         issues,
     })
 }
@@ -493,6 +574,13 @@ mod tests {
             <CtrPtyId><RptgCtrPty><LEI>LEIAAAAAAAAAAAAAAAAA1</LEI></RptgCtrPty></CtrPtyId>
             <NbOfOutsdngDerivs>999999</NbOfOutsdngDerivs>
             <NbOfOutsdngDerivsWthNoValtn>999999</NbOfOutsdngDerivsWthNoValtn>
+            <TxDtls>
+              <TxId>
+                <OthrCtrPty><Lgl><LEI>OTHRBBBBBBBBBBBBBBB2</LEI></Lgl></OthrCtrPty>
+                <UnqIdr><UnqTxIdr>UTIWRNTX0000000000001</UnqTxIdr></UnqIdr>
+              </TxId>
+              <ValtnTmStmp>2026-05-12T09:00:00Z</ValtnTmStmp>
+            </TxDtls>
           </Wrnngs>
         </Rpt></MssngValtn>
         <MssngMrgnInf><Rpt>
@@ -554,6 +642,29 @@ mod tests {
         assert_eq!(cp.outstanding_derivatives, Some(999999));
         assert_eq!(cp.missing_valuation, Some(999999));
         assert_eq!(cp.missing_valuation_rate.unwrap().to_string(), "1");
+
+        // The per-UTI `TxDtls` IS now modelled — and its leaves never
+        // leaked into the per-CP counts above (still 999999).
+        assert_eq!(out.transaction_records.len(), 1);
+        let tx = &out.transaction_records[0];
+        assert_eq!(tx.warning_category.as_deref(), Some("MissingValuation"));
+        assert_eq!(tx.uti.as_deref(), Some("UTIWRNTX0000000000001"));
+        assert_eq!(
+            tx.counterparty_lei.as_deref(),
+            Some("LEIAAAAAAAAAAAAAAAAA1")
+        );
+        assert_eq!(
+            tx.other_counterparty.as_deref(),
+            Some("OTHRBBBBBBBBBBBBBBB2")
+        );
+        assert_eq!(
+            tx.reporting_date.map(|d| d.to_string()).as_deref(),
+            Some("2026-05-13")
+        );
+        assert_eq!(
+            tx.raw_fields.get("TxDtls/ValtnTmStmp").map(String::as_str),
+            Some("2026-05-12T09:00:00Z")
+        );
     }
 
     #[test]

@@ -27,11 +27,11 @@ Beyond single-batch checks, OpenDQI also ships dedicated TR-layer
 families: **7 TSR** state-health, **5 TAR** activity, **8 MAR**
 margin-activity, **8 MSR** margin-state, **5 lifecycle** (cross-batch),
 **4 feedback**, **3 reconciliation**, **4 RST** recon-statistics
-(auth.091), **10 WRN** data-quality warnings (auth.106 — 5
-report-level + 5 per-counterparty), and **2 PSC** pre-submission
-(rejection-profile driven, auth.092 → next scan) checks — see the
-dedicated docs. **Total live EMIR catalog: 145 checks**, plus 65 SFTR
-counterparts (`docs/sftr-checks.md`).
+(auth.091), **13 WRN** data-quality warnings (auth.106 — 5
+report-level + 5 per-counterparty + 3 per-UTI), and **2 PSC**
+pre-submission (rejection-profile driven, auth.092 → next scan)
+checks — see the dedicated docs. **Total live EMIR catalog: 148
+checks**, plus 65 SFTR counterparts (`docs/sftr-checks.md`).
 
 Severity scale: `info` < `warning` < `high` < `critical`.
 

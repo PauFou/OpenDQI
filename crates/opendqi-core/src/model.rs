@@ -1021,6 +1021,59 @@ impl Default for WarningsCounterpartyRecord {
     }
 }
 
+/// One transaction the TR explicitly flagged inside an EMIR
+/// Data-Quality Warnings Report (ISO 20022 `auth.106`,
+/// `Wrnngs/TxDtls`). Each record is one problematic SFT enumerated by
+/// the TR under a counterparty for one reference date — operational,
+/// not statistical. `warning_category` distinguishes which sub-report
+/// flagged it (`MissingValuation` / `MissingMargin` / `AbnormalValue`);
+/// the heterogeneous per-category context (valuation amount/timestamp,
+/// collateral timestamp, notional, action/event metadata) is preserved
+/// in `raw_fields`. See `docs/auth-messages/emir-auth106.md`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WarningsTransactionRecord {
+    /// Source file path (or other origin label).
+    pub source_file: Option<String>,
+    /// Stable identifier of the line within the source.
+    pub record_id: Option<String>,
+    /// Regulatory regime — always `Regime::Emir` for v1.
+    pub regime: Regime,
+    /// Reference date the warnings statistics cover.
+    pub reporting_date: Option<NaiveDate>,
+    /// LEI of the counterparty this `Wrnngs` block is for.
+    pub counterparty_lei: Option<String>,
+    /// UTI of the flagged transaction (`TxId/UnqIdr/UnqTxIdr`, else
+    /// the proprietary `TxId/UnqIdr/Prtry/Id`).
+    pub uti: Option<String>,
+    /// Which sub-report flagged this transaction:
+    /// `MissingValuation` | `MissingMargin` | `AbnormalValue`.
+    pub warning_category: Option<String>,
+    /// Other counterparty of the flagged trade
+    /// (`TxId/OthrCtrPty/.../LEI`), when present.
+    pub other_counterparty: Option<String>,
+    /// Catch-all of the heterogeneous per-category `TxDtls` context
+    /// leaves (valuation amount/currency/timestamp, collateral
+    /// timestamp, notional amount, action/event metadata).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub raw_fields: BTreeMap<String, String>,
+}
+
+impl Default for WarningsTransactionRecord {
+    fn default() -> Self {
+        Self {
+            source_file: None,
+            record_id: None,
+            regime: Regime::Emir,
+            reporting_date: None,
+            counterparty_lei: None,
+            uti: None,
+            warning_category: None,
+            other_counterparty: None,
+            raw_fields: BTreeMap::new(),
+        }
+    }
+}
+
 /// One transaction from an SFTR Missing Collateral Request
 /// (ISO 20022 `auth.083`,
 /// `SecuritiesFinancingReportingMissingCollateralRequestV02`). The TR

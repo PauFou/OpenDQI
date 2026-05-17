@@ -11,13 +11,18 @@
   (one per reference date). Schema-shaped, not a fully XSD-valid
   instance. See docs/auth-messages/emir-auth106.md.
 
-  OpenDQI models the REPORT-LEVEL aggregate (one TradeWarningsRecord
-  per RefDt, no LEI) AND the PER-COUNTERPARTY aggregate (one
-  WarningsCounterpartyRecord per RefDt+LEI, merging the three Wrnngs
-  blocks for that LEI). The per-counterparty values MUST NOT leak into
-  the report-level aggregate — the huge Wrnngs values below prove the
-  two are kept separate. The deeper per-UTI Wrnngs/TxDtls level stays
-  a documented deferred subset.
+  OpenDQI models THREE levels, kept strictly separate: the
+  REPORT-LEVEL aggregate (one TradeWarningsRecord per RefDt, no LEI),
+  the PER-COUNTERPARTY aggregate (one WarningsCounterpartyRecord per
+  RefDt+LEI, merging the three Wrnngs blocks for that LEI), and the
+  PER-UTI level (one WarningsTransactionRecord per Wrnngs/TxDtls). The
+  per-counterparty and per-UTI values MUST NOT leak into the
+  report-level aggregate — the huge Wrnngs values below prove the
+  layers stay separate.
+
+  Each Wrnngs block carries one TxDtls (UTIWRNVAL.../UTIWRNMRG...
+  /UTIWRNABN...) -> one issue each: EMIR.WRN.TX_MISSING_VALUATION,
+  EMIR.WRN.TX_MISSING_MARGIN, EMIR.WRN.TX_ABNORMAL_VALUE.
 
   Report-level derived rates (defaults: valuation/margin max 0.05,
   abnormal 0.01):
@@ -47,6 +52,13 @@
             <NbOfOutsdngDerivs>999999</NbOfOutsdngDerivs>
             <NbOfOutsdngDerivsWthNoValtn>999999</NbOfOutsdngDerivsWthNoValtn>
             <NbOfOutsdngDerivsWthOutdtdValtn>999999</NbOfOutsdngDerivsWthOutdtdValtn>
+            <TxDtls>
+              <TxId>
+                <OthrCtrPty><Lgl><LEI>OTHRB000000000000002</LEI></Lgl></OthrCtrPty>
+                <UnqIdr><UnqTxIdr>UTIWRNVAL00000000001</UnqTxIdr></UnqIdr>
+              </TxId>
+              <ValtnTmStmp>2026-05-12T09:00:00Z</ValtnTmStmp>
+            </TxDtls>
           </Wrnngs>
         </Rpt></MssngValtn>
         <MssngMrgnInf><Rpt>
@@ -57,6 +69,12 @@
             <CtrPtyId><RptgCtrPty><LEI>LEIA0000000000000001</LEI></RptgCtrPty></CtrPtyId>
             <NbOfOutsdngDerivs>888888</NbOfOutsdngDerivs>
             <NbOfOutsdngDerivsWthNoMrgnInf>888888</NbOfOutsdngDerivsWthNoMrgnInf>
+            <TxDtls>
+              <TxId>
+                <UnqIdr><UnqTxIdr>UTIWRNMRG00000000002</UnqTxIdr></UnqIdr>
+              </TxId>
+              <CollTmStmp>2026-05-13T00:00:00Z</CollTmStmp>
+            </TxDtls>
           </Wrnngs>
         </Rpt></MssngMrgnInf>
         <AbnrmlVals><Rpt>
@@ -66,6 +84,13 @@
             <CtrPtyId><RptgCtrPty><LEI>LEIA0000000000000001</LEI></RptgCtrPty></CtrPtyId>
             <NbOfDerivsRptd>777777</NbOfDerivsRptd>
             <NbOfDerivsRptdWthOtlrs>777777</NbOfDerivsRptdWthOtlrs>
+            <TxDtls>
+              <TxId>
+                <ActnTp>NEWT</ActnTp>
+                <UnqIdr><UnqTxIdr>UTIWRNABN00000000003</UnqTxIdr></UnqIdr>
+              </TxId>
+              <NtnlAmt><FrstLeg><Amt><Amt Ccy="EUR">999000000.00</Amt></Amt></FrstLeg></NtnlAmt>
+            </TxDtls>
           </Wrnngs>
         </Rpt></AbnrmlVals>
       </Rpt>

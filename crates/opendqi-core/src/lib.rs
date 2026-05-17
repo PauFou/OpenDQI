@@ -24,6 +24,6 @@ pub use model::{
     MarginActivityRecord, MarginStateRecord, MissingCollateralRecord, ReconStatsRecord,
     ReconciliationRecord, Regime, RejectionCause, RejectionProfile, RejectionProfileFile,
     RepeatedRejection, ScanSummary, Severity, SftrRecord, SftrTrStateRecord, TrActivitySummary,
-    TrStateRecord, TradeWarningsRecord, WarningsCounterpartyRecord,
+    TrStateRecord, TradeWarningsRecord, WarningsCounterpartyRecord, WarningsTransactionRecord,
 };
 pub use scoring::quality_score;

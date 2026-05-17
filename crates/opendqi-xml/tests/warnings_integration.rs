@@ -4,17 +4,18 @@
 //! **derived** from the report-level counts). See
 //! `docs/auth-messages/emir-auth106.md`.
 //!
-//! The per-counterparty `Wrnngs` aggregate is now modelled separately
-//! (`WarningsCounterpartyRecord`); its values must NOT leak into the
-//! report-level aggregate. The deeper per-UTI `TxDtls` level stays a
-//! documented deferred subset.
+//! The per-counterparty `Wrnngs` aggregate and the per-UTI
+//! `Wrnngs/TxDtls` level are modelled separately
+//! (`WarningsCounterpartyRecord` / `WarningsTransactionRecord`);
+//! neither's values may leak into the report-level aggregate.
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use opendqi_core::dq::{
-    default_warnings_checks, default_warnings_counterparty_checks, run_all_warnings,
-    run_all_warnings_counterparty, CheckContext,
+    default_warnings_checks, default_warnings_counterparty_checks,
+    default_warnings_transaction_checks, run_all_warnings, run_all_warnings_counterparty,
+    run_all_warnings_transaction, CheckContext,
 };
 use opendqi_xml::read_emir_warnings_xml;
 
@@ -99,6 +100,60 @@ fn derives_rates_and_fires_high_rate_checks() {
     assert!(cp_ids.contains("EMIR.WRN.CTRPTY_ABNORMAL_VALUES_HIGH"));
     // No per-CP outdated-margin numerator in the sample → does not fire.
     assert!(!cp_ids.contains("EMIR.WRN.CTRPTY_OUTDATED_MARGIN_INFO_HIGH"));
+
+    // The per-UTI `Wrnngs/TxDtls` level: one record per flagged
+    // transaction (one per Wrnngs in the sample), correctly
+    // categorised, LEI inherited from the enclosing Wrnngs. The
+    // TxDtls leaves never leaked into the report-level/per-CP counts
+    // asserted above.
+    assert_eq!(outcome.transaction_records.len(), 3);
+    let by_uti: std::collections::BTreeMap<&str, &_> = outcome
+        .transaction_records
+        .iter()
+        .map(|t| (t.uti.as_deref().unwrap_or(""), t))
+        .collect();
+    let val = by_uti["UTIWRNVAL00000000001"];
+    assert_eq!(val.warning_category.as_deref(), Some("MissingValuation"));
+    assert_eq!(
+        val.counterparty_lei.as_deref(),
+        Some("LEIA0000000000000001")
+    );
+    assert_eq!(
+        val.other_counterparty.as_deref(),
+        Some("OTHRB000000000000002")
+    );
+    assert_eq!(
+        val.reporting_date.map(|d| d.to_string()).as_deref(),
+        Some("2026-05-13")
+    );
+    assert_eq!(
+        by_uti["UTIWRNMRG00000000002"].warning_category.as_deref(),
+        Some("MissingMargin")
+    );
+    assert_eq!(
+        by_uti["UTIWRNABN00000000003"].warning_category.as_deref(),
+        Some("AbnormalValue")
+    );
+
+    let tx_issues = run_all_warnings_transaction(
+        &default_warnings_transaction_checks(),
+        &outcome.transaction_records,
+        &ctx,
+    );
+    let tx_ids: BTreeSet<&str> = tx_issues.iter().map(|i| i.check_id.as_str()).collect();
+    assert!(
+        tx_ids.contains("EMIR.WRN.TX_MISSING_VALUATION"),
+        "got {tx_ids:?}"
+    );
+    assert!(
+        tx_ids.contains("EMIR.WRN.TX_MISSING_MARGIN"),
+        "got {tx_ids:?}"
+    );
+    assert!(
+        tx_ids.contains("EMIR.WRN.TX_ABNORMAL_VALUE"),
+        "got {tx_ids:?}"
+    );
+    assert_eq!(tx_issues.len(), 3);
 }
 
 #[test]

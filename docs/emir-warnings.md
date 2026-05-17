@@ -27,7 +27,7 @@ Optional flags:
 
 Outputs `summary.json`, `warnings_issues.csv`, `warnings_report.html`.
 
-## Checks (10)
+## Checks (13)
 
 Each fires when the **derived rate exceeds** the configured maximum
 (see `WarningsThresholds` in `crates/opendqi-core/src/config.rs`).
@@ -56,10 +56,24 @@ Folded into the same `warnings_issues.csv`.
 | `EMIR.WRN.CTRPTY_OUTDATED_MARGIN_INFO_HIGH` | Timeliness | High | per-CP `outdated_margin_info / outstanding_derivatives_margin` (0.05) |
 | `EMIR.WRN.CTRPTY_ABNORMAL_VALUES_HIGH` | Accuracy | High | per-CP `abnormal_values / derivatives_reported` (0.01) |
 
+### Per-UTI (3) — one per flagged `Wrnngs/TxDtls`
+
+Operational, not statistical: the TR explicitly enumerated these
+transactions, so each flagged `TxDtls` yields **one** issue (same
+shape as `EMIR.REC.*`), filtered by category. The UTI is set on the
+issue; the counterparty LEI is named in the message. Folded into the
+same `warnings_issues.csv`.
+
+| Check ID | Dimension | Severity | Fires |
+|---|---|---|---|
+| `EMIR.WRN.TX_MISSING_VALUATION` | Completeness | High | once per `TxDtls` the TR flagged for missing valuation |
+| `EMIR.WRN.TX_MISSING_MARGIN` | Completeness | High | once per `TxDtls` the TR flagged for missing margin information |
+| `EMIR.WRN.TX_ABNORMAL_VALUE` | Accuracy | High | once per `TxDtls` the TR flagged for an abnormal (outlier) value |
+
 A `WrnngsSttstcs/DataSetActn = "NOTX"` no-activity report yields zero
 records plus one informational `EMIR.FMT.WRN_NO_RECORDS`.
 
-The deeper per-UTI `Wrnngs/TxDtls` level is a documented deferred
-subset — the per-counterparty checks operate on the per-CP aggregate.
-See [`auth-messages/emir-auth106.md`](auth-messages/emir-auth106.md)
-for the derive map and limits.
+All three levels (report-level, per-counterparty, per-UTI) are
+modelled and kept strictly separate. See
+[`auth-messages/emir-auth106.md`](auth-messages/emir-auth106.md)
+for the derive maps and limits.

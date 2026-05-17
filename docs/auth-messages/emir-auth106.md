@@ -45,7 +45,7 @@ Document
          │     NbOfOutsdngDerivs, NbOfOutsdngDerivsWthNoValtn,
          │     NbOfOutsdngDerivsWthOutdtdValtn
          │     [+ Wrnngs(0..500000): CtrPtyId, …counts  — modelled;
-         │        Wrnngs/TxDtls(per-UTI) — deferred]
+         │        Wrnngs/TxDtls(per-UTI) — modelled]
          ├─ MssngMrgnInf (choice: DataSetActn | Rpt):
          │     NbOfOutsdngDerivs, NbOfOutsdngDerivsWthNoMrgnInf,
          │     NbOfOutsdngDerivsWthOutdtdMrgnInf  [+ Wrnngs — modelled]
@@ -99,28 +99,48 @@ counterparty — see [`../emir-warnings.md`](../emir-warnings.md)). They
 are folded into the same `warnings_issues.csv` (shared core, same
 precedent as the auth.091 per-transaction fold).
 
+## Per-UTI derivation → `WarningsTransactionRecord`
+
+The deepest level — `Wrnngs/TxDtls` — is **also** modelled: one
+`WarningsTransactionRecord` per flagged transaction the TR explicitly
+enumerated. Operational, not statistical (one issue per record, like
+`EMIR.REC.*`):
+
+| Canonical field | Source |
+|---|---|
+| `reporting_date` | the enclosing `WrnngsSttstcs/Rpt/RefDt` |
+| `counterparty_lei` | the enclosing `Wrnngs/CtrPtyId/RptgCtrPty/LEI` |
+| `uti` | `TxDtls/TxId/UnqIdr/UnqTxIdr` (else the proprietary `TxId/UnqIdr/Prtry/Id`) |
+| `warning_category` | which sub-report: `MissingValuation` / `MissingMargin` / `AbnormalValue` |
+| `other_counterparty` | `TxDtls/TxId/OthrCtrPty/.../LEI` (when present) |
+| `raw_fields` | the heterogeneous per-category context kept verbatim, keyed by the path from `TxDtls` (`ValtnTmStmp`, `CollTmStmp`, `NtnlAmt/...`, `ActnTp`, `RptgTmStmp`, `DerivEvtTp`, …) |
+| `regime` | `Emir` |
+
+These drive the 3 `EMIR.WRN.TX_*` checks (one issue per flagged
+transaction, by category — see [`../emir-warnings.md`](../emir-warnings.md)),
+folded into the same `warnings_issues.csv`. The `Ccy` currency
+**attribute** of amount leaves is not captured (the streaming parser
+reads element text, not attributes) — the numeric amount text is kept
+in `raw_fields`.
+
 ## Fields ignored / known unsupported branches
 
-The deeper per-UTI `Wrnngs/TxDtls` level
-(`MissingValuationsTransactionData2` / `MissingMarginTransactionData2`
-/ `AbnormalValuesTransactionData2` — per-transaction UTI, valuation
-amount/timestamp, etc.) and the per-category `DataSetActn`
-no-activity branches.
+`Wrnngs/TxDtls/NtnlQty`, `DerivEvtTmStmp`, amount-leaf `Ccy`
+attributes, and the per-category `DataSetActn` no-activity branches.
 
 ### Documented limitations
 
 - **Derived rates.** The real message has no rate field; the rates
   are computed from the report-level counts (a defensible
   interpretation, not a verbatim mapping).
-- **Two levels modelled; per-UTI deferred.** The report-level
-  aggregate (`TradeWarningsRecord`, `counterparty_lei` `None`) and the
+- **Three levels modelled, kept separate.** The report-level
+  aggregate (`TradeWarningsRecord`, `counterparty_lei` `None`), the
   per-counterparty aggregate (`WarningsCounterpartyRecord`, one per
-  `(RefDt, LEI)`) are both modelled. The deeper per-UTI `Wrnngs/TxDtls`
-  level (UTI + valuation amount/timestamp per transaction) remains a
-  documented deferred subset — a clean future increment, same
-  precedent as the `auth.091` per-transaction detail. Per-counterparty
-  values never leak into the report-level aggregate (guaranteed by an
-  integration assertion).
+  `(RefDt, LEI)`) and the per-UTI level (`WarningsTransactionRecord`,
+  one per `Wrnngs/TxDtls`) are all modelled. Per-counterparty and
+  per-UTI values never leak into the report-level aggregate
+  (guaranteed by integration assertions). Only `NtnlQty`,
+  `DerivEvtTmStmp` and amount `Ccy` attributes remain unmodelled.
 - **Single reference date assumption.** One record per `Rpt`; the
   schema permits one `Rpt` per report.
 - **Not a full XSD validation** — same documented "subset" stance as

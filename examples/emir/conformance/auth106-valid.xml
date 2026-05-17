@@ -23,6 +23,11 @@
               <NbOfOutsdngDerivs>1000</NbOfOutsdngDerivs>
               <NbOfOutsdngDerivsWthNoValtn>1000</NbOfOutsdngDerivsWthNoValtn>
               <NbOfOutsdngDerivsWthOutdtdValtn>1000</NbOfOutsdngDerivsWthOutdtdValtn>
+              <TxDtls>
+                <TxId>
+                  <UnqIdr><UnqTxIdr>ABCDEFGHIJKLMNOPQR01</UnqTxIdr></UnqIdr>
+                </TxId>
+              </TxDtls>
             </Wrnngs>
           </Rpt>
         </MssngValtn>
@@ -36,6 +41,12 @@
               <NbOfOutsdngDerivs>1000</NbOfOutsdngDerivs>
               <NbOfOutsdngDerivsWthNoMrgnInf>1000</NbOfOutsdngDerivsWthNoMrgnInf>
               <NbOfOutsdngDerivsWthOutdtdMrgnInf>1000</NbOfOutsdngDerivsWthOutdtdMrgnInf>
+              <TxDtls>
+                <TxId>
+                  <UnqIdr><UnqTxIdr>ABCDEFGHIJKLMNOPQR02</UnqTxIdr></UnqIdr>
+                </TxId>
+                <CollTmStmp>2026-05-13T00:00:00Z</CollTmStmp>
+              </TxDtls>
             </Wrnngs>
           </Rpt>
         </MssngMrgnInf>
@@ -47,6 +58,14 @@
               <CtrPtyId><RptgCtrPty><LEI>ABCDEFGHIJKLMNOPQR99</LEI></RptgCtrPty></CtrPtyId>
               <NbOfDerivsRptd>1000</NbOfDerivsRptd>
               <NbOfDerivsRptdWthOtlrs>1000</NbOfDerivsRptdWthOtlrs>
+              <TxDtls>
+                <TxId>
+                  <UnqIdr><UnqTxIdr>ABCDEFGHIJKLMNOPQR03</UnqTxIdr></UnqIdr>
+                </TxId>
+                <NtnlAmt>
+                  <FrstLeg><Amt><Amt Ccy="EUR">1000.00</Amt></Amt></FrstLeg>
+                </NtnlAmt>
+              </TxDtls>
             </Wrnngs>
           </Rpt>
         </AbnrmlVals>

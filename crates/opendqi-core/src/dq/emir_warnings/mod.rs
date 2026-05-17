@@ -10,6 +10,7 @@ use crate::config::WarningsThresholds;
 use crate::dq::CheckContext;
 use crate::model::{
     DqDimension, DqIssue, Regime, Severity, TradeWarningsRecord, WarningsCounterpartyRecord,
+    WarningsTransactionRecord,
 };
 use rust_decimal::prelude::ToPrimitive;
 
@@ -25,6 +26,10 @@ mod ctrpty_missing_valuation_high;
 mod ctrpty_outdated_margin_info_high;
 mod ctrpty_outdated_valuation_high;
 
+mod tx_abnormal_value;
+mod tx_missing_margin;
+mod tx_missing_valuation;
+
 pub use abnormal_values_high::EmirWrnAbnormalValuesHigh;
 pub use missing_margin_info_high::EmirWrnMissingMarginInfoHigh;
 pub use missing_valuation_high::EmirWrnMissingValuationHigh;
@@ -36,6 +41,10 @@ pub use ctrpty_missing_margin_info_high::EmirWrnCtrptyMissingMarginInfoHigh;
 pub use ctrpty_missing_valuation_high::EmirWrnCtrptyMissingValuationHigh;
 pub use ctrpty_outdated_margin_info_high::EmirWrnCtrptyOutdatedMarginInfoHigh;
 pub use ctrpty_outdated_valuation_high::EmirWrnCtrptyOutdatedValuationHigh;
+
+pub use tx_abnormal_value::EmirWrnTxAbnormalValue;
+pub use tx_missing_margin::EmirWrnTxMissingMargin;
+pub use tx_missing_valuation::EmirWrnTxMissingValuation;
 
 /// An EMIR auth.106 data-quality-warnings check.
 pub trait WarningsCheck: Send + Sync {
@@ -83,6 +92,67 @@ pub fn default_warnings_counterparty_checks() -> Vec<Box<dyn WarningsCounterpart
         Box::new(EmirWrnCtrptyOutdatedMarginInfoHigh),
         Box::new(EmirWrnCtrptyAbnormalValuesHigh),
     ]
+}
+
+/// An EMIR auth.106 **per-UTI** `Wrnngs/TxDtls` check. Operational,
+/// not statistical: the TR explicitly enumerated this transaction as
+/// problematic, so each record yields one issue (same shape as
+/// `EMIR.REC.*` / `SFTR.MCR.MISSING_COLLATERAL_REQUESTED`), filtered
+/// by `warning_category`.
+pub trait WarningsTransactionCheck: Send + Sync {
+    /// Stable identifier, e.g. `EMIR.WRN.TX_MISSING_VALUATION`.
+    fn id(&self) -> &'static str;
+    /// The DQ dimension this check belongs to.
+    fn dimension(&self) -> DqDimension;
+    /// Default severity for issues raised by this check.
+    fn severity(&self) -> Severity;
+    /// Execute the check against the per-UTI batch.
+    fn run(&self, records: &[WarningsTransactionRecord], ctx: &CheckContext) -> Vec<DqIssue>;
+}
+
+/// Default EMIR auth.106 per-UTI check registry (3 checks, one per
+/// `Wrnngs/TxDtls` category).
+pub fn default_warnings_transaction_checks() -> Vec<Box<dyn WarningsTransactionCheck>> {
+    vec![
+        Box::new(EmirWrnTxMissingValuation),
+        Box::new(EmirWrnTxMissingMargin),
+        Box::new(EmirWrnTxAbnormalValue),
+    ]
+}
+
+/// Build a `DqIssue` shell for a per-UTI `WarningsTransactionRecord`
+/// (sets `uti`; callers override `message`). Mirrors
+/// `sftr_missing_collateral::build_issue`.
+pub(crate) fn build_issue_tx(
+    check_id: &str,
+    severity: Severity,
+    dimension: DqDimension,
+    rec: &WarningsTransactionRecord,
+) -> DqIssue {
+    DqIssue {
+        check_id: check_id.into(),
+        regime: Regime::Emir,
+        severity,
+        dimension,
+        record_id: rec.record_id.clone(),
+        uti: rec.uti.clone(),
+        field: None,
+        value: None,
+        message: String::new(),
+        source_file: rec.source_file.clone(),
+        evidence: Vec::new(),
+    }
+}
+
+/// Counterparty pair label for per-UTI issue messages.
+pub(crate) fn tx_counterparty_label(rec: &WarningsTransactionRecord) -> String {
+    format!(
+        "{} vs {}",
+        rec.counterparty_lei.as_deref().unwrap_or("(no LEI)"),
+        rec.other_counterparty
+            .as_deref()
+            .unwrap_or("(no OthrCtrPty)"),
+    )
 }
 
 /// Decimal → f64 lossy converter; safe for rates in `[0.0, 1.0]`.
