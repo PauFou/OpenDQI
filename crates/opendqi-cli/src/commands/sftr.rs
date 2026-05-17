@@ -205,12 +205,25 @@ pub enum SftrAction {
     /// Ingest an SFTR Missing Collateral Request (`auth.083`, the TR
     /// asking the firm to provide the collateral missing for listed
     /// SFTs) and produce `SFTR.MCR.*` issues: one actionable request
-    /// per `TxId`, plus a flag for requests with no UTI. Outputs
+    /// per `TxId`, plus a flag for requests with no UTI. With `--tsr`
+    /// (or `--store`) the requested UTIs are cross-referenced against
+    /// the firm's SFTR trade state to flag whether collateral is
+    /// already present / still missing / the SFT is absent. Outputs
     /// `summary.json`, `missing_collateral_issues.csv`,
     /// `missing_collateral_report.html`.
     MissingCollateral {
         /// Path to the `auth.083` XML file.
         input: PathBuf,
+        /// Optional companion SFTR TSR (`auth.079`). When set, the
+        /// requested UTIs are cross-referenced against it. Takes
+        /// precedence over `--store`.
+        #[arg(long)]
+        tsr: Option<PathBuf>,
+        /// Optional SQLite history store. When set (and `--tsr` is
+        /// not), the latest persisted SFTR trade state is used for
+        /// the cross-reference.
+        #[arg(long)]
+        store: Option<PathBuf>,
         /// Directory where reports are written.
         #[arg(long)]
         out: PathBuf,
@@ -316,10 +329,18 @@ pub fn run(action: SftrAction) -> Result<ExitCode> {
         }
         SftrAction::MissingCollateral {
             input,
+            tsr,
+            store,
             out,
             email_config,
         } => {
-            run_missing_collateral(&input, &out, email_config.as_deref())?;
+            run_missing_collateral(
+                &input,
+                tsr.as_deref(),
+                store.as_deref(),
+                &out,
+                email_config.as_deref(),
+            )?;
             Ok(ExitCode::SUCCESS)
         }
         SftrAction::Normalize {
@@ -553,6 +574,8 @@ fn run_scan(
 
 fn run_missing_collateral(
     input: &Path,
+    tsr_path: Option<&Path>,
+    store_path: Option<&Path>,
     out: &Path,
     email_config_path: Option<&Path>,
 ) -> Result<()> {
@@ -568,14 +591,54 @@ fn run_missing_collateral(
 
     let mut issues: Vec<DqIssue> = outcome.issues;
 
+    // Optional companion TSR for the cross-reference checks: `--tsr`
+    // wins; else the latest persisted SFTR trade state for the
+    // requested UTIs (read-only — auth.083 persists nothing).
+    let tsr_records: Option<Vec<SftrTrStateRecord>> = match (tsr_path, store_path) {
+        (Some(tsr), _) => {
+            let o = read_sftr_tr_state_xml(tsr)
+                .with_context(|| format!("reading companion SFTR TSR {}", tsr.display()))?;
+            info!(
+                tsr = %tsr.display(),
+                tsr_records = o.records.len(),
+                "loaded companion SFTR TSR for cross-reference"
+            );
+            Some(o.records)
+        }
+        (None, Some(store)) => {
+            let store = opendqi_store::open_store(store)
+                .with_context(|| format!("opening history store at {}", store.display()))?;
+            let utis: Vec<&str> = outcome
+                .records
+                .iter()
+                .filter_map(|r| r.uti.as_deref())
+                .map(str::trim)
+                .filter(|u| !u.is_empty())
+                .collect();
+            let prior = store
+                .load_prior_sftr_tr_state(&utis, i64::MAX)
+                .context("loading prior SFTR trade state from history store")?;
+            info!(
+                prior_tsr_records = prior.len(),
+                "loaded prior SFTR trade state from store for cross-reference"
+            );
+            Some(prior)
+        }
+        (None, None) => None,
+    };
+
     let now = Utc::now();
     let ctx = CheckContext {
         thresholds: Thresholds::default(),
         today: now.date_naive(),
         now,
     };
-    let mcr_issues =
-        run_all_missing_collateral(&default_missing_collateral_checks(), &outcome.records, &ctx);
+    let mcr_issues = run_all_missing_collateral(
+        &default_missing_collateral_checks(),
+        &outcome.records,
+        tsr_records.as_deref(),
+        &ctx,
+    );
     info!(
         missing_collateral_issues = mcr_issues.len(),
         "missing-collateral checks run"

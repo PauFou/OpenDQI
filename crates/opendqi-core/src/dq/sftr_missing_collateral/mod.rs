@@ -7,15 +7,24 @@
 //! SFTR reconciliation-statistics family.
 
 use crate::dq::CheckContext;
-use crate::model::{DqDimension, DqIssue, MissingCollateralRecord, Regime, Severity};
+use crate::model::{
+    DqDimension, DqIssue, MissingCollateralRecord, Regime, Severity, SftrTrStateRecord,
+};
 
+mod collateral_state_cross_ref;
 mod missing_collateral_requested;
 mod missing_uti_on_request;
 
+pub use collateral_state_cross_ref::SftrMcrCollateralStateCrossRef;
 pub use missing_collateral_requested::SftrMcrMissingCollateralRequested;
 pub use missing_uti_on_request::SftrMcrMissingUtiOnRequest;
 
 /// An SFTR auth.083 Missing Collateral Request check.
+///
+/// `tsr` is the optional companion SFTR Trade State Report
+/// (`auth.079`) — either an explicit `--tsr` file or the latest
+/// per-UTI state loaded from the history store. `None` when neither
+/// was supplied; cross-referencing checks then no-op.
 pub trait MissingCollateralCheck: Send + Sync {
     /// Stable identifier, e.g. `SFTR.MCR.MISSING_COLLATERAL_REQUESTED`.
     fn id(&self) -> &'static str;
@@ -24,14 +33,21 @@ pub trait MissingCollateralCheck: Send + Sync {
     /// Default severity for issues raised by this check.
     fn severity(&self) -> Severity;
     /// Execute the check against the current batch.
-    fn run(&self, records: &[MissingCollateralRecord], ctx: &CheckContext) -> Vec<DqIssue>;
+    fn run(
+        &self,
+        records: &[MissingCollateralRecord],
+        tsr: Option<&[SftrTrStateRecord]>,
+        ctx: &CheckContext,
+    ) -> Vec<DqIssue>;
 }
 
-/// Default SFTR auth.083 check registry (2 checks).
+/// Default SFTR auth.083 check registry (3 checks; the cross-ref one
+/// no-ops unless a companion/store TSR is supplied).
 pub fn default_missing_collateral_checks() -> Vec<Box<dyn MissingCollateralCheck>> {
     vec![
         Box::new(SftrMcrMissingCollateralRequested),
         Box::new(SftrMcrMissingUtiOnRequest),
+        Box::new(SftrMcrCollateralStateCrossRef),
     ]
 }
 

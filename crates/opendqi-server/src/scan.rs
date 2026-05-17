@@ -985,9 +985,12 @@ fn run_sftr_missing_collateral_server(input: &Path, out_dir: &Path) -> Result<Sc
         now,
     };
     let mut issues = outcome.issues;
+    // Web UI v1: no companion/store cross-ref (CLI-only, FBK
+    // precedent) — the cross-ref check no-ops on `None`.
     issues.extend(run_all_missing_collateral(
         &default_missing_collateral_checks(),
         &outcome.records,
+        None,
         &ctx,
     ));
     finalize_issues(&mut issues, &ctx);

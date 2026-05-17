@@ -198,6 +198,11 @@ fn parse(path: &Path) -> anyhow::Result<MissingCollateralXmlReadOutcome> {
                                 rec.master_agreement_type = Some(v.to_owned());
                             } else if leaf == "Vrsn" && has(&pile, "MstrAgrmt") {
                                 rec.master_agreement_version = Some(v.to_owned());
+                            } else if leaf == "OthrMstrAgrmtDtls" && has(&pile, "MstrAgrmt") {
+                                // Free-text master-agreement note: no
+                                // typed field — preserved verbatim.
+                                rec.raw_fields
+                                    .insert("MstrAgrmt/OthrMstrAgrmtDtls".to_owned(), v.to_owned());
                             }
                         }
                     }
@@ -262,7 +267,7 @@ mod tests {
       <RptgCtrPty><LEI>ABCDEFGHIJKLMNOPQR99</LEI></RptgCtrPty>
       <OthrCtrPty><Lgl><LEI>ZYXWVUTSRQPONMLKJI88</LEI></Lgl></OthrCtrPty>
       <UnqTradIdr>UTI-MCR-0001</UnqTradIdr>
-      <MstrAgrmt><Tp><Tp>GMRA</Tp></Tp><Vrsn>2011</Vrsn></MstrAgrmt>
+      <MstrAgrmt><Tp><Tp>GMRA</Tp></Tp><Vrsn>2011</Vrsn><OthrMstrAgrmtDtls>BILATERAL ANNEX 2020</OthrMstrAgrmtDtls></MstrAgrmt>
     </TxId>
     <TxId>
       <RptgCtrPty><LEI>ABCDEFGHIJKLMNOPQR99</LEI></RptgCtrPty>
@@ -291,10 +296,18 @@ mod tests {
         assert_eq!(r0.uti.as_deref(), Some("UTI-MCR-0001"));
         assert_eq!(r0.master_agreement_type.as_deref(), Some("GMRA"));
         assert_eq!(r0.master_agreement_version.as_deref(), Some("2011"));
-        // Second record: natural-person other CP, no UTI.
+        assert_eq!(
+            r0.raw_fields
+                .get("MstrAgrmt/OthrMstrAgrmtDtls")
+                .map(String::as_str),
+            Some("BILATERAL ANNEX 2020")
+        );
+        // Second record: natural-person other CP, no UTI, no
+        // OthrMstrAgrmtDtls → raw_fields stays empty.
         let r1 = &out.records[1];
         assert_eq!(r1.other_counterparty.as_deref(), Some("NATURAL-PERSON-1"));
         assert!(r1.uti.is_none());
+        assert!(r1.raw_fields.is_empty());
     }
 
     #[test]

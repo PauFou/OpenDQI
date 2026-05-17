@@ -4,7 +4,7 @@
 
 use super::{build_issue, counterparty_label, MissingCollateralCheck};
 use crate::dq::CheckContext;
-use crate::model::{DqDimension, DqIssue, MissingCollateralRecord, Severity};
+use crate::model::{DqDimension, DqIssue, MissingCollateralRecord, Severity, SftrTrStateRecord};
 
 /// Check implementation.
 pub struct SftrMcrMissingCollateralRequested;
@@ -21,7 +21,12 @@ impl MissingCollateralCheck for SftrMcrMissingCollateralRequested {
     fn severity(&self) -> Severity {
         Severity::High
     }
-    fn run(&self, records: &[MissingCollateralRecord], _ctx: &CheckContext) -> Vec<DqIssue> {
+    fn run(
+        &self,
+        records: &[MissingCollateralRecord],
+        _tsr: Option<&[SftrTrStateRecord]>,
+        _ctx: &CheckContext,
+    ) -> Vec<DqIssue> {
         records
             .iter()
             .map(|r| {
@@ -54,7 +59,7 @@ mod tests {
             },
         ];
         let ctx = CheckContext::now_with_defaults();
-        let issues = SftrMcrMissingCollateralRequested.run(&recs, &ctx);
+        let issues = SftrMcrMissingCollateralRequested.run(&recs, None, &ctx);
         assert_eq!(issues.len(), 2);
         assert!(issues.iter().all(|i| i.check_id == CHECK_ID));
         assert_eq!(issues[0].uti.as_deref(), Some("UTI-1"));

@@ -24,6 +24,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stays a documented deferred subset. Docs:
   [`docs/emir-warnings.md`](docs/emir-warnings.md),
   [`docs/auth-messages/emir-auth106.md`](docs/auth-messages/emir-auth106.md).
+- **SFTR `auth.083` trade-state cross-reference + `OthrMstrAgrmtDtls`.**
+  `opendqi sftr missing-collateral` gains `--tsr <auth079>` /
+  `--store <db>` (`--tsr` wins): the requested UTIs are matched
+  against the firm's SFTR trade state, yielding 3 new `SFTR.MCR.*`
+  cross-ref checks — `COLLATERAL_PRESENT_IN_TSR` (Info, likely
+  satisfied / TR lag), `STILL_MISSING_IN_TSR` (High, gap confirmed),
+  `REQUESTED_UTI_NOT_IN_TSR` (High, SFT absent from TR state). No-UTI
+  records are skipped; with neither flag the cross-ref no-ops (output
+  byte-identical). auth.083 persists nothing — the cross-ref is
+  read-only against the existing `sftr_tr_state_records` history (no
+  new table/migration); the web UI keeps the base 2 checks only
+  (cross-ref CLI-only, FBK precedent). The previously-dropped
+  `MstrAgrmt/OthrMstrAgrmtDtls` free-text is now preserved in
+  `raw_fields["MstrAgrmt/OthrMstrAgrmtDtls"]`. SFTR check total
+  62 → 65, workspace 207 → 210. Docs:
+  [`docs/sftr-missing-collateral.md`](docs/sftr-missing-collateral.md),
+  [`docs/auth-messages/sftr-auth083.md`](docs/auth-messages/sftr-auth083.md).
 
 ### Changed
 

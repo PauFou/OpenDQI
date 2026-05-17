@@ -1,11 +1,11 @@
 # SFTR data-quality checks
 
 OpenDQI ships **44 single-batch SFTR checks** (this document —
-including `SFTR.COMP.SECURITY_ID_MISSING`), plus **16 post-TR
-checks** (6 TSR + 5 TAR + 3 reconciliation + 2 missing-collateral),
+including `SFTR.COMP.SECURITY_ID_MISSING`), plus **19 post-TR
+checks** (6 TSR + 5 TAR + 3 reconciliation + 5 missing-collateral),
 plus **2 `SFTR.PSC.*` pre-submission checks** (rejection-profile-driven;
 see [`pre-submission-checks.md`](pre-submission-checks.md)) — live
-total of **62 SFTR checks**, plus
+total of **65 SFTR checks**, plus
 SFTR post-TR intelligence layers — `auth.080` reconciliation,
 `auth.083` missing-collateral, `auth.079` TSR, `auth.052` TAR,
 `auth.052 + auth.079` audit, and CSV-vs-TSR book-reconcile. (SFTR has

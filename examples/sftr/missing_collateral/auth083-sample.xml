@@ -9,8 +9,9 @@
   (SecuritiesFinancingReportingMissingCollateralRequestV02):
   Document > SctiesFincgRptgMssngCollReq > TxId(1..n)/{RptgCtrPty/LEI,
   OthrCtrPty (Lgl/LEI | Ntrl/Id/Id), UnqTradIdr?, MstrAgrmt?}.
-  Schema-shaped, not a fully XSD-valid instance. See
-  docs/auth-messages/sftr-auth083.md.
+  MstrAgrmt/OthrMstrAgrmtDtls (free-text) is preserved verbatim in
+  raw_fields["MstrAgrmt/OthrMstrAgrmtDtls"]. Schema-shaped, not a
+  fully XSD-valid instance. See docs/auth-messages/sftr-auth083.md.
 
   auth.083 is a TR -> firm operational request: the TR asks the firm
   to provide the collateral missing for each listed SFT. Ingested by
@@ -28,7 +29,7 @@
       <RptgCtrPty><LEI>RPTGLEI0000000000001</LEI></RptgCtrPty>
       <OthrCtrPty><Lgl><LEI>OTHRLEI0000000000002</LEI></Lgl></OthrCtrPty>
       <UnqTradIdr>OPENDQI-SFTR-MCR-0001</UnqTradIdr>
-      <MstrAgrmt><Tp><Tp>GMRA</Tp></Tp><Vrsn>2011</Vrsn></MstrAgrmt>
+      <MstrAgrmt><Tp><Tp>GMRA</Tp></Tp><Vrsn>2011</Vrsn><OthrMstrAgrmtDtls>BILATERAL ANNEX 2020</OthrMstrAgrmtDtls></MstrAgrmt>
     </TxId>
 
     <!-- 2. Natural-person other CP, no UTI.

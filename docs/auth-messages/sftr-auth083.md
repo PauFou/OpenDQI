@@ -63,6 +63,9 @@ auth.106) there is no `*_NO_RECORDS` info path.
 | `master_agreement_version` | `TxId/MstrAgrmt/Vrsn` |
 | `regime` | `Sftr` |
 
+`MstrAgrmt/OthrMstrAgrmtDtls` (free-text master-agreement note) is
+preserved verbatim in `raw_fields["MstrAgrmt/OthrMstrAgrmtDtls"]`.
+
 Reachable checks (one record = one missing-collateral request):
 
 - `SFTR.MCR.MISSING_COLLATERAL_REQUESTED` — one issue per `TxId`
@@ -70,32 +73,47 @@ Reachable checks (one record = one missing-collateral request):
 - `SFTR.MCR.MISSING_UTI_ON_REQUEST` — fires when `UnqTradIdr` is absent
   (Validity, High): the request cannot be tied to a booked SFT.
 
+### Cross-reference vs. the firm's SFTR trade state (optional)
+
+With `--tsr <auth.079>` (a companion SFTR Trade State Report) or
+`--store <db>` (the latest persisted SFTR trade state for the
+requested UTIs), each requested UTI is matched against the firm's TR
+state. `--tsr` takes precedence when both are given (mirrors
+`sftr tr-activity-scan`). Records with no UTI are skipped (already
+covered by `MISSING_UTI_ON_REQUEST`); with neither flag these checks
+no-op (output byte-identical):
+
+- `SFTR.MCR.COLLATERAL_PRESENT_IN_TSR` — Consistency, Info: the TR
+  state already shows collateral (`collateral_value > 0` or a
+  `collateral_isin`) — the request is likely satisfied / TR lag.
+- `SFTR.MCR.STILL_MISSING_IN_TSR` — Consistency, High: the SFT is in
+  the TR state but still has no collateral — the gap is confirmed.
+- `SFTR.MCR.REQUESTED_UTI_NOT_IN_TSR` — Consistency, High: the
+  requested SFT is absent from the firm's TR state.
+
+auth.083 is a transient request — it persists nothing; the cross-ref
+is **read-only** against the existing `sftr_tr_state_records` history
+(no new store table / migration).
+
 See [`../sftr-missing-collateral.md`](../sftr-missing-collateral.md).
 
 ## Fields ignored / known unsupported branches
 
-`MstrAgrmt/OthrMstrAgrmtDtls` (free-text master-agreement note — kept
-in neither a typed field nor `raw_fields` in v1). All three identifier
-*choices* are honoured (`RptgCtrPty/LEI`, `OthrCtrPty/Lgl/LEI`,
-`OthrCtrPty/Ntrl/Id/Id`); no other branches exist in this small
-message.
+All three identifier *choices* are honoured (`RptgCtrPty/LEI`,
+`OthrCtrPty/Lgl/LEI`, `OthrCtrPty/Ntrl/Id/Id`) and
+`MstrAgrmt/OthrMstrAgrmtDtls` is preserved in `raw_fields`; no other
+branches exist in this small message.
 
 ### Documented limitations
 
-- **No cross-referencing in v1.** The requested UTIs are surfaced as
-  issues but are not (yet) joined against the SFTR history store or a
-  companion TSR to confirm whether the firm later supplied the
-  collateral. That enrichment is a possible later milestone; v1 is the
-  faithful parse + the two `SFTR.MCR.*` checks (same scope discipline
-  as the initial auth.080 / auth.106 increments).
-- **`OthrMstrAgrmtDtls` is dropped.** The scalar record keeps only the
-  master-agreement *type code* and *version*; the free-text "other
-  details" string has no consumer and is intentionally not retained.
 - **Natural-person other counterparty** is captured as the raw
   `Ntrl/Id/Id` text (no name/birth structure — the schema only carries
   a `Max50Text` id here).
-- **No `--store` / no `--prior`.** This is a stateless request scan
-  (mirrors `sftr reconcile`'s non-store shape, without persistence).
+- **Cross-ref is CLI-only.** The web UI v1 runs the parse + the two
+  base `SFTR.MCR.*` checks only; the `--tsr`/`--store` cross-reference
+  is CLI-only (same precedent as the EMIR feedback store checks).
+- **No `--prior` trend.** The cross-ref is a point-in-time match
+  against the latest TR state, not a multi-batch trend.
 - **Not a full XSD validation** — same documented "subset" stance as
   the other messages; a fully XSD-valid conformance instance
   (`examples/sftr/conformance/auth083-valid.xml`) is gated by

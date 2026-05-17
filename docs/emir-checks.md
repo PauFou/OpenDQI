@@ -30,7 +30,7 @@ margin-activity, **8 MSR** margin-state, **5 lifecycle** (cross-batch),
 (auth.091), **10 WRN** data-quality warnings (auth.106 — 5
 report-level + 5 per-counterparty), and **2 PSC** pre-submission
 (rejection-profile driven, auth.092 → next scan) checks — see the
-dedicated docs. **Total live EMIR catalog: 145 checks**, plus 62 SFTR
+dedicated docs. **Total live EMIR catalog: 145 checks**, plus 65 SFTR
 counterparts (`docs/sftr-checks.md`).
 
 Severity scale: `info` < `warning` < `high` < `critical`.

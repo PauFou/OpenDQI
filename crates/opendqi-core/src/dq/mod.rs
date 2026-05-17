@@ -1285,19 +1285,23 @@ pub fn run_all_warnings_counterparty(
 mod sftr_missing_collateral;
 
 pub use sftr_missing_collateral::{
-    default_missing_collateral_checks, MissingCollateralCheck, SftrMcrMissingCollateralRequested,
-    SftrMcrMissingUtiOnRequest,
+    default_missing_collateral_checks, MissingCollateralCheck, SftrMcrCollateralStateCrossRef,
+    SftrMcrMissingCollateralRequested, SftrMcrMissingUtiOnRequest,
 };
 
-/// Run every SFTR auth.083 Missing Collateral Request check.
+/// Run every SFTR auth.083 Missing Collateral Request check. `tsr` is
+/// an optional companion SFTR Trade State Report (`--tsr` file or the
+/// latest per-UTI state from the history store) for the cross-ref
+/// checks; `None` ⇒ those checks no-op.
 pub fn run_all_missing_collateral(
     checks: &[Box<dyn MissingCollateralCheck>],
     records: &[MissingCollateralRecord],
+    tsr: Option<&[SftrTrStateRecord]>,
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
     let mut issues: Vec<DqIssue> = checks
         .par_iter()
-        .flat_map_iter(|c| c.run(records, ctx))
+        .flat_map_iter(|c| c.run(records, tsr, ctx))
         .collect();
     finalize_issues(&mut issues, ctx);
     issues
