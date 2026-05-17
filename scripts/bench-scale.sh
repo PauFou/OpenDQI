@@ -63,6 +63,7 @@ else
     MT_ENV=()
 fi
 PHASE_ROWS=""
+PEAK_ROWS=""
 
 echo
 echo "| regime | records | wall (s) | peak RSS |"
@@ -99,6 +100,18 @@ for regime in emir sftr; do
                     printf "| %s | %s | %s | %s |\n", r, n, ph, v
                 }' "$tf")"
             PHASE_ROWS+="$rows"$'\n'
+            # True peak: the sampler thread's last line catches a
+            # transient that spikes/frees *between* boundary samples.
+            prow="$(awk -v r="$regime" -v n="${recs:-$n}" '
+                /^MEMTRACE peak / {
+                    split($3, a, "="); rb = a[2]
+                    split($4, b, "="); ms = b[2]
+                    split($5, c, "="); ph = c[2]
+                    if (rb == "unknown") v = "n/a"
+                    else v = sprintf("%.0f MiB", rb / 1048576)
+                    printf "| %s | %s | %s | %s | %s |\n", r, n, v, ms, ph
+                }' "$tf")"
+            PEAK_ROWS+="$prow"$'\n'
         fi
     done
 done
@@ -111,6 +124,13 @@ if [[ "$MEMTRACE" == 1 ]]; then
     echo "| regime | records | phase | RSS |"
     echo "|---|---|---|---|"
     printf '%s' "$PHASE_ROWS" | grep -v '^$' || true
+    echo
+    echo "True-peak attribution (background sampler; catches a"
+    echo "transient freed *between* boundaries — see docs/performance.md):"
+    echo
+    echo "| regime | records | peak RSS | at (ms) | phase live at peak |"
+    echo "|---|---|---|---|---|"
+    printf '%s' "$PEAK_ROWS" | grep -v '^$' || true
 fi
 
 echo

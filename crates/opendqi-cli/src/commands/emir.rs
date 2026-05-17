@@ -499,6 +499,10 @@ fn run_scan(
 
     let validator = xsd_path.map(|p| ExternalXmllintValidator::new(p.to_path_buf()));
     crate::memtrace::mem_trace("post_discovery");
+    // Sampler covers parse→report (discovery is sub-second / ~MiB; the
+    // GB-scale peak we hunt is downstream). RAII: named binding so it
+    // lives to fn end; Drop stops+joins+prints the true-peak line.
+    let _peak_sampler = crate::memtrace::start_peak_sampler();
 
     let mut records: Vec<EmirRecord> = Vec::new();
     let mut format_issues: Vec<DqIssue> = Vec::new();
@@ -619,12 +623,16 @@ fn run_scan(
     crate::memtrace::mem_trace("post_finalize");
 
     let summary = build_summary(&records, &issues, &inputs, started_at, Utc::now());
+    crate::memtrace::mem_trace("post_summary");
 
     std::fs::create_dir_all(out)
         .with_context(|| format!("creating output directory {}", out.display()))?;
     write_summary_json(&out.join("summary.json"), &summary)?;
+    crate::memtrace::mem_trace("post_write_summary_json");
     write_issues_csv(&out.join("issues.csv"), &issues)?;
+    crate::memtrace::mem_trace("post_write_issues_csv");
     write_report_html(&out.join("report.html"), &summary, &issues, &sources)?;
+    crate::memtrace::mem_trace("post_write_report_html");
     if validator.is_some() {
         write_xsd_errors_csv(&out.join("xsd_errors.csv"), &xsd_rows)?;
     }

@@ -222,6 +222,81 @@ the M0.14 lesson). The instrumentation is opt-in and output-invariant
 (unset env ⇒ byte-identical scan output; golden / XSD-conformance
 unchanged).
 
+## True-peak attribution (M0.16)
+
+M0.15 localized the EMIR peak only to "somewhere in finalize→report"
+— the 6-point boundary trace structurally cannot see a transient
+freed *between* samples. M0.16 adds (a) **four finer markers**
+(`post_summary`, `post_write_summary_json`, `post_write_issues_csv`,
+`post_write_report_html`) and (b) a **background peak sampler** that
+polls RSS (default 200 ms; `OPENDQI_MEM_TRACE_MS`) and reports the
+run **maximum** plus the phase marker live at that instant — catching
+a transient the boundary trace misses. Captured 2026-05-17, same
+Apple-Silicon box, release `lto=thin`, 100 ms sampler.
+**Indicative, not a contract.**
+
+Finer boundary trace (current RSS, MiB):
+
+| regime | recs | parse | checks | lifecycle | **finalize** | summary | wr_json | wr_csv | wr_html | report |
+|---|---|---|---|---|---|---|---|---|---|---|
+| emir | 100k | 238 | 882 | 882 | 882 | 877 | 878 | 771 | 781 | 781 |
+| emir | 1M | 179 | 1471 | 1471 | **3819** | 3819 | 3819 | 1585 | 2492 | 2492 |
+| sftr | 100k | 205 | 335 | 335 | 335 | 335 | 335 | 337 | 338 | 338 |
+| sftr | 1M | 1135 | 2241 | 2241 | 2241 | 2241 | 2242 | 1916 | 1924 | 1924 |
+
+Background sampler — true peak vs. independent `/usr/bin/time -l`:
+
+| regime | recs | sampler peak | OS max | phase live at peak |
+|---|---|---|---|---|
+| emir | 100 000 | 897 MiB | 914 | post_parse (during checks) |
+| emir | 1 000 000 | **3901 MiB** | 3998 | post_write_summary_json (≈ entering write_issues_csv) |
+| sftr | 100 000 | 338 MiB | 338 | post_report |
+| sftr | 1 000 000 | 2432 MiB | 2432 | post_parse (during checks) |
+
+**Resolved finding — the EMIR 1M culprit is `finalize_issues`:**
+
+- Resident **jumps 1471 → 3819 MiB across `finalize_issues`** (a
+  **persistent ~2.35 GiB**, not a brief spike — it stays 3819 through
+  `post_summary`/`post_write_summary_json`), then **`write_issues_csv`
+  frees ~2.2 GiB** (3819 → 1585). The sampler's true peak (3901)
+  ≈ the OS max (3998) and is attributed to the finalize→
+  `write_issues_csv` span. So `finalize_issues` (the global
+  severity-override + sort over the full `Vec<DqIssue>`) **roughly
+  doubles the working set at scale**; the writes are secondary
+  (`write_issues_csv` is actually where memory is *released*).
+- **Scale-dependent**: at 100k the finalize jump is **absent**
+  (882 → 882). The blow-up appears only at 1M ⇒ an O(n)/clone-shaped
+  cost proportional to issue count (millions of `DqIssue` at 1M) —
+  the precise hypothesis the next increment tests against
+  `finalize_issues`' implementation.
+- **SFTR**: confirms M0.15 — true peak (2432) occurs while
+  `phase=post_parse` is live, i.e. *during the check phase*: the
+  `Vec<SftrRecord>` (post_parse 1135) plus the accumulating
+  `Vec<DqIssue>`. `finalize_issues` is flat for SFTR (2241 → 2241):
+  the EMIR blow-up is **not** intrinsic to finalize but scales with
+  the EMIR issue volume specifically.
+
+**Method validated / honest limits:** the sampler max (3901 MiB)
+independently agrees with `/usr/bin/time -l` (3998 MiB) within ~2 %,
+and it correctly split the span the M0.15 trace could not. Boundary
+samples are still points (the `post_finalize` 3819 is what finalize
+leaves *resident* — a persistent climb, more actionable than a
+spike); the 100 ms sampler and its own macOS `ps` children perturb
+the measured process slightly (the ~2 % sampler-vs-OS gap bounds it).
+
+**Next increment (data-driven):** bound `finalize_issues` for EMIR —
+inspect `crates/opendqi-core/src/dq/mod.rs::finalize_issues` for the
+~2.35 GiB scale allocation (a full-issue clone / O(n) auxiliary in
+the severity-override or sort over millions of `DqIssue`) and remove
+it (e.g. sort/override in place; avoid an allocating sort key). SFTR
+remains the separately-scoped chunk/spill (records+issues
+co-residence; whole-batch checks are the hard constraint).
+
+No optimization was applied in M0.16 (measurement only, by design —
+the M0.14/M0.15 discipline). Opt-in and output-invariant: env unset
+⇒ no sampler thread, markers are no-ops ⇒ byte-identical scan output
+(golden / XSD-conformance unchanged); not in preflight/CI.
+
 ## Conventions
 
 - All new checks must be `Send + Sync` (compiler-enforced at the

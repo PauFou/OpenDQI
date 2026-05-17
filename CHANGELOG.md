@@ -35,6 +35,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unset ⇒ byte-identical scan output (golden / XSD-conformance
   unchanged); not in preflight/CI. Measurement only — no optimization.
 
+- **Phase-correlated peak RSS sampler — EMIR culprit localized
+  (tooling).** Extends `OPENDQI_MEM_TRACE` with four finer report-span
+  markers and a background sampler (default 200 ms,
+  `OPENDQI_MEM_TRACE_MS`) that catches a transient freed *between*
+  boundary samples and names the phase live at the run maximum.
+  Resolved finding (in [`docs/performance.md`](docs/performance.md)):
+  **the EMIR 1M peak is `finalize_issues`** — resident jumps
+  1471→3819 MiB across it (a *persistent* ~2.35 GiB, scale-dependent:
+  absent at 100k), then `write_issues_csv` *frees* ~2.2 GiB; the
+  sampler peak (3901 MiB) independently matches `/usr/bin/time`
+  (3998 MiB) within ~2 %. SFTR confirms M0.15 (records+issues
+  co-residence during checks). Drives the next, optimization
+  increment. Env-gated/output-invariant; not in preflight/CI.
+  Measurement only — no optimization.
+
 ### Changed
 
 ### Removed
