@@ -151,6 +151,77 @@ loop. Peak RSS, not throughput, is the binding constraint for
 the primary input for the deferred memory-bounded / streaming and
 incremental-scan increments.
 
+## Phase attribution (M0.15)
+
+M0.13 measured only the **total** peak. M0.14 then *guessed* the
+contributor (per-record `raw_fields`) and was reverted when a probe
+proved it ≈ 0 bytes on this workload. M0.15 therefore **measures
+which phase owns the peak** before any optimization, via opt-in
+phase-boundary instrumentation (`OPENDQI_MEM_TRACE`, surfaced by
+`./scripts/bench-scale.sh --mem-trace`). The trace prints **current**
+RSS sampled at six `run_scan` boundaries; `/usr/bin/time -l` still
+reports the run **maximum**. Captured 2026-05-17, same Apple-Silicon
+box, release `lto=thin`. **Indicative, not a contract.**
+
+| regime | records | total peak | post_discovery | post_parse | post_checks | post_lifecycle_presub | post_finalize | post_report |
+|---|---|---|---|---|---|---|---|---|
+| emir | 100 000 | 808 MiB | 5 | 225 | 784 | 780 | 777 | 543 |
+| emir | 1 000 000 | **3423 MiB** | 5 | 149 | 715 | 715 | **1305** | 853 |
+| sftr | 100 000 | 346 MiB | 6 | 205 | 338 | 338 | 338 | 343 |
+| sftr | 1 000 000 | **2189 MiB** | 5 | 834 | **1992** | 1992 | 1992 | 874 |
+
+(boundary columns are *current* RSS in MiB at that point.)
+
+**Key finding — the dominant phase differs by regime:**
+
+- **SFTR 1M**: total peak (2189) ≈ `post_checks` current (1992). The
+  peak is the **parse + checks steady state** — the resident
+  `Vec<SftrRecord>` (post_parse already 834) plus the accumulating
+  `Vec<DqIssue>` (checks add ~1.2 GiB). It then **drops to 874 at
+  post_report** (the finalize/report phase is cheap for SFTR — the
+  big Vecs are still resident but no large transient is added).
+- **EMIR 1M**: total peak (**3423**) is **far above every boundary
+  sample** (highest is `post_finalize` 1305). The persistent resident
+  climbs parse(149) → checks(715) → finalize(**1305**) then **falls
+  to 853 at post_report** — so the 3423 maximum is a **large
+  transient (~2 GiB above the post_finalize resident) that occurs
+  *between* `post_finalize` and `post_report` and is released before
+  the post_report sample**: i.e. inside `finalize_issues` (global
+  severity-override + sort over the full `Vec<DqIssue>`) and/or the
+  three `write_*` calls. The 6-point trace **cannot split finalize
+  vs. report** — that span is the next increment's target and needs
+  finer probes (it does *not* implicate the records `Vec`, which is
+  flat from post_checks on and freed regardless at report).
+
+**Honest limitation:** boundary samples are *points*; a transient
+that spikes and is freed *between* two samples (the EMIR 1M case) is
+invisible to the 6-point trace except as a max/sample gap. This is
+expected and is exactly the signal that localizes the next probe —
+not a defect in the method.
+
+**Direction for the next increment (data-driven, not guessed):**
+
+1. EMIR: add finer instrumentation *inside* the finalize→report span
+   (around `finalize_issues` and each of `write_summary_json` /
+   `write_issues_csv` / `write_report_html`) to pin the ~2 GiB
+   transient, then bound it (e.g. stream `issues.csv` row-by-row
+   without the intermediate sorted `Vec`, avoid a full-issue clone in
+   finalize/sort).
+2. SFTR: the binding constraint is the **steady-state working set**
+   (`Vec<*Record>` + `Vec<DqIssue>` co-resident through checks). The
+   `records` Vec is provably dead after the check passes (the
+   `write_*` writers do not take `&records`) — freeing it before
+   report-write is a candidate, but the trace shows report is already
+   the *low* point, so the real lever is not holding records **and**
+   all issues **and** the report build simultaneously; that needs the
+   chunked-checks / spill design (whole-batch checks —
+   `DUPLICATE_UTI`, lifecycle — are the documented hard constraint).
+
+No optimization was applied in M0.15 (measurement only, by design —
+the M0.14 lesson). The instrumentation is opt-in and output-invariant
+(unset env ⇒ byte-identical scan output; golden / XSD-conformance
+unchanged).
+
 ## Conventions
 
 - All new checks must be `Send + Sync` (compiler-enforced at the

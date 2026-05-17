@@ -23,6 +23,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   check / model / output / count change; no optimization yet (the
   baseline drives the deferred streaming / incremental-scan work).
 
+- **Phase-boundary RSS attribution for `scan` (tooling).** Opt-in
+  `OPENDQI_MEM_TRACE` (surfaced by `scripts/bench-scale.sh
+  --mem-trace`) samples current RSS at six `run_scan` boundaries
+  (discovery / parse / checks / lifecycle+presub / finalize / report).
+  Measured finding (in [`docs/performance.md`](docs/performance.md)):
+  the dominant phase **differs by regime** — SFTR 1M peaks at the
+  parse+checks steady state (~2.0 GiB), EMIR 1M peaks as a ~2 GiB
+  transient inside the finalize→report span (total 3.4 GiB, far above
+  any boundary sample). Replaces M0.14's reverted *guess*. Env-gated:
+  unset ⇒ byte-identical scan output (golden / XSD-conformance
+  unchanged); not in preflight/CI. Measurement only — no optimization.
+
 ### Changed
 
 ### Removed

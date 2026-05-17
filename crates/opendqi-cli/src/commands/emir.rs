@@ -498,6 +498,7 @@ fn run_scan(
     };
 
     let validator = xsd_path.map(|p| ExternalXmllintValidator::new(p.to_path_buf()));
+    crate::memtrace::mem_trace("post_discovery");
 
     let mut records: Vec<EmirRecord> = Vec::new();
     let mut format_issues: Vec<DqIssue> = Vec::new();
@@ -556,6 +557,8 @@ fn run_scan(
         }
     }
 
+    crate::memtrace::mem_trace("post_parse");
+
     let now = Utc::now();
     let ctx = CheckContext {
         thresholds,
@@ -566,6 +569,7 @@ fn run_scan(
     let checks = default_checks();
     let mut issues = run_all(&checks, &records, &ctx);
     issues.extend(format_issues);
+    crate::memtrace::mem_trace("post_checks");
 
     if let Some(store_path) = store_path {
         let mut store = opendqi_store::open_store(store_path)
@@ -609,7 +613,10 @@ fn run_scan(
         issues.extend(psc_issues);
     }
 
+    crate::memtrace::mem_trace("post_lifecycle_presub");
+
     finalize_issues(&mut issues, &ctx);
+    crate::memtrace::mem_trace("post_finalize");
 
     let summary = build_summary(&records, &issues, &inputs, started_at, Utc::now());
 
@@ -621,6 +628,7 @@ fn run_scan(
     if validator.is_some() {
         write_xsd_errors_csv(&out.join("xsd_errors.csv"), &xsd_rows)?;
     }
+    crate::memtrace::mem_trace("post_report");
 
     if let Some(path) = email_config_path {
         let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;

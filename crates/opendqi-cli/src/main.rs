@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 
 mod commands;
+mod memtrace;
 
 use std::process::ExitCode;
 
