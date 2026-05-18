@@ -16,6 +16,9 @@ use crate::model::{
 mod aggregate;
 pub use aggregate::IssueAggregator;
 
+mod sink;
+pub use sink::{SortedIssueSink, SortedIssues};
+
 mod abnormal_maturity;
 mod action_event_compatibility;
 mod action_type_enum;
@@ -442,34 +445,41 @@ pub fn run_all(
     collect_finalize(checks, ctx, |c| c.run(records, ctx))
 }
 
-/// Sort issues into a deterministic **content** total order: by
+/// Deterministic **content** total order over a `DqIssue`: by
 /// `check_id`, `source_file`, `record_id` (the historical gross
-/// order), then `uti`, `field`, `value`, `message`, `evidence` as
-/// tiebreakers so the result is fully determined by issue content —
-/// not by the (parallel) production order. Two issues that compare
-/// equal on every field are byte-identical in `issues.csv`, so their
-/// relative order is immaterial.
+/// order), then `uti`, `field`, `value`, `message`, `evidence`.
+/// `regime`/`severity`/`dimension` are intentionally excluded — two
+/// issues equal on the eight compared fields are byte-identical in
+/// `issues.csv`, so their relative order is immaterial (exactly as
+/// `sort_unstable_by` already leaves such pairs).
+///
+/// **Single source of truth** for `issues.csv` ordering: used by
+/// both [`sort_issues`] and the streaming `SortedIssueSink` k-way
+/// merge so the in-memory sort and the external merge cannot drift.
+pub(crate) fn issue_cmp(a: &DqIssue, b: &DqIssue) -> std::cmp::Ordering {
+    a.check_id
+        .cmp(&b.check_id)
+        .then_with(|| a.source_file.cmp(&b.source_file))
+        .then_with(|| a.record_id.cmp(&b.record_id))
+        .then_with(|| a.uti.cmp(&b.uti))
+        .then_with(|| a.field.cmp(&b.field))
+        .then_with(|| a.value.cmp(&b.value))
+        .then_with(|| a.message.cmp(&b.message))
+        .then_with(|| a.evidence.cmp(&b.evidence))
+}
+
+/// Sort issues into the deterministic content order ([`issue_cmp`]).
 ///
 /// Uses `sort_unstable_by` deliberately: the stable sort allocates an
 /// O(n) scratch buffer of `size_of::<DqIssue>()` per element (≈ the
 /// 2.35 GiB observed at the EMIR 1M `finalize_issues`); the unstable
-/// sort is fully in place. Because the comparator is a total order on
-/// content, dropping stability does not change the output.
+/// sort is fully in place. Because [`issue_cmp`] is a total order on
+/// the compared content, dropping stability does not change output.
 ///
 /// Public so CLI / server runners can post-process issue lists they
 /// assemble themselves.
 pub fn sort_issues(issues: &mut [DqIssue]) {
-    issues.sort_unstable_by(|a, b| {
-        a.check_id
-            .cmp(&b.check_id)
-            .then_with(|| a.source_file.cmp(&b.source_file))
-            .then_with(|| a.record_id.cmp(&b.record_id))
-            .then_with(|| a.uti.cmp(&b.uti))
-            .then_with(|| a.field.cmp(&b.field))
-            .then_with(|| a.value.cmp(&b.value))
-            .then_with(|| a.message.cmp(&b.message))
-            .then_with(|| a.evidence.cmp(&b.evidence))
-    });
+    issues.sort_unstable_by(issue_cmp);
 }
 
 /// Apply `thresholds.severity_overrides` in-place: any issue whose

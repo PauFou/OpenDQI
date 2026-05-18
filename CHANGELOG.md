@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`SortedIssueSink` + k-way-merge engine — unwired (Milestone
+  0.22; Increment B of the streaming issue pipeline).** New
+  `opendqi_core::{SortedIssueSink, SortedIssues}`: buffers issues
+  (applying severity overrides + online `IssueAggregator` tally as
+  they arrive), spills `issue_cmp`-sorted JSON-Lines runs to a temp
+  dir once a buffer threshold is hit, and `finish()` yields the
+  `ScanSummary` plus an iterator that emits every issue in exact
+  `issue_cmp` order via a `BinaryHeap` k-way merge — the no-spill
+  path being *literally* `finalize_issues` (byte-identical), the
+  spill path finalize-equivalent (same multiset, non-decreasing
+  under `issue_cmp`). RAII temp-dir cleanup. The 8-field comparator
+  is extracted to a single `issue_cmp` shared by `sort_issues` and
+  the merge so they cannot drift (output-invariant refactor). No new
+  crate (`serde_json` was already a workspace dep). **Dormant** —
+  not wired into any command (Increment C flips EMIR `run_scan` and
+  measures); zero behaviour / golden / conformance change; 11 new
+  exhaustive equivalence/RAII tests.
+
 - **Large-input scale benchmark + end-to-end memory/time harness
   (tooling).** First increment of the performance/scale work
   ("measure before optimize"): the `check_loop` criterion bench now

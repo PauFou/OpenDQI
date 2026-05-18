@@ -18,7 +18,10 @@ pub mod model;
 pub mod scoring;
 
 pub use config::Thresholds;
-pub use dq::{default_checks, default_sftr_checks, Check, IssueAggregator, SftrCheck};
+pub use dq::{
+    default_checks, default_sftr_checks, Check, IssueAggregator, SftrCheck, SortedIssueSink,
+    SortedIssues,
+};
 pub use model::{
     DqDimension, DqIssue, EmirRecord, EvidenceItem, FeedbackRecord, FeedbackType,
     MarginActivityRecord, MarginStateRecord, MissingCollateralRecord, ReconStatsRecord,
