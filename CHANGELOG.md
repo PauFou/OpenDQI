@@ -52,6 +52,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **In-place issue sort — eliminates the `finalize_issues`
+  stable-sort allocation (Milestone 0.17; honest result).** First
+  optimisation of the perf chantier. `sort_issues` now uses
+  `sort_unstable_by` (ipnsort, fully in place) instead of the stable
+  `sort_by` (driftsort, O(N) scratch of `size_of::<DqIssue>()`/elem),
+  with the comparator extended to a **deterministic content total
+  order** (`check_id, source_file, record_id, uti, field, value,
+  message, evidence`). Measured (in
+  [`docs/performance.md`](docs/performance.md)): the EMIR 1M
+  *persistent post-finalize footprint drops 3819 → 1530 MiB
+  (−2.3 GiB)* — but **total peak RSS is unchanged (~4 GiB)**: the
+  binding peak relocated to a previously-masked **report-write
+  transient** (next increment's target). Shipped as a correct,
+  necessary structural fix — **not** a peak win (it isn't one yet);
+  SFTR unaffected. **Behaviour:** `issues.csv` tie-order is now
+  content-deterministic (was the parallel-insertion artifact); a
+  single golden (`sftr-reconcile.issues.csv`) regenerated — a proven
+  pure permutation (identical row set, zero rows added/removed/
+  modified, `*.summary.json` byte-unchanged). `EvidenceItem` gains a
+  derived `PartialOrd, Ord` (additive, not serialised).
+
 ### Removed
 
 ## [0.9.0] - 2026-05-17

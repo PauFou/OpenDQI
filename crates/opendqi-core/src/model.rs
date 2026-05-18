@@ -90,7 +90,7 @@ impl std::fmt::Display for DqDimension {
 /// `source_line` when the record's index in its source file is
 /// known. All fields are optional so checks can populate only what
 /// is meaningful.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct EvidenceItem {
     /// Field name the evidence relates to.
     pub field: String,

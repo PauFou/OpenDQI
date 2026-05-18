@@ -297,6 +297,70 @@ the M0.14/M0.15 discipline). Opt-in and output-invariant: env unset
 ⇒ no sampler thread, markers are no-ops ⇒ byte-identical scan output
 (golden / XSD-conformance unchanged); not in preflight/CI.
 
+## M0.17 — first optimization: in-place issue sort (honest result)
+
+The chantier's **first optimization**. Root cause (read, not
+guessed): `finalize_issues` → `sort_issues` used the **stable**
+`slice::sort_by`, whose driftsort allocates an O(N) scratch buffer of
+`size_of::<DqIssue>()` per element. Fix: `sort_unstable_by` (ipnsort,
+fully in place) with the comparator extended to a **deterministic
+content total order** (`check_id, source_file, record_id` then `uti,
+field, value, message, evidence`) so dropping stability does not make
+the output nondeterministic. Captured 2026-05-18, same box, release,
+100 ms sampler.
+
+EMIR 1M, M0.16 (before) → M0.17 (after), boundary RSS (MiB):
+
+| phase | before | after |
+|---|---|---|
+| post_checks | 1471 | 2357 † |
+| post_finalize | 3819 | 3648 |
+| **post_summary** | **3819** | **1530** |
+| post_write_summary_json | 3819 | 1530 |
+| post_write_issues_csv | 1585 | 1166 |
+| post_report | 853 | 2173 |
+| **true peak (sampler)** | **3901** | **4506** |
+| wall (s) | 49.8 | 69.1 † |
+
+† `post_checks` runs identical code before/after; the 1471↔2357 and
+49.8↔69.1 swings are the **run-to-run variance** band on this box
+(the total-peak series across M0.13–0.17 is ~3.4–4.5 GiB) — wall
+delta is **inconclusive**, possibly the heavier 8-field comparator.
+
+**Honest finding — partial success, headline unmoved:**
+
+- The fix **worked at the targeted level**: the *persistent
+  post-finalize footprint collapsed 3819 → 1530 MiB (−2.3 GiB)*. The
+  stable-sort O(N) scratch was real and is gone (the M0.16 root
+  cause was correct *as far as it went*).
+- **But total peak RSS did not improve** (~4 GiB, within noise).
+  Classic optimisation whack-a-mole: the binding peak **relocated**
+  to a previously-masked transient in the **report-write phase** —
+  the sampler now reports the true peak (4506 MiB) at `post_report`
+  (write_report_html), where M0.16 had reported it inside the
+  finalize span. M0.16's "finalize is THE culprit" was incomplete:
+  finalize was *a* ~2.3 GiB contributor, **not** the peak ceiling.
+- **SFTR unaffected** (as predicted): SFTR 1M `post_finalize`
+  (1934) ≈ `post_checks` (1934) — no finalize jump; its peak remains
+  the parse+checks co-residence. The EMIR blow-up was EMIR-issue-
+  volume-specific, not intrinsic to `finalize_issues`.
+
+**Output:** `issues.csv` tie-order is now **content-deterministic**
+(more principled than the prior parallel-insertion artifact;
+satisfies "deterministic outputs / stable issue IDs"). Exactly one of
+34 goldens changed (`sftr-reconcile.issues.csv`): a **proven pure
+permutation** — identical line set, zero rows added/removed/modified,
+3 same-`(check_id,source_file,record_id)` `FIELD_MISMATCH` rows
+re-ordered by `field`; every `*.summary.json` byte-unchanged.
+
+This is shipped as a **correct, deterministic, necessary structural
+fix — not a peak win** (it isn't one yet). The next increment targets
+the now-binding **report-write transient** (`write_report_html` /
+the finalize→report span); only then is an EMIR peak reduction
+expected. Discipline reaffirmed (M0.14/M0.15): the local hypothesis
+was right but the *headline* benefit the measurement was meant to
+confirm did not materialise — said plainly, not spun.
+
 ## Conventions
 
 - All new checks must be `Send + Sync` (compiler-enforced at the

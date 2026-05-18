@@ -398,15 +398,33 @@ pub fn run_all(
     issues
 }
 
-/// Sort issues deterministically: by `check_id`, then `source_file`,
-/// then `record_id`. Public so CLI / server runners can post-process
-/// issue lists they assemble themselves.
+/// Sort issues into a deterministic **content** total order: by
+/// `check_id`, `source_file`, `record_id` (the historical gross
+/// order), then `uti`, `field`, `value`, `message`, `evidence` as
+/// tiebreakers so the result is fully determined by issue content —
+/// not by the (parallel) production order. Two issues that compare
+/// equal on every field are byte-identical in `issues.csv`, so their
+/// relative order is immaterial.
+///
+/// Uses `sort_unstable_by` deliberately: the stable sort allocates an
+/// O(n) scratch buffer of `size_of::<DqIssue>()` per element (≈ the
+/// 2.35 GiB observed at the EMIR 1M `finalize_issues`); the unstable
+/// sort is fully in place. Because the comparator is a total order on
+/// content, dropping stability does not change the output.
+///
+/// Public so CLI / server runners can post-process issue lists they
+/// assemble themselves.
 pub fn sort_issues(issues: &mut [DqIssue]) {
-    issues.sort_by(|a, b| {
+    issues.sort_unstable_by(|a, b| {
         a.check_id
             .cmp(&b.check_id)
             .then_with(|| a.source_file.cmp(&b.source_file))
             .then_with(|| a.record_id.cmp(&b.record_id))
+            .then_with(|| a.uti.cmp(&b.uti))
+            .then_with(|| a.field.cmp(&b.field))
+            .then_with(|| a.value.cmp(&b.value))
+            .then_with(|| a.message.cmp(&b.message))
+            .then_with(|| a.evidence.cmp(&b.evidence))
     });
 }
 
@@ -1365,5 +1383,79 @@ mod tests {
         let mut issues = vec![issue("ANY", Severity::High)];
         apply_severity_overrides(&mut issues, &t);
         assert_eq!(issues[0].severity, Severity::High);
+    }
+
+    fn msg(check_id: &str, message: &str) -> DqIssue {
+        let mut i = issue(check_id, Severity::High);
+        i.message = message.into();
+        i
+    }
+
+    #[test]
+    fn sort_issues_tiebreaks_by_message_when_primary_keys_equal() {
+        // Same check_id / source_file (None) / record_id (None) — the
+        // historical key ties; the content tiebreak orders by message.
+        let mut v = vec![msg("EMIR.X", "zebra"), msg("EMIR.X", "alpha")];
+        sort_issues(&mut v);
+        assert_eq!(v[0].message, "alpha");
+        assert_eq!(v[1].message, "zebra");
+    }
+
+    #[test]
+    fn sort_issues_is_idempotent() {
+        let mut once = vec![
+            msg("EMIR.B", "m2"),
+            msg("EMIR.A", "m9"),
+            msg("EMIR.A", "m1"),
+            msg("EMIR.B", "m0"),
+        ];
+        sort_issues(&mut once);
+        let mut twice = once.clone();
+        sort_issues(&mut twice);
+        let key = |i: &[DqIssue]| -> Vec<(String, String)> {
+            i.iter()
+                .map(|x| (x.check_id.clone(), x.message.clone()))
+                .collect()
+        };
+        assert_eq!(key(&once), key(&twice));
+    }
+
+    #[test]
+    fn sort_issues_deterministic_total_order_on_known_vector() {
+        // check_id is the primary key; message the tiebreak within it.
+        let mut v = vec![
+            msg("EMIR.B", "b"),
+            msg("EMIR.A", "z"),
+            msg("EMIR.A", "a"),
+            msg("EMIR.B", "a"),
+        ];
+        sort_issues(&mut v);
+        let got: Vec<(&str, &str)> = v
+            .iter()
+            .map(|i| (i.check_id.as_str(), i.message.as_str()))
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                ("EMIR.A", "a"),
+                ("EMIR.A", "z"),
+                ("EMIR.B", "a"),
+                ("EMIR.B", "b"),
+            ]
+        );
+    }
+
+    #[test]
+    fn sort_issues_record_id_outranks_message() {
+        // record_id is a higher key than message: r1/zzz must precede
+        // r2/aaa even though "zzz" > "aaa".
+        let mut a = msg("EMIR.X", "zzz");
+        a.record_id = Some("r1".into());
+        let mut b = msg("EMIR.X", "aaa");
+        b.record_id = Some("r2".into());
+        let mut v = vec![b, a];
+        sort_issues(&mut v);
+        assert_eq!(v[0].record_id.as_deref(), Some("r1"));
+        assert_eq!(v[1].record_id.as_deref(), Some("r2"));
     }
 }
