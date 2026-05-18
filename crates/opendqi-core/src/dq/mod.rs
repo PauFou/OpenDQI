@@ -383,6 +383,38 @@ pub fn default_checks() -> Vec<Box<dyn Check>> {
     ]
 }
 
+/// Run `run` over every check **in parallel**, concatenate the
+/// per-check issues into one pre-sized `Vec`, then
+/// [`finalize_issues`]. The shared chokepoint behind every
+/// `run_all*` entry point.
+///
+/// The parallel dimension is the **checks** axis (the high-leverage
+/// choice — see `docs/performance.md`). `&[T]::par_iter().map(..)`
+/// is an *indexed* parallel iterator, so the collect is
+/// order-preserving and rayon's per-task intermediates hold only
+/// `Vec<DqIssue>` *headers* — each check's issue heap is allocated
+/// once and moved by header, never duplicated. (The former
+/// `flat_map_iter().collect()` over an *unindexed* iterator made
+/// `bridge_producer_consumer` duplicate the issue data ≈ 2×; dhat
+/// confirmed this was the EMIR 1M peak's transient — Milestone 0.19.)
+/// Pre-sizing to the exact total also removes the collect-target
+/// growth reallocations. Output is byte-identical: the pre-`finalize`
+/// order equals the old behaviour and `finalize_issues` re-imposes
+/// the same deterministic content total-order regardless.
+fn collect_finalize<T, F>(checks: &[T], ctx: &CheckContext, run: F) -> Vec<DqIssue>
+where
+    T: Sync,
+    F: Fn(&T) -> Vec<DqIssue> + Sync + Send,
+{
+    let per_check: Vec<Vec<DqIssue>> = checks.par_iter().map(run).collect();
+    let mut issues = Vec::with_capacity(per_check.iter().map(Vec::len).sum());
+    for v in per_check {
+        issues.extend(v);
+    }
+    finalize_issues(&mut issues, ctx);
+    issues
+}
+
 /// Run every check in `checks` against `records` and return the
 /// concatenated issues, sorted deterministically.
 pub fn run_all(
@@ -390,12 +422,7 @@ pub fn run_all(
     records: &[EmirRecord],
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
-    let mut issues: Vec<DqIssue> = checks
-        .par_iter()
-        .flat_map_iter(|c| c.run(records, ctx))
-        .collect();
-    finalize_issues(&mut issues, ctx);
-    issues
+    collect_finalize(checks, ctx, |c| c.run(records, ctx))
 }
 
 /// Sort issues into a deterministic **content** total order: by
@@ -557,12 +584,7 @@ pub fn run_all_sftr(
     records: &[SftrRecord],
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
-    let mut issues: Vec<DqIssue> = checks
-        .par_iter()
-        .flat_map_iter(|c| c.run(records, ctx))
-        .collect();
-    finalize_issues(&mut issues, ctx);
-    issues
+    collect_finalize(checks, ctx, |c| c.run(records, ctx))
 }
 
 // ---- Lifecycle checks (cross-batch) -------------------------------
@@ -611,12 +633,7 @@ pub fn run_all_lifecycle(
     prior: &[EmirRecord],
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
-    let mut issues: Vec<DqIssue> = checks
-        .par_iter()
-        .flat_map_iter(|c| c.run(current, prior, ctx))
-        .collect();
-    finalize_issues(&mut issues, ctx);
-    issues
+    collect_finalize(checks, ctx, |c| c.run(current, prior, ctx))
 }
 
 pub use sftr::lifecycle::{
@@ -640,12 +657,7 @@ pub fn run_all_sftr_lifecycle(
     prior: &[SftrRecord],
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
-    let mut issues: Vec<DqIssue> = checks
-        .par_iter()
-        .flat_map_iter(|c| c.run(current, prior, ctx))
-        .collect();
-    finalize_issues(&mut issues, ctx);
-    issues
+    collect_finalize(checks, ctx, |c| c.run(current, prior, ctx))
 }
 
 // ---- Feedback (TR → firm) checks ----------------------------------
@@ -697,12 +709,7 @@ pub fn run_all_feedback(
     prior: &[EmirRecord],
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
-    let mut issues: Vec<DqIssue> = checks
-        .par_iter()
-        .flat_map_iter(|c| c.run(feedback, prior, ctx))
-        .collect();
-    finalize_issues(&mut issues, ctx);
-    issues
+    collect_finalize(checks, ctx, |c| c.run(feedback, prior, ctx))
 }
 
 // SFTR has no rejection-feedback message: real auth.080 is a
@@ -757,12 +764,7 @@ pub fn run_all_reconciliation(
     prior: &[EmirRecord],
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
-    let mut issues: Vec<DqIssue> = checks
-        .par_iter()
-        .flat_map_iter(|c| c.run(records, prior, ctx))
-        .collect();
-    finalize_issues(&mut issues, ctx);
-    issues
+    collect_finalize(checks, ctx, |c| c.run(records, prior, ctx))
 }
 
 pub use sftr::reconciliation::{
@@ -786,12 +788,7 @@ pub fn run_all_sftr_reconciliation(
     prior: &[SftrRecord],
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
-    let mut issues: Vec<DqIssue> = checks
-        .par_iter()
-        .flat_map_iter(|c| c.run(records, prior, ctx))
-        .collect();
-    finalize_issues(&mut issues, ctx);
-    issues
+    collect_finalize(checks, ctx, |c| c.run(records, prior, ctx))
 }
 
 // ---- Trade State Report (TR auth.107) checks ---------------------
@@ -847,12 +844,7 @@ pub fn run_all_tr_state(
     prior: &[EmirRecord],
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
-    let mut issues: Vec<DqIssue> = checks
-        .par_iter()
-        .flat_map_iter(|c| c.run(records, prior, ctx))
-        .collect();
-    finalize_issues(&mut issues, ctx);
-    issues
+    collect_finalize(checks, ctx, |c| c.run(records, prior, ctx))
 }
 
 // ---- Trade Activity Report (TR auth.030 returns) checks ----------
@@ -908,12 +900,7 @@ pub fn run_all_tr_activity(
     tsr: Option<&[TrStateRecord]>,
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
-    let mut issues: Vec<DqIssue> = checks
-        .par_iter()
-        .flat_map_iter(|c| c.run(records, prior, tsr, ctx))
-        .collect();
-    finalize_issues(&mut issues, ctx);
-    issues
+    collect_finalize(checks, ctx, |c| c.run(records, prior, tsr, ctx))
 }
 
 // ---- EMIR Margin Activity Report (auth.108) checks --------------
@@ -947,12 +934,7 @@ pub fn run_all_margin_activity(
     prior: &[MarginActivityRecord],
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
-    let mut issues: Vec<DqIssue> = checks
-        .par_iter()
-        .flat_map_iter(|c| c.run(records, prior, ctx))
-        .collect();
-    finalize_issues(&mut issues, ctx);
-    issues
+    collect_finalize(checks, ctx, |c| c.run(records, prior, ctx))
 }
 
 // ---- EMIR Margin State Report (auth.109) checks -----------------
@@ -987,12 +969,7 @@ pub fn run_all_margin_state(
     prior: &[EmirRecord],
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
-    let mut issues: Vec<DqIssue> = checks
-        .par_iter()
-        .flat_map_iter(|c| c.run(records, prior, ctx))
-        .collect();
-    finalize_issues(&mut issues, ctx);
-    issues
+    collect_finalize(checks, ctx, |c| c.run(records, prior, ctx))
 }
 
 // ---- SFTR Trade State Report (auth.079) checks ------------------
@@ -1029,12 +1006,7 @@ pub fn run_all_sftr_tr_state(
     prior: &[SftrRecord],
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
-    let mut issues: Vec<DqIssue> = checks
-        .par_iter()
-        .flat_map_iter(|c| c.run(records, prior, ctx))
-        .collect();
-    finalize_issues(&mut issues, ctx);
-    issues
+    collect_finalize(checks, ctx, |c| c.run(records, prior, ctx))
 }
 
 // ---- SFTR Trade Activity Report (auth.052 TR-replay) checks -----
@@ -1063,12 +1035,7 @@ pub fn run_all_sftr_tr_activity(
     tsr: Option<&[SftrTrStateRecord]>,
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
-    let mut issues: Vec<DqIssue> = checks
-        .par_iter()
-        .flat_map_iter(|c| c.run(records, prior, tsr, ctx))
-        .collect();
-    finalize_issues(&mut issues, ctx);
-    issues
+    collect_finalize(checks, ctx, |c| c.run(records, prior, tsr, ctx))
 }
 
 // ---- Cross-batch lifecycle layers (Phase 7) ---------------------
@@ -1106,12 +1073,7 @@ pub fn run_all_tr_state_lifecycle(
     prior: &[TrStateRecord],
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
-    let mut issues: Vec<DqIssue> = checks
-        .par_iter()
-        .flat_map_iter(|c| c.run(current, prior, ctx))
-        .collect();
-    finalize_issues(&mut issues, ctx);
-    issues
+    collect_finalize(checks, ctx, |c| c.run(current, prior, ctx))
 }
 
 /// Default SFTR TSR lifecycle check registry (3 checks).
@@ -1130,12 +1092,7 @@ pub fn run_all_sftr_tr_state_lifecycle(
     prior: &[SftrTrStateRecord],
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
-    let mut issues: Vec<DqIssue> = checks
-        .par_iter()
-        .flat_map_iter(|c| c.run(current, prior, ctx))
-        .collect();
-    finalize_issues(&mut issues, ctx);
-    issues
+    collect_finalize(checks, ctx, |c| c.run(current, prior, ctx))
 }
 
 /// Default EMIR MAR cross-batch check registry (3 checks). Re-uses
@@ -1165,12 +1122,7 @@ pub fn run_all_margin_state_lifecycle(
     prior: &[MarginStateRecord],
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
-    let mut issues: Vec<DqIssue> = checks
-        .par_iter()
-        .flat_map_iter(|c| c.run(current, prior, ctx))
-        .collect();
-    finalize_issues(&mut issues, ctx);
-    issues
+    collect_finalize(checks, ctx, |c| c.run(current, prior, ctx))
 }
 
 // ---- EMIR pre-submission checks (rejection-profile driven) -----
@@ -1193,12 +1145,7 @@ pub fn run_all_pre_submission(
     profile: &RejectionProfile,
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
-    let mut issues: Vec<DqIssue> = checks
-        .par_iter()
-        .flat_map_iter(|c| c.run(records, profile, ctx))
-        .collect();
-    finalize_issues(&mut issues, ctx);
-    issues
+    collect_finalize(checks, ctx, |c| c.run(records, profile, ctx))
 }
 
 // ---- Book vs TSR reconciliation (shared CLI + web UI) ----------
@@ -1226,12 +1173,7 @@ pub fn run_all_sftr_pre_submission(
     profile: &RejectionProfile,
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
-    let mut issues: Vec<DqIssue> = checks
-        .par_iter()
-        .flat_map_iter(|c| c.run(records, profile, ctx))
-        .collect();
-    finalize_issues(&mut issues, ctx);
-    issues
+    collect_finalize(checks, ctx, |c| c.run(records, profile, ctx))
 }
 
 // ---- EMIR Reconciliation Statistics (auth.091) checks ----------
@@ -1250,12 +1192,7 @@ pub fn run_all_recon_stats(
     prior: &[ReconStatsRecord],
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
-    let mut issues: Vec<DqIssue> = checks
-        .par_iter()
-        .flat_map_iter(|c| c.run(records, prior, ctx))
-        .collect();
-    finalize_issues(&mut issues, ctx);
-    issues
+    collect_finalize(checks, ctx, |c| c.run(records, prior, ctx))
 }
 
 // ---- EMIR Data-Quality Warnings (auth.106) checks --------------
@@ -1279,12 +1216,7 @@ pub fn run_all_warnings(
     records: &[TradeWarningsRecord],
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
-    let mut issues: Vec<DqIssue> = checks
-        .par_iter()
-        .flat_map_iter(|c| c.run(records, ctx))
-        .collect();
-    finalize_issues(&mut issues, ctx);
-    issues
+    collect_finalize(checks, ctx, |c| c.run(records, ctx))
 }
 
 /// Run every EMIR auth.106 **per-counterparty** `Wrnngs` check.
@@ -1293,12 +1225,7 @@ pub fn run_all_warnings_counterparty(
     records: &[WarningsCounterpartyRecord],
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
-    let mut issues: Vec<DqIssue> = checks
-        .par_iter()
-        .flat_map_iter(|c| c.run(records, ctx))
-        .collect();
-    finalize_issues(&mut issues, ctx);
-    issues
+    collect_finalize(checks, ctx, |c| c.run(records, ctx))
 }
 
 /// Run every EMIR auth.106 **per-UTI** `Wrnngs/TxDtls` check.
@@ -1307,12 +1234,7 @@ pub fn run_all_warnings_transaction(
     records: &[WarningsTransactionRecord],
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
-    let mut issues: Vec<DqIssue> = checks
-        .par_iter()
-        .flat_map_iter(|c| c.run(records, ctx))
-        .collect();
-    finalize_issues(&mut issues, ctx);
-    issues
+    collect_finalize(checks, ctx, |c| c.run(records, ctx))
 }
 
 // ---- SFTR Missing Collateral Request (auth.083) checks ---------
@@ -1334,12 +1256,7 @@ pub fn run_all_missing_collateral(
     tsr: Option<&[SftrTrStateRecord]>,
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
-    let mut issues: Vec<DqIssue> = checks
-        .par_iter()
-        .flat_map_iter(|c| c.run(records, tsr, ctx))
-        .collect();
-    finalize_issues(&mut issues, ctx);
-    issues
+    collect_finalize(checks, ctx, |c| c.run(records, tsr, ctx))
 }
 
 #[cfg(test)]
@@ -1457,5 +1374,42 @@ mod tests {
         sort_issues(&mut v);
         assert_eq!(v[0].record_id.as_deref(), Some("r1"));
         assert_eq!(v[1].record_id.as_deref(), Some("r2"));
+    }
+
+    #[test]
+    fn collect_finalize_preserves_every_issue_and_finalizes() {
+        let ctx = CheckContext::now_with_defaults();
+        // Three "checks" (plain indices); each emits two issues in a
+        // deliberately UN-sorted order to prove the result is the
+        // deterministic finalized order, not the production order.
+        let checks: Vec<u32> = vec![0, 1, 2];
+        let out = collect_finalize(&checks, &ctx, |i| {
+            vec![
+                msg("EMIR.Z", &format!("chk{i}-z")),
+                msg("EMIR.A", &format!("chk{i}-a")),
+            ]
+        });
+        // No issue dropped or duplicated: 3 checks × 2 = 6.
+        assert_eq!(out.len(), 6);
+        // Result equals the globally finalize-sorted order regardless
+        // of per-check emission order / parallel collect.
+        let got: Vec<(String, String)> = out
+            .iter()
+            .map(|i| (i.check_id.clone(), i.message.clone()))
+            .collect();
+        let mut want = got.clone();
+        want.sort();
+        assert_eq!(got, want, "collect_finalize must apply finalize_issues");
+        // All EMIR.A precede all EMIR.Z (primary key = check_id).
+        assert!(out[..3].iter().all(|i| i.check_id == "EMIR.A"));
+        assert!(out[3..].iter().all(|i| i.check_id == "EMIR.Z"));
+    }
+
+    #[test]
+    fn collect_finalize_handles_empty_checks() {
+        let ctx = CheckContext::now_with_defaults();
+        let checks: Vec<u32> = Vec::new();
+        let out = collect_finalize(&checks, &ctx, |_| vec![msg("EMIR.A", "x")]);
+        assert!(out.is_empty());
     }
 }

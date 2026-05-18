@@ -9,25 +9,38 @@ of each check.
 
 ## Implementation
 
-All 20 `run_all*` runners in `crates/opendqi-core/src/dq/mod.rs` use
-`rayon::par_iter().flat_map_iter(...)` :
+All 23 `run_all*` runners in `crates/opendqi-core/src/dq/mod.rs`
+delegate to one shared `collect_finalize` helper (Milestone 0.19 —
+previously 23 duplicated `par_iter().flat_map_iter(...).collect()`
+bodies):
 
 ```rust
-let mut issues: Vec<DqIssue> = checks
-    .par_iter()
-    .flat_map_iter(|c| c.run(records, ctx))
-    .collect();
-finalize_issues(&mut issues, ctx); // severity overrides + sort
+fn collect_finalize<T, F>(checks: &[T], ctx: &CheckContext, run: F) -> Vec<DqIssue>
+where T: Sync, F: Fn(&T) -> Vec<DqIssue> + Sync + Send {
+    let per_check: Vec<Vec<DqIssue>> = checks.par_iter().map(run).collect();
+    let mut issues = Vec::with_capacity(per_check.iter().map(Vec::len).sum());
+    for v in per_check { issues.extend(v); }
+    finalize_issues(&mut issues, ctx); // severity overrides + sort
+    issues
+}
+// e.g. run_all → collect_finalize(checks, ctx, |c| c.run(records, ctx))
 ```
 
-- `par_iter` distributes the check evaluations across the rayon
-  global thread pool (defaults to one worker per logical core).
-- `flat_map_iter` accepts each check's `Vec<DqIssue>` as a plain
-  iterator, avoiding the cost of turning each tiny sub-Vec into a
-  `ParallelIterator`.
+- `par_iter().map(run)` distributes the check evaluations across the
+  rayon global pool (one worker per logical core) — the parallel
+  dimension is **checks** (the high-leverage axis).
+- The collect is **order-preserving** (`&[T]::par_iter().map` is an
+  *indexed* parallel iterator), so the result is byte-identical to
+  the former `flat_map_iter` shape; `finalize_issues` re-imposes the
+  deterministic content total-order regardless.
 - The final `finalize_issues` (severity overrides + sort) is
-  sequential and runs in O(n log n) over the merged issue list —
-  typically a few thousand items max, dwarfed by the check loop.
+  sequential, O(n log n) over the merged list.
+- **Memory note (honest):** M0.19 *intended* to remove a rayon
+  parallel-collect doubling but dhat **refuted** that — the
+  `Vec<Vec<DqIssue>>` + pre-sized destination coexist at ≈2×, the
+  same as the old rayon collect intermediates (total heap unchanged,
+  see "M0.19" below). The helper is kept for the **de-duplication**
+  (23 bodies → 1), not a memory win.
 
 Every check trait (`Check`, `SftrCheck`, `LifecycleCheck`,
 `TrStateCheck`, `MarginActivityCheck`, …) already requires
@@ -415,6 +428,54 @@ check/model/output/store change; opt-in and output-invariant
 (feature off ⇒ `dhat` absent ⇒ byte-identical; golden /
 XSD-conformance unchanged).
 
+## M0.19 — refuted memory hypothesis, kept as a refactor (honest)
+
+M0.18's profile said the EMIR peak's "~2 GiB transient doubling" was
+rayon's parallel-collect intermediates in
+`run_all`'s `par_iter().flat_map_iter(...).collect()`. M0.19's
+*hypothesis*: collect per-check into `Vec<Vec<DqIssue>>` then flatten
+into a pre-sized `Vec` ⇒ rayon's per-task intermediates become Vec
+*headers* only, killing the doubling. It was wired as one shared
+`collect_finalize` helper across all 23 `run_all*`.
+
+**The dhat evidence-loop (the mandated low-noise check) refuted it.**
+Re-profiled `emir scan`, N=100k:
+
+| | M0.18 (before) | M0.19 (after) |
+|---|---|---|
+| total live heap @ t-gmax | **752 MB** | **808 MB** (no improvement; marginally worse) |
+| destination `Vec<DqIssue>` | 160 MB (grow) | 160 MB (`with_capacity`, single alloc) |
+| `run_scan` `.extend()`s | 107 MB | 107 MB (unchanged — out of scope) |
+| the ≈2× transient | ~152 MB rayon *collect* intermediates | ~210 MB **all per-check `Vec`s held in `per_check`** |
+
+**Why it failed (design flaw the loop caught):**
+`par_iter().map(run).collect::<Vec<Vec<DqIssue>>>()` materialises
+**every** per-check `Vec` simultaneously in `per_check`, and
+`Vec::with_capacity(total)` reserves the full destination upfront —
+the two coexist at ≈2×, *exactly* the old structure. The doubling
+was **relocated** (rayon collect-intermediates → `per_check` +
+pre-reserved destination), **not removed**. Total RSS at 1M was
+likewise unchanged (3874 MiB, inside the noisy ~3.4–4.5 GiB band).
+
+**Proven structural conclusion (no more contained guessing):** the
+EMIR peak = the materialised `Vec<DqIssue>` (~total) **plus an
+unavoidable ≈total transient during *any* collect/flatten of the
+parallel per-check results**. No collect-strategy tweak moves it —
+only **not materialising all issues** (issue-streaming /
+bounded-memory rearchitecture; shared with the deferred SFTR
+records+issues chunk/spill) will. M0.19 was the last contained
+attempt; the chantier is now definitively redirected there.
+
+**Kept anyway — honestly, not as a perf win.** The change is correct,
+**output byte-identical** (zero golden/conformance diff — the collect
+is order-preserving and `finalize_issues` is unchanged), preflight
+green, and collapses 23 duplicated `run_all*` bodies into one
+`collect_finalize` helper (−115 lines). Shipped for that
+de-duplication value, with the refuted memory hypothesis stated
+plainly (the M0.14/M0.17 discipline: the headline benefit the
+measurement was meant to confirm did not materialise — said, not
+spun).
+
 ## Conventions
 
 - All new checks must be `Send + Sync` (compiler-enforced at the
@@ -424,8 +485,9 @@ XSD-conformance unchanged).
 - The post-pass `finalize_issues` (severity overrides + sort) is the
   source of truth for issue ordering. Tests must not assume any
   pre-sort order.
-- New `run_all*` variants should follow the same `par_iter ->
-  flat_map_iter -> finalize_issues` shape.
+- New `run_all*` variants must delegate to the shared
+  `collect_finalize` helper (one-line body) rather than re-inlining a
+  `par_iter` collect — keeps the parallel/finalize shape in one place.
 
 ## What's not parallelised (v1)
 

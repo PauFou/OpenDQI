@@ -68,6 +68,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`run_all*` consolidated into one `collect_finalize` helper
+  (Milestone 0.19; refuted memory hypothesis, kept as a refactor).**
+  All 23 duplicated `run_all*` bodies now delegate to a single
+  generic helper (−115 lines). It was *intended* to remove a rayon
+  parallel-collect doubling (M0.18-attributed) but the dhat
+  evidence-loop **refuted** that: collecting `Vec<Vec<DqIssue>>` plus
+  a pre-sized destination coexist at ≈2×, *relocating* the doubling
+  rather than removing it (total live heap 752 → 808 MB at N=100k;
+  EMIR 1M RSS unchanged at ~3.9 GiB). Proven structural conclusion
+  (in [`docs/performance.md`](docs/performance.md)): the EMIR peak
+  needs the *bounded-memory / issue-streaming* rearchitecture — no
+  collect tweak moves it. Kept solely for the de-duplication:
+  **output byte-identical** (zero golden/conformance diff — the
+  collect is order-preserving, `finalize_issues` unchanged),
+  preflight green. Not a perf win — stated plainly (M0.14/M0.17
+  discipline).
+
 - **In-place issue sort — eliminates the `finalize_issues`
   stable-sort allocation (Milestone 0.17; honest result).** First
   optimisation of the perf chantier. `sort_issues` now uses
