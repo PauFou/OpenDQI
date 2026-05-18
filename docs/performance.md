@@ -10,37 +10,48 @@ of each check.
 ## Implementation
 
 All 23 `run_all*` runners in `crates/opendqi-core/src/dq/mod.rs`
-delegate to one shared `collect_finalize` helper (Milestone 0.19 —
-previously 23 duplicated `par_iter().flat_map_iter(...).collect()`
-bodies):
+delegate to one shared `collect_finalize` helper (Milestone 0.19
+de-duplicated 23 bodies; Milestone 0.20 made it a single-buffer
+sink):
 
 ```rust
 fn collect_finalize<T, F>(checks: &[T], ctx: &CheckContext, run: F) -> Vec<DqIssue>
 where T: Sync, F: Fn(&T) -> Vec<DqIssue> + Sync + Send {
-    let per_check: Vec<Vec<DqIssue>> = checks.par_iter().map(run).collect();
-    let mut issues = Vec::with_capacity(per_check.iter().map(Vec::len).sum());
-    for v in per_check { issues.extend(v); }
+    let sink: Mutex<Vec<DqIssue>> = Mutex::new(Vec::new());
+    checks.par_iter().for_each(|c| {
+        let mut produced = run(c);
+        if produced.is_empty() { return; }
+        sink.lock().expect("issue sink mutex").append(&mut produced);
+    });
+    let mut issues = sink.into_inner().expect("issue sink mutex");
     finalize_issues(&mut issues, ctx); // severity overrides + sort
     issues
 }
 // e.g. run_all → collect_finalize(checks, ctx, |c| c.run(records, ctx))
 ```
 
-- `par_iter().map(run)` distributes the check evaluations across the
-  rayon global pool (one worker per logical core) — the parallel
-  dimension is **checks** (the high-leverage axis).
-- The collect is **order-preserving** (`&[T]::par_iter().map` is an
-  *indexed* parallel iterator), so the result is byte-identical to
-  the former `flat_map_iter` shape; `finalize_issues` re-imposes the
-  deterministic content total-order regardless.
+- `par_iter().for_each` runs every `run(c)` concurrently — the
+  parallel dimension is **checks** (the high-leverage axis); only
+  the small `append` is serialised (≤ ~150 lock acquires, one per
+  check; the `is_empty` guard skips the lock for zero-issue checks).
+- Each per-check `Vec` is appended into the single growing sink and
+  dropped as its check finishes ⇒ in-flight per-check `Vec`s are
+  bounded by the worker count, **not** the check count, and there is
+  no second concat copy (M0.19's `Vec<Vec<_>>` held them all at
+  once).
 - The final `finalize_issues` (severity overrides + sort) is
-  sequential, O(n log n) over the merged list.
-- **Memory note (honest):** M0.19 *intended* to remove a rayon
-  parallel-collect doubling but dhat **refuted** that — the
-  `Vec<Vec<DqIssue>>` + pre-sized destination coexist at ≈2×, the
-  same as the old rayon collect intermediates (total heap unchanged,
-  see "M0.19" below). The helper is kept for the **de-duplication**
-  (23 bodies → 1), not a memory win.
+  sequential, O(n log n); append order is irrelevant — it re-imposes
+  the deterministic content total-order ⇒ output **byte-identical**.
+- **Memory note (honest):** the M0.18→M0.20 sequence chased the EMIR
+  1M peak and **never moved the headline** (see M0.19 / M0.20
+  below): dhat shows total live heap essentially flat across the
+  `flat_map_iter` collect (752 MB), the `Vec<Vec<_>>` collect
+  (808 MB), and this sink (731 MB) at N=100k. The contained
+  collect/append optimisations are **exhausted**; the only remaining
+  lever is the out-of-scope external-sort / no-retain
+  rearchitecture. The current shape is kept for its genuine
+  structural cleanliness (one DRY chokepoint; no all-per-check-Vecs
+  hold), not as a memory win.
 
 Every check trait (`Check`, `SftrCheck`, `LifecycleCheck`,
 `TrStateCheck`, `MarginActivityCheck`, …) already requires
@@ -475,6 +486,60 @@ de-duplication value, with the refuted memory hypothesis stated
 plainly (the M0.14/M0.17 discipline: the headline benefit the
 measurement was meant to confirm did not materialise — said, not
 spun).
+
+## M0.20 — single-buffer sink: contained levers exhausted (honest)
+
+M0.19 proved every *collect/flatten* holds all per-check `Vec`s plus
+a destination ≈2×. M0.20's hypothesis: a single `Mutex<Vec<DqIssue>>`
+fed by `par_iter().for_each` (each per-check `Vec` appended and freed
+as its check finishes ⇒ no all-at-once hold, no concat copy) cuts the
+transient to ≈1× the resident.
+
+**The dhat evidence-loop again refuted the headline.** `emir scan`,
+N=100k, live heap at t-gmax:
+
+| | total live heap @ t-gmax |
+|---|---|
+| M0.18 (`flat_map_iter` collect) | 752 MB |
+| M0.19 (`Vec<Vec<_>>` collect) | 808 MB |
+| **M0.20 (single-buffer sink)** | **731 MB** |
+
+≈ flat (M0.20 ~3 % below M0.18 — within variance), **not** the
+predicted ~halving. dhat shows the structural change *did* work —
+M0.19's ≈210 MB "all per-check `Vec`s held at once" transient is
+**gone** — but it was **replaced** by the sink `Vec`'s own
+geometric-growth realloc: a single **256 MB**
+`RawVec::reserve ← bridge_producer_consumer` site (now the largest;
+≈2.5 GB-equiv at 1M), because the sink grows unbounded via `append`
+with no pre-reserved capacity.
+
+**Definitive conclusion — contained optimisation is exhausted.**
+This is the **fourth** consecutive correct, byte-identical change
+whose headline peak did not move (M0.14 raw_fields → reverted; M0.17
+sort; M0.19 collect; M0.20 sink). The reason is structural and now
+proven from two directions: (1) the global deterministic
+`finalize_issues` sort **requires all ~T issues resident**, and
+(2) growing one `Vec` to ~T cannot avoid a ~2–3× realloc transient
+unless capacity is reserved exactly — and the exact issue count is
+unknowable before the checks run (a heuristic reserve is itself a
+footgun: under-estimate → still reallocs, over-estimate → wastes /
+worsens). No collect/append tweak escapes this. The **only**
+remaining lever is **not retaining all issues** — streamed
+`issues.csv` via an external / k-way-merge sort + online
+aggregates — the large, behaviour-sensitive rearchitecture
+(shared family with the deferred SFTR records+issues chunk/spill),
+which gets its own deliberate plan.
+
+**Kept (not a perf win).** The change is correct, **output
+byte-identical** (zero golden/conformance diff — append order
+irrelevant, `finalize_issues` unchanged; the M0.19 unit tests pass
+as-is), preflight green. Shipped for the genuine structural
+improvement (one DRY chokepoint; per-check `Vec`s no longer all held
+at once), with the flat headline stated plainly — the
+M0.14/M0.17/M0.19 honesty discipline. (Total-RSS bench not re-run:
+dhat is the established decisive low-noise measure and the verdict —
+flat — is unambiguous; a noisy ±0.5–1 GiB bench adds nothing and
+costs a release build.)
 
 ## Conventions
 

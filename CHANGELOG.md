@@ -68,6 +68,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`collect_finalize` is now a single-buffer issue sink
+  (Milestone 0.20; refuted memory hypothesis, kept as a refactor).**
+  The shared `run_all*` chokepoint replaces the `Vec<Vec<DqIssue>>`
+  collect with a `Mutex<Vec<DqIssue>>` fed by `par_iter().for_each`
+  — each per-check `Vec` is appended and freed as its check
+  finishes, so per-check `Vec`s are no longer all held at once.
+  Intended to drop the ≈2× collect transient; the dhat
+  evidence-loop **refuted** the headline: total live heap is flat
+  (M0.18 752 → M0.19 808 → **M0.20 731 MB** at N=100k) — the
+  per-check hold is gone but replaced by the sink's own
+  geometric-growth realloc (256 MB single site at 100k). **Fourth**
+  consecutive correct-but-headline-flat memory change; the contained
+  collect/append lever is **exhausted** — only the out-of-scope
+  external-sort / no-retain rearchitecture can move the EMIR peak
+  (see [`docs/performance.md`](docs/performance.md)). Kept solely
+  for the structural cleanliness: **output byte-identical** (zero
+  golden/conformance diff — append order irrelevant,
+  `finalize_issues` unchanged; M0.19 unit tests pass as-is),
+  preflight green. Not a perf win — stated plainly
+  (M0.14/M0.17/M0.19 discipline).
+
 - **`run_all*` consolidated into one `collect_finalize` helper
   (Milestone 0.19; refuted memory hypothesis, kept as a refactor).**
   All 23 duplicated `run_all*` bodies now delegate to a single

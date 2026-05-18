@@ -1,5 +1,7 @@
 //! Data-quality check trait and the MVP EMIR check registry.
 
+use std::sync::Mutex;
+
 use chrono::{DateTime, NaiveDate, Utc};
 use rayon::prelude::*;
 
@@ -383,34 +385,46 @@ pub fn default_checks() -> Vec<Box<dyn Check>> {
     ]
 }
 
-/// Run `run` over every check **in parallel**, concatenate the
-/// per-check issues into one pre-sized `Vec`, then
+/// Run `run` over every check **in parallel**, append each check's
+/// issues into one shared sink as it finishes, then
 /// [`finalize_issues`]. The shared chokepoint behind every
 /// `run_all*` entry point.
 ///
 /// The parallel dimension is the **checks** axis (the high-leverage
-/// choice — see `docs/performance.md`). `&[T]::par_iter().map(..)`
-/// is an *indexed* parallel iterator, so the collect is
-/// order-preserving and rayon's per-task intermediates hold only
-/// `Vec<DqIssue>` *headers* — each check's issue heap is allocated
-/// once and moved by header, never duplicated. (The former
-/// `flat_map_iter().collect()` over an *unindexed* iterator made
-/// `bridge_producer_consumer` duplicate the issue data ≈ 2×; dhat
-/// confirmed this was the EMIR 1M peak's transient — Milestone 0.19.)
-/// Pre-sizing to the exact total also removes the collect-target
-/// growth reallocations. Output is byte-identical: the pre-`finalize`
-/// order equals the old behaviour and `finalize_issues` re-imposes
-/// the same deterministic content total-order regardless.
+/// choice — see `docs/performance.md`): `par_iter().for_each` runs
+/// every `run(c)` concurrently; only the small `append` is
+/// serialised (one lock acquire **per check**, ≤ ~150 total — the
+/// `is_empty` guard skips the lock for the common zero-issue checks;
+/// the expensive `run(c)` over N records is outside the lock).
+///
+/// **Why a single sink, not a `collect`:** every collect/flatten
+/// strategy holds *all* per-check `Vec`s plus a destination at
+/// once ⇒ ≈2× the issue data resident (dhat-proven for both the
+/// `flat_map_iter` collect, M0.18, and the `Vec<Vec<_>>` collect,
+/// M0.19). Appending into one growing buffer frees each per-check
+/// `Vec` as its check finishes, so in-flight per-check `Vec`s are
+/// bounded by the worker count, not the check count — there is no
+/// ≈total transient and no second concat copy (Milestone 0.20).
+///
+/// Output is byte-identical: append order is irrelevant because
+/// `finalize_issues` re-imposes the deterministic content
+/// total-order over the single `Vec`.
 fn collect_finalize<T, F>(checks: &[T], ctx: &CheckContext, run: F) -> Vec<DqIssue>
 where
     T: Sync,
     F: Fn(&T) -> Vec<DqIssue> + Sync + Send,
 {
-    let per_check: Vec<Vec<DqIssue>> = checks.par_iter().map(run).collect();
-    let mut issues = Vec::with_capacity(per_check.iter().map(Vec::len).sum());
-    for v in per_check {
-        issues.extend(v);
-    }
+    let sink: Mutex<Vec<DqIssue>> = Mutex::new(Vec::new());
+    checks.par_iter().for_each(|c| {
+        let mut produced = run(c);
+        if produced.is_empty() {
+            return;
+        }
+        sink.lock()
+            .expect("issue sink mutex (a check panicked)")
+            .append(&mut produced);
+    });
+    let mut issues = sink.into_inner().expect("issue sink mutex");
     finalize_issues(&mut issues, ctx);
     issues
 }
