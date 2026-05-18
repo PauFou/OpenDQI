@@ -23,14 +23,17 @@ use opendqi_core::dq::{
     CheckContext,
 };
 use opendqi_core::{
-    DqDimension, DqIssue, EmirRecord, MarginActivityRecord, MarginStateRecord, Regime, ScanSummary,
-    Severity, Thresholds, TrActivitySummary, TrStateRecord,
+    stream_emir_checks_into, DqDimension, DqIssue, EmirRecord, MarginActivityRecord,
+    MarginStateRecord, Regime, ScanSummary, Severity, SortedIssueSink, Thresholds,
+    TrActivitySummary, TrStateRecord, STREAM_SPILL_MAX_ISSUES,
 };
 use opendqi_io::{
     discover_emir_inputs, has_extension, read_emir_csv, read_emir_parquet, write_emir_parquet,
     CsvMapping,
 };
-use opendqi_report::{write_issues_csv, write_report_html, write_summary_json};
+use opendqi_report::{
+    write_issues_csv, write_issues_csv_from_iter, write_report_html, write_summary_json, TopIssues,
+};
 use opendqi_xml::{
     check_wellformedness, read_emir_feedback_xml, read_emir_mar_xml, read_emir_msr_xml,
     read_emir_recon_stats_xml, read_emir_tr_state_xml, read_emir_warnings_xml, read_emir_xml,
@@ -571,8 +574,19 @@ fn run_scan(
     };
 
     let checks = default_checks();
-    let mut issues = run_all(&checks, &records, &ctx);
-    issues.extend(format_issues);
+    // Streaming pipeline (Milestone 0.23): every issue source is
+    // pushed into one spill-capable sink instead of materialising a
+    // union `Vec<DqIssue>`. The sink owns the online aggregator
+    // (summary) and produces issues in exact `issue_cmp` order at
+    // `finish`. Small inputs never spill ⇒ output byte-identical.
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
+    ));
+    stream_emir_checks_into(&checks, &records, &ctx, &sink);
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(format_issues);
     crate::memtrace::mem_trace("post_checks");
 
     if let Some(store_path) = store_path {
@@ -597,7 +611,9 @@ fn run_scan(
             lifecycle_issues = lifecycle_issues.len(),
             "lifecycle checks run"
         );
-        issues.extend(lifecycle_issues);
+        sink.lock()
+            .expect("issue sink mutex")
+            .push_batch(lifecycle_issues);
     }
 
     if let Some(profile_path) = rejection_profile_path {
@@ -614,24 +630,41 @@ fn run_scan(
         let psc_issues =
             run_all_pre_submission(&default_pre_submission_checks(), &records, &profile, &ctx);
         info!(psc_issues = psc_issues.len(), "pre-submission checks run");
-        issues.extend(psc_issues);
+        sink.lock()
+            .expect("issue sink mutex")
+            .push_batch(psc_issues);
     }
 
     crate::memtrace::mem_trace("post_lifecycle_presub");
 
-    finalize_issues(&mut issues, &ctx);
+    let (summary, sorted) = sink.into_inner().expect("issue sink mutex").finish(
+        Regime::Emir,
+        inputs.len() as u32,
+        records.len() as u32,
+        started_at,
+        Utc::now(),
+    );
     crate::memtrace::mem_trace("post_finalize");
-
-    let summary = build_summary(&records, &issues, &inputs, started_at, Utc::now());
     crate::memtrace::mem_trace("post_summary");
 
     std::fs::create_dir_all(out)
         .with_context(|| format!("creating output directory {}", out.display()))?;
     write_summary_json(&out.join("summary.json"), &summary)?;
     crate::memtrace::mem_trace("post_write_summary_json");
-    write_issues_csv(&out.join("issues.csv"), &issues)?;
+    // Single streamed pass: write each row in `issue_cmp` order while
+    // a bounded selector picks the report's top-20 (no resident Vec).
+    let mut top = TopIssues::with_capacity(20);
+    write_issues_csv_from_iter(
+        &out.join("issues.csv"),
+        sorted.inspect(|issue| top.offer(issue)),
+    )?;
     crate::memtrace::mem_trace("post_write_issues_csv");
-    write_report_html(&out.join("report.html"), &summary, &issues, &sources)?;
+    write_report_html(
+        &out.join("report.html"),
+        &summary,
+        &top.into_sorted(),
+        &sources,
+    )?;
     crate::memtrace::mem_trace("post_write_report_html");
     if validator.is_some() {
         write_xsd_errors_csv(&out.join("xsd_errors.csv"), &xsd_rows)?;

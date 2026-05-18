@@ -50,14 +50,15 @@ pub fn write_report_html(
         .context("loading report template")?;
     let tmpl = env.get_template("report").context("getting template")?;
 
-    // Top 20 issues, severity descending then check_id.
-    let mut top: Vec<&DqIssue> = issues.iter().collect();
-    top.sort_by(|a, b| {
-        severity_rank(b.severity)
-            .cmp(&severity_rank(a.severity))
-            .then_with(|| a.check_id.cmp(&b.check_id))
-    });
-    let top_views: Vec<IssueView> = top.iter().take(20).map(|i| (*i).into()).collect();
+    // Top 20 issues, severity descending then check_id — via the
+    // bounded `TopIssues` selector (same logic the streaming
+    // `run_scan` pipeline uses, so both pick the same set).
+    let mut top = TopIssues::with_capacity(20);
+    for i in issues {
+        top.offer(i);
+    }
+    let top_owned = top.into_sorted();
+    let top_views: Vec<IssueView> = top_owned.iter().map(|i| i.into()).collect();
 
     let by_severity: Vec<(String, u32)> = summary
         .issues_by_severity
@@ -91,6 +92,84 @@ fn severity_rank(s: Severity) -> u8 {
         Severity::High => 3,
         Severity::Warning => 2,
         Severity::Info => 1,
+    }
+}
+
+/// `Greater` when `a` is **lower** display priority than `b` (i.e.
+/// `a` is the eviction candidate): severity rank descending, then
+/// `check_id` ascending. Single definition of the report's display
+/// order, shared by [`TopIssues`] and its `into_sorted`.
+fn lower_priority(a: &DqIssue, b: &DqIssue) -> std::cmp::Ordering {
+    severity_rank(b.severity)
+        .cmp(&severity_rank(a.severity))
+        .then_with(|| a.check_id.cmp(&b.check_id))
+}
+
+/// Heap wrapper whose `Ord` makes the **lowest** display-priority
+/// issue the `BinaryHeap` maximum (so it is the one evicted when the
+/// selector is over capacity).
+struct Ranked(DqIssue);
+impl PartialEq for Ranked {
+    fn eq(&self, o: &Self) -> bool {
+        lower_priority(&self.0, &o.0) == std::cmp::Ordering::Equal
+    }
+}
+impl Eq for Ranked {}
+impl Ord for Ranked {
+    fn cmp(&self, o: &Self) -> std::cmp::Ordering {
+        lower_priority(&self.0, &o.0)
+    }
+}
+impl PartialOrd for Ranked {
+    fn partial_cmp(&self, o: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(o))
+    }
+}
+
+/// Streaming, bounded top-N issue selector by the report's display
+/// order (severity rank descending, then `check_id` ascending).
+/// O(`cap`) memory — runs over a streamed scan without retaining
+/// every issue. Clones only the issues actually kept.
+pub struct TopIssues {
+    cap: usize,
+    heap: std::collections::BinaryHeap<Ranked>,
+}
+
+impl TopIssues {
+    /// Selector retaining at most `cap` highest-priority issues.
+    pub fn with_capacity(cap: usize) -> Self {
+        Self {
+            cap,
+            heap: std::collections::BinaryHeap::new(),
+        }
+    }
+
+    /// Offer one issue; kept only if among the current top `cap`.
+    pub fn offer(&mut self, issue: &DqIssue) {
+        if self.cap == 0 {
+            return;
+        }
+        if self.heap.len() < self.cap {
+            self.heap.push(Ranked(issue.clone()));
+            return;
+        }
+        // `heap.peek()` is the lowest-priority kept issue; replace it
+        // only if the new issue is strictly higher priority.
+        if let Some(worst) = self.heap.peek() {
+            if lower_priority(issue, &worst.0) == std::cmp::Ordering::Less {
+                self.heap.pop();
+                self.heap.push(Ranked(issue.clone()));
+            }
+        }
+    }
+
+    /// The retained issues in report display order (highest priority
+    /// first) — identical ordering to the former
+    /// `sort_by(sev desc, check_id).take(cap)`.
+    pub fn into_sorted(self) -> Vec<DqIssue> {
+        let mut v: Vec<DqIssue> = self.heap.into_iter().map(|r| r.0).collect();
+        v.sort_by(lower_priority);
+        v
     }
 }
 

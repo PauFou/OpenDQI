@@ -445,6 +445,41 @@ pub fn run_all(
     collect_finalize(checks, ctx, |c| c.run(records, ctx))
 }
 
+/// Production spill threshold (issue count) for the streaming
+/// `run_scan` pipeline: small enough that the synthetic golden
+/// fixtures never spill (so `issues.csv` stays *literally* the
+/// `finalize_issues` order — byte-identical), large enough to bound
+/// memory at scale (a 1 M-record EMIR scan keeps ≤ this many issues
+/// resident plus on-disk runs, not the whole ~10 M-issue `Vec`).
+pub const STREAM_SPILL_MAX_ISSUES: usize = 65_536;
+
+/// Run every EMIR check in parallel and stream each check's issues
+/// into `sink` as it finishes (no materialised union `Vec<DqIssue>`).
+///
+/// Mirrors [`run_all`]'s parallel-over-checks shape but feeds the
+/// spill-capable [`SortedIssueSink`] instead of returning a `Vec`:
+/// the expensive `c.run` is outside the lock; one `push_batch` lock
+/// acquire per check (a spill, if any, happens under it — rare and
+/// I/O-bound). The caller pushes any other issue sources
+/// (format/lifecycle/pre-submission) into the same `sink`, then
+/// `finish()`es it. EMIR-specific for Milestone 0.23; later
+/// increments generalise the rollout.
+pub fn stream_emir_checks_into(
+    checks: &[Box<dyn Check>],
+    records: &[EmirRecord],
+    ctx: &CheckContext,
+    sink: &std::sync::Mutex<SortedIssueSink>,
+) {
+    checks.par_iter().for_each(|c| {
+        let produced = c.run(records, ctx);
+        if !produced.is_empty() {
+            sink.lock()
+                .expect("issue sink mutex (a check panicked)")
+                .push_batch(produced);
+        }
+    });
+}
+
 /// Deterministic **content** total order over a `DqIssue`: by
 /// `check_id`, `source_file`, `record_id` (the historical gross
 /// order), then `uti`, `field`, `value`, `message`, `evidence`.

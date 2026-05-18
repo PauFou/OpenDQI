@@ -62,6 +62,60 @@ pub fn write_issues_csv(path: &Path, issues: &[DqIssue]) -> Result<()> {
     Ok(())
 }
 
+/// Streaming `issues.csv` writer: same header / row format as
+/// [`write_issues_csv`] but consumes an **already-sorted** iterator
+/// (the `SortedIssueSink` k-way merge) — **no buffering, no
+/// re-sort**. Byte-identical to `write_issues_csv` fed the
+/// `finalize_issues`-sorted slice, because that function's internal
+/// 4-key stable re-sort is order-preserving on input already in the
+/// finer 8-field order.
+pub fn write_issues_csv_from_iter<I>(path: &Path, issues: I) -> Result<()>
+where
+    I: IntoIterator<Item = DqIssue>,
+{
+    let mut writer = csv::WriterBuilder::new()
+        .has_headers(true)
+        .from_path(path)
+        .with_context(|| format!("creating {}", path.display()))?;
+
+    writer.write_record([
+        "check_id",
+        "regime",
+        "severity",
+        "dimension",
+        "record_id",
+        "uti",
+        "field",
+        "value",
+        "message",
+        "source_file",
+        "evidence_json",
+    ])?;
+
+    for issue in issues {
+        let evidence_json = if issue.evidence.is_empty() {
+            String::new()
+        } else {
+            serde_json::to_string(&issue.evidence).unwrap_or_default()
+        };
+        writer.write_record([
+            issue.check_id.as_str(),
+            &issue.regime.to_string(),
+            &issue.severity.to_string(),
+            &issue.dimension.to_string(),
+            issue.record_id.as_deref().unwrap_or(""),
+            issue.uti.as_deref().unwrap_or(""),
+            issue.field.as_deref().unwrap_or(""),
+            issue.value.as_deref().unwrap_or(""),
+            issue.message.as_str(),
+            issue.source_file.as_deref().unwrap_or(""),
+            evidence_json.as_str(),
+        ])?;
+    }
+    writer.flush()?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -19,8 +19,8 @@ pub mod scoring;
 
 pub use config::Thresholds;
 pub use dq::{
-    default_checks, default_sftr_checks, Check, IssueAggregator, SftrCheck, SortedIssueSink,
-    SortedIssues,
+    default_checks, default_sftr_checks, stream_emir_checks_into, Check, IssueAggregator,
+    SftrCheck, SortedIssueSink, SortedIssues, STREAM_SPILL_MAX_ISSUES,
 };
 pub use model::{
     DqDimension, DqIssue, EmirRecord, EvidenceItem, FeedbackRecord, FeedbackType,

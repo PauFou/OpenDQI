@@ -91,6 +91,15 @@ impl SortedIssueSink {
         }
     }
 
+    /// Drain a whole batch (e.g. one check's `Vec<DqIssue>`) through
+    /// [`push`](Self::push); the batch's backing allocation is freed
+    /// here. One lock acquire per batch when called under a `Mutex`.
+    pub fn push_batch(&mut self, batch: Vec<DqIssue>) {
+        for issue in batch {
+            self.push(issue);
+        }
+    }
+
     fn ensure_spill_dir(&mut self) -> PathBuf {
         if self.spill_dir.is_none() {
             let nanos = std::time::SystemTime::now()
