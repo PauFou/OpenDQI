@@ -1138,24 +1138,15 @@ fn build_summary(
     started_at: chrono::DateTime<Utc>,
     finished_at: chrono::DateTime<Utc>,
 ) -> ScanSummary {
-    use std::collections::BTreeMap;
-    let mut by_sev: BTreeMap<Severity, u32> = BTreeMap::new();
-    let mut by_dim: BTreeMap<DqDimension, u32> = BTreeMap::new();
-    for i in issues {
-        *by_sev.entry(i.severity).or_insert(0) += 1;
-        *by_dim.entry(i.dimension).or_insert(0) += 1;
-    }
-    ScanSummary {
+    // Thin signature adapter; the summary logic lives once in
+    // `opendqi_core::IssueAggregator` (Milestone 0.21).
+    opendqi_core::IssueAggregator::from_issues(issues).into_summary(
         regime,
-        files_processed: files,
-        records_processed: records,
-        issues_total: issues.len() as u32,
-        issues_by_severity: by_sev,
-        issues_by_dimension: by_dim,
-        quality_score: opendqi_core::quality_score(records, issues),
+        files,
+        records,
         started_at,
         finished_at,
-    }
+    )
 }
 
 /// Resolve the original filename to a sane safe stem suitable for

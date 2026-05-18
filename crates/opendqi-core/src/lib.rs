@@ -18,7 +18,7 @@ pub mod model;
 pub mod scoring;
 
 pub use config::Thresholds;
-pub use dq::{default_checks, default_sftr_checks, Check, SftrCheck};
+pub use dq::{default_checks, default_sftr_checks, Check, IssueAggregator, SftrCheck};
 pub use model::{
     DqDimension, DqIssue, EmirRecord, EvidenceItem, FeedbackRecord, FeedbackType,
     MarginActivityRecord, MarginStateRecord, MissingCollateralRecord, ReconStatsRecord,
@@ -26,4 +26,4 @@ pub use model::{
     RepeatedRejection, ScanSummary, Severity, SftrRecord, SftrTrStateRecord, TrActivitySummary,
     TrStateRecord, TradeWarningsRecord, WarningsCounterpartyRecord, WarningsTransactionRecord,
 };
-pub use scoring::quality_score;
+pub use scoring::{quality_score, quality_score_from_counts};

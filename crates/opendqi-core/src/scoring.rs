@@ -18,10 +18,6 @@ use crate::model::{DqIssue, Severity};
 ///
 /// When `records_processed == 0` the score is `100.0`.
 pub fn quality_score(records_processed: u32, issues: &[DqIssue]) -> f32 {
-    if records_processed == 0 {
-        return 100.0;
-    }
-    let n = records_processed as f32;
     let mut critical = 0u32;
     let mut high = 0u32;
     let mut warning = 0u32;
@@ -34,6 +30,24 @@ pub fn quality_score(records_processed: u32, issues: &[DqIssue]) -> f32 {
             Severity::Info => info += 1,
         }
     }
+    quality_score_from_counts(records_processed, critical, high, warning, info)
+}
+
+/// Same formula as [`quality_score`] but from pre-tallied
+/// per-severity counts — so an online accumulator can reproduce the
+/// score **byte-identically** without retaining the issues. The sole
+/// arithmetic definition; [`quality_score`] delegates here.
+pub fn quality_score_from_counts(
+    records_processed: u32,
+    critical: u32,
+    high: u32,
+    warning: u32,
+    info: u32,
+) -> f32 {
+    if records_processed == 0 {
+        return 100.0;
+    }
+    let n = records_processed as f32;
     let penalty = 25.0 * (critical as f32 / n)
         + 10.0 * (high as f32 / n)
         + 3.0 * (warning as f32 / n)

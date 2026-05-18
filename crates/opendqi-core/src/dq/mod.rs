@@ -13,6 +13,9 @@ use crate::model::{
     WarningsTransactionRecord,
 };
 
+mod aggregate;
+pub use aggregate::IssueAggregator;
+
 mod abnormal_maturity;
 mod action_event_compatibility;
 mod action_type_enum;

@@ -68,6 +68,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`IssueAggregator` — online summary; 18 `build_summary` copies
+  de-duplicated (Milestone 0.21).** New
+  `opendqi_core::IssueAggregator` computes `ScanSummary`
+  (severity/dimension counts, total, `quality_score`) from a
+  *stream* of issues without retaining them; `scoring::quality_score`
+  now delegates to a shared `quality_score_from_counts` so the score
+  is reproducible from counts alone. The 17 CLI + 1 server
+  hand-rolled `build_summary` bodies collapse to thin adapters over
+  it. **Output byte-identical** (same arithmetic — zero
+  golden/conformance diff; preflight green). Foundational seam
+  ("Increment A") for the streaming issue pipeline that will replace
+  the resident `Vec<DqIssue>` (the only remaining lever after the
+  M0.18–0.20 dhat findings); independently valuable as de-dup. No
+  behaviour/model/store change.
+
 - **`collect_finalize` is now a single-buffer issue sink
   (Milestone 0.20; refuted memory hypothesis, kept as a refactor).**
   The shared `run_all*` chokepoint replaces the `Vec<Vec<DqIssue>>`
