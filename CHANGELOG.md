@@ -50,6 +50,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   increment. Env-gated/output-invariant; not in preflight/CI.
   Measurement only — no optimization.
 
+- **Opt-in dhat heap profiler — definitive allocation attribution
+  (Milestone 0.18; tooling).** Feature-gated `dhat-heap`
+  (`cargo run --release -p opendqi-cli --features dhat-heap`) swaps
+  in the dhat global allocator + heap profiler; off by default ⇒
+  `dhat` absent from the dependency graph, system allocator
+  unchanged, every committed artifact byte-identical (not in
+  preflight/CI). Ended the phase-RSS guessing that misled M0.16/0.17:
+  the EMIR peak is, by call stack (in
+  [`docs/performance.md`](docs/performance.md)), the resident
+  `Vec<DqIssue>` (`run_all` collect + `run_scan` extends) **plus
+  rayon's parallel-collect intermediate buffers** (~1.5 GB-equiv at
+  1M — the elusive transient doubling) **plus** per-issue `format!`
+  message strings — **not** a report-write transient. Drives the
+  next, evidence-justified optimization. Measurement only — no
+  optimization; opt-in, output-invariant.
+
 ### Changed
 
 - **In-place issue sort — eliminates the `finalize_issues`

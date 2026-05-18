@@ -2,6 +2,16 @@
 
 #![forbid(unsafe_code)]
 
+// Opt-in heap profiler (Milestone 0.18). Feature-gated: absent from
+// every default / release / CI build (the system allocator is
+// unchanged), so behaviour and all committed artifacts are
+// byte-identical. The `#[global_allocator]` attribute needs no
+// `unsafe` block here — the `unsafe impl GlobalAlloc` lives inside
+// `dhat` — so `#![forbid(unsafe_code)]` still holds.
+#[cfg(feature = "dhat-heap")]
+#[global_allocator]
+static ALLOC: dhat::Alloc = dhat::Alloc;
+
 mod commands;
 mod memtrace;
 
@@ -54,6 +64,11 @@ enum TopLevel {
 }
 
 fn main() -> Result<ExitCode> {
+    // Held for the whole process; on drop it writes `dhat-heap.json`
+    // (CWD) with per-call-stack bytes at the global peak (t-gmax).
+    #[cfg(feature = "dhat-heap")]
+    let _dhat = dhat::Profiler::new_heap();
+
     init_tracing();
     let cli = Cli::parse();
     match cli.command {

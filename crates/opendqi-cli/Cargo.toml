@@ -32,3 +32,13 @@ serde_yaml.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+# Opt-in heap profiler (Milestone 0.18). Optional + feature-gated:
+# absent from every default / release / CI build, so behaviour and
+# all committed artifacts are byte-identical. Deliberate one-shot
+# allocation attribution only — never shipped, never in preflight/CI.
+dhat = { version = "0.3", optional = true }
+
+[features]
+# `cargo run --release -p opendqi-cli --features dhat-heap` swaps in
+# the dhat global allocator + heap profiler (writes dhat-heap.json).
+dhat-heap = ["dep:dhat"]

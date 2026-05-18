@@ -20,6 +20,9 @@ planning_internal.md
 # Local Cargo tuning (job cap, linker) — developer-machine preference,
 # must not be forced on CI or other contributors. Strictly local.
 /.cargo/
+# Opt-in dhat heap profile output (Milestone 0.18) — a generated
+# tooling artifact from a deliberate one-shot run; never committed.
+dhat-heap.json
 
 # IDE
 .vscode/

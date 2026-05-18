@@ -361,6 +361,60 @@ expected. Discipline reaffirmed (M0.14/M0.15): the local hypothesis
 was right but the *headline* benefit the measurement was meant to
 confirm did not materialise — said plainly, not spun.
 
+## M0.18 — definitive allocation attribution (opt-in dhat)
+
+Phase-RSS sampling (M0.13–0.17) had misled the optimisation **twice**
+(M0.16 "finalize", M0.17's relocated peak). M0.18 stops guessing:
+an **opt-in, feature-gated** `dhat` heap profiler
+(`cargo run --release -p opendqi-cli --features dhat-heap`) gives
+per-**call-stack** bytes *at the global peak* (t-gmax). Off by
+default ⇒ `dhat` is not in the dependency graph, the system allocator
+is unchanged, every committed artifact byte-identical (not in
+preflight/CI — the OPENDQI_MEM_TRACE doctrine). dhat records a
+backtrace per allocation (heavy) so it is run at a **reduced,
+structurally-representative N**; the *attribution* (which call sites)
+is scale-invariant, the absolute bytes scale ~linearly.
+
+Profiled `opendqi emir scan`, **N = 100 000**, live heap at t-gmax
+≈ **752 MB**. Top allocation sites (bytes live at the peak):
+
+| MB @100k | call site (top frames) | nature |
+|---|---|---|
+| **160** | `RawVec::reserve` ← **`dq::run_all`** ← `run_scan` | the `Vec<DqIssue>` grow inside the parallel-check `.collect()` |
+| **107** | `RawVec::reserve` ← **`run_scan`** | issues-Vec `.extend()` (format / lifecycle / presub) reallocs |
+| **40+40+28+24+20 = 152** | `RawVec::reserve` ← **`rayon::…bridge_producer_consumer`** ← `join` | **parallel-collect intermediate buffers** — the transient ~doubling |
+| **~62** | `fmt::format` ← `Check::run` (`LeiFormat*`, `ValuationAfterReporting`, …) | per-issue `format!`'d `DqIssue.message` strings |
+| 14 | `fmt::format` ← `iso20022::start_record` | parse-time record-id/string formatting |
+
+**Definitive, call-stack-proven conclusions (no more inference):**
+
+- The EMIR peak is **not** a report-write transient (the M0.16/0.17
+  phase-RSS attribution was an artifact). It is, in order:
+  (1) the **resident `Vec<DqIssue>`** itself — built/grown in
+  `run_all` (160 MB) and re-grown by the `run_scan` `.extend()`s
+  (107 MB); (2) **rayon's parallel-collect intermediate buffers**
+  (152 MB at 100k ≈ **~1.5 GB at 1M**) — *this* is the elusive
+  "~2 GiB transient doubling" M0.16/M0.17 chased blindly; (3) the
+  cumulative per-issue **`format!` message strings** across checks.
+- Scaled to 1M these reconcile with the observed ~4 GiB peak
+  (≈ M0.17's `post_checks` ~2.1 GiB resident `Vec<DqIssue>` **+** the
+  rayon-collect doubling during that collect).
+
+**Next increment (now evidence-justified, not guessed):** eliminate
+the **rayon parallel-collect doubling in `run_all`**
+(`crates/opendqi-core/src/dq/mod.rs` — `checks.par_iter()
+.flat_map_iter(|c| c.run(records, ctx)).collect()`): the
+`bridge_producer_consumer` intermediates are a contained ~2 GiB
+transient, fixable by changing the collect/reduce strategy *without*
+the full issue-streaming rearchitecture. The resident `Vec<DqIssue>`
+(sites 1–2) and per-issue `format!` messages (site 4) remain the
+deeper structural floor for a later bounded-memory increment.
+
+M0.18 is **measurement only** — no optimisation, no
+check/model/output/store change; opt-in and output-invariant
+(feature off ⇒ `dhat` absent ⇒ byte-identical; golden /
+XSD-conformance unchanged).
+
 ## Conventions
 
 - All new checks must be `Send + Sync` (compiler-enforced at the
