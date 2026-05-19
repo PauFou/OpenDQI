@@ -12,20 +12,20 @@ use opendqi_core::dq::{
     default_missing_collateral_checks, default_sftr_checks, default_sftr_lifecycle_checks,
     default_sftr_pre_submission_checks, default_sftr_reconciliation_checks,
     default_sftr_tr_activity_checks, default_sftr_tr_state_checks,
-    default_sftr_tr_state_lifecycle_checks, finalize_issues, run_all_missing_collateral,
-    run_all_sftr, run_all_sftr_lifecycle, run_all_sftr_pre_submission, run_all_sftr_reconciliation,
-    run_all_sftr_tr_activity, run_all_sftr_tr_state, run_all_sftr_tr_state_lifecycle, sort_issues,
+    default_sftr_tr_state_lifecycle_checks, run_all_sftr_lifecycle, run_all_sftr_pre_submission,
     CheckContext,
 };
 use opendqi_core::{
-    DqDimension, DqIssue, Regime, ScanSummary, Severity, SftrRecord, SftrTrStateRecord, Thresholds,
-    TrActivitySummary,
+    stream_checks_into, DqDimension, DqIssue, Regime, Severity, SftrRecord, SftrTrStateRecord,
+    SortedIssueSink, Thresholds, TrActivitySummary, STREAM_SPILL_MAX_ISSUES,
 };
 use opendqi_io::{
     discover_emir_inputs, has_extension, read_sftr_csv, read_sftr_parquet, write_sftr_parquet,
     CsvMapping,
 };
-use opendqi_report::{write_issues_csv, write_report_html, write_summary_json};
+use opendqi_report::{
+    write_issues_csv_from_iter, write_report_html, write_summary_json, TopIssues,
+};
 use opendqi_xml::{
     check_wellformedness, read_sftr_missing_collateral_xml, read_sftr_reconciliation_xml,
     read_sftr_tr_state_xml, read_sftr_xml, ExternalXmllintValidator, XsdValidator, XsdViolation,
@@ -475,8 +475,18 @@ fn run_scan(
     };
 
     let checks = default_sftr_checks();
-    let mut issues = run_all_sftr(&checks, &records, &ctx);
-    issues.extend(format_issues);
+    // Streaming pipeline (Milestone 0.26): every issue source is
+    // pushed into one spill-capable sink instead of a union
+    // `Vec<DqIssue>` — mirrors the M0.23 EMIR `run_scan`. Small
+    // inputs never spill ⇒ output byte-identical.
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
+    ));
+    stream_checks_into(&checks, &sink, |c| c.run(&records, &ctx));
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(format_issues);
     crate::memtrace::mem_trace("post_checks");
 
     if let Some(store_path) = store_path {
@@ -501,7 +511,9 @@ fn run_scan(
             lifecycle_issues = lifecycle_issues.len(),
             "lifecycle checks run"
         );
-        issues.extend(lifecycle_issues);
+        sink.lock()
+            .expect("issue sink mutex")
+            .push_batch(lifecycle_issues);
     }
 
     if let Some(profile_path) = rejection_profile_path {
@@ -525,24 +537,35 @@ fn run_scan(
             psc_issues = psc_issues.len(),
             "SFTR pre-submission checks run"
         );
-        issues.extend(psc_issues);
+        sink.lock()
+            .expect("issue sink mutex")
+            .push_batch(psc_issues);
     }
 
     crate::memtrace::mem_trace("post_lifecycle_presub");
 
-    finalize_issues(&mut issues, &ctx);
+    let (summary, sorted) = sink.into_inner().expect("issue sink mutex").finish(
+        Regime::Sftr,
+        inputs.len() as u32,
+        records.len() as u32,
+        started_at,
+        Utc::now(),
+    );
     crate::memtrace::mem_trace("post_finalize");
-
-    let summary = build_summary(&records, &issues, &inputs, started_at, Utc::now());
     crate::memtrace::mem_trace("post_summary");
 
     std::fs::create_dir_all(out)
         .with_context(|| format!("creating output directory {}", out.display()))?;
     write_summary_json(&out.join("summary.json"), &summary)?;
     crate::memtrace::mem_trace("post_write_summary_json");
-    write_issues_csv(&out.join("issues.csv"), &issues)?;
+    let mut top = TopIssues::with_capacity(20);
+    write_issues_csv_from_iter(
+        &out.join("issues.csv"),
+        sorted.inspect(|issue| top.offer(issue)),
+    )?;
     crate::memtrace::mem_trace("post_write_issues_csv");
-    write_report_html(&out.join("report.html"), &summary, &issues, &sources)?;
+    let top = top.into_sorted();
+    write_report_html(&out.join("report.html"), &summary, &top, &sources)?;
     crate::memtrace::mem_trace("post_write_report_html");
     if validator.is_some() {
         write_xsd_errors_csv(&out.join("xsd_errors.csv"), &xsd_rows)?;
@@ -605,8 +628,6 @@ fn run_missing_collateral(
         "loaded SFTR auth.083 Missing Collateral Request XML",
     );
 
-    let mut issues: Vec<DqIssue> = outcome.issues;
-
     // Optional companion TSR for the cross-reference checks: `--tsr`
     // wins; else the latest persisted SFTR trade state for the
     // requested UTIs (read-only — auth.083 persists nothing).
@@ -649,25 +670,26 @@ fn run_missing_collateral(
         today: now.date_naive(),
         now,
     };
-    let mcr_issues = run_all_missing_collateral(
-        &default_missing_collateral_checks(),
-        &outcome.records,
-        tsr_records.as_deref(),
-        &ctx,
-    );
-    info!(
-        missing_collateral_issues = mcr_issues.len(),
-        "missing-collateral checks run"
-    );
-    issues.extend(mcr_issues);
-    finalize_issues(&mut issues, &ctx);
-
-    let inputs = vec![input.to_path_buf()];
+    // Streaming pipeline (Milestone 0.26): format + missing-collateral
+    // issues fold into one spill-capable sink; `records_processed` =
+    // parsed auth.083 record count (exactly as the former
+    // `build_feedback_summary`). Byte-identical for non-spilling inputs.
+    let inputs = [input.to_path_buf()];
     let sources = vec![input.to_string_lossy().into_owned()];
-    let summary = build_feedback_summary(
-        outcome.records.len(),
-        &issues,
-        &inputs,
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
+    ));
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(outcome.issues);
+    stream_checks_into(&default_missing_collateral_checks(), &sink, |c| {
+        c.run(&outcome.records, tsr_records.as_deref(), &ctx)
+    });
+    let (summary, sorted) = sink.into_inner().expect("issue sink mutex").finish(
+        Regime::Sftr,
+        inputs.len() as u32,
+        outcome.records.len() as u32,
         started_at,
         Utc::now(),
     );
@@ -675,11 +697,16 @@ fn run_missing_collateral(
     std::fs::create_dir_all(out)
         .with_context(|| format!("creating output directory {}", out.display()))?;
     write_summary_json(&out.join("summary.json"), &summary)?;
-    write_issues_csv(&out.join("missing_collateral_issues.csv"), &issues)?;
+    let mut top = TopIssues::with_capacity(20);
+    write_issues_csv_from_iter(
+        &out.join("missing_collateral_issues.csv"),
+        sorted.inspect(|issue| top.offer(issue)),
+    )?;
+    let top = top.into_sorted();
     write_report_html(
         &out.join("missing_collateral_report.html"),
         &summary,
-        &issues,
+        &top,
         &sources,
     )?;
 
@@ -842,32 +869,6 @@ fn run_validate(input: &Path, xsd_path: &Path) -> Result<ExitCode> {
     })
 }
 
-fn build_feedback_summary(
-    feedback_count: usize,
-    issues: &[DqIssue],
-    inputs: &[PathBuf],
-    started_at: chrono::DateTime<Utc>,
-    finished_at: chrono::DateTime<Utc>,
-) -> ScanSummary {
-    let mut by_sev: BTreeMap<Severity, u32> = BTreeMap::new();
-    let mut by_dim: BTreeMap<DqDimension, u32> = BTreeMap::new();
-    for i in issues {
-        *by_sev.entry(i.severity).or_insert(0) += 1;
-        *by_dim.entry(i.dimension).or_insert(0) += 1;
-    }
-    ScanSummary {
-        regime: Regime::Sftr,
-        files_processed: inputs.len() as u32,
-        records_processed: feedback_count as u32,
-        issues_total: issues.len() as u32,
-        issues_by_severity: by_sev,
-        issues_by_dimension: by_dim,
-        quality_score: opendqi_core::quality_score(feedback_count as u32, issues),
-        started_at,
-        finished_at,
-    }
-}
-
 fn run_reconcile(
     input: &Path,
     store_path: &Path,
@@ -883,8 +884,6 @@ fn run_reconcile(
         format_issues = outcome.issues.len(),
         "loaded SFTR reconciliation XML",
     );
-
-    let mut issues: Vec<DqIssue> = outcome.issues;
 
     let mut store = opendqi_store::open_store(store_path)
         .with_context(|| format!("opening history store at {}", store_path.display()))?;
@@ -912,25 +911,26 @@ fn run_reconcile(
         today: now.date_naive(),
         now,
     };
-    let rec_issues = run_all_sftr_reconciliation(
-        &default_sftr_reconciliation_checks(),
-        &outcome.records,
-        &prior,
-        &ctx,
-    );
-    info!(
-        reconciliation_issues = rec_issues.len(),
-        "reconciliation checks run"
-    );
-    issues.extend(rec_issues);
-    finalize_issues(&mut issues, &ctx);
-
-    let inputs = vec![input.to_path_buf()];
+    // Streaming pipeline (Milestone 0.26): format + reconciliation
+    // issues fold into one spill-capable sink; `records_processed` =
+    // parsed reconciliation record count (exactly as the former
+    // `build_feedback_summary`). Byte-identical for non-spilling inputs.
+    let inputs = [input.to_path_buf()];
     let sources = vec![input.to_string_lossy().into_owned()];
-    let summary = build_feedback_summary(
-        outcome.records.len(),
-        &issues,
-        &inputs,
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
+    ));
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(outcome.issues);
+    stream_checks_into(&default_sftr_reconciliation_checks(), &sink, |c| {
+        c.run(&outcome.records, &prior, &ctx)
+    });
+    let (summary, sorted) = sink.into_inner().expect("issue sink mutex").finish(
+        Regime::Sftr,
+        inputs.len() as u32,
+        outcome.records.len() as u32,
         started_at,
         Utc::now(),
     );
@@ -938,8 +938,13 @@ fn run_reconcile(
     std::fs::create_dir_all(out)
         .with_context(|| format!("creating output directory {}", out.display()))?;
     write_summary_json(&out.join("summary.json"), &summary)?;
-    write_issues_csv(&out.join("issues.csv"), &issues)?;
-    write_report_html(&out.join("report.html"), &summary, &issues, &sources)?;
+    let mut top = TopIssues::with_capacity(20);
+    write_issues_csv_from_iter(
+        &out.join("issues.csv"),
+        sorted.inspect(|issue| top.offer(issue)),
+    )?;
+    let top = top.into_sorted();
+    write_report_html(&out.join("report.html"), &summary, &top, &sources)?;
 
     if let Some(path) = email_config_path {
         let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
@@ -995,8 +1000,6 @@ fn run_tr_state_scan(
         "loaded SFTR TSR XML",
     );
 
-    let mut issues: Vec<DqIssue> = outcome.issues;
-
     let (prior, prior_tsr): (Vec<SftrRecord>, Vec<SftrTrStateRecord>) =
         if let Some(store_path) = store_path {
             let mut store = opendqi_store::open_store(store_path)
@@ -1033,35 +1036,31 @@ fn run_tr_state_scan(
         today: now.date_naive(),
         now,
     };
-    let tsr_issues = run_all_sftr_tr_state(
-        &default_sftr_tr_state_checks(),
-        &outcome.records,
-        &prior,
-        &ctx,
-    );
-    info!(tsr_issues = tsr_issues.len(), "SFTR TSR checks run");
-    issues.extend(tsr_issues);
-    if !prior_tsr.is_empty() {
-        let lfc_issues = run_all_sftr_tr_state_lifecycle(
-            &default_sftr_tr_state_lifecycle_checks(),
-            &outcome.records,
-            &prior_tsr,
-            &ctx,
-        );
-        info!(
-            lfc_issues = lfc_issues.len(),
-            "SFTR TSR lifecycle checks run"
-        );
-        issues.extend(lfc_issues);
-    }
-    finalize_issues(&mut issues, &ctx);
-
-    let inputs = vec![input.to_path_buf()];
+    // Streaming pipeline (Milestone 0.26): SFTR TSR + conditional
+    // lifecycle fold into one spill-capable sink; `records_processed`
+    // = parsed TSR record count (exactly as the former
+    // `build_feedback_summary`). Byte-identical for non-spilling inputs.
+    let inputs = [input.to_path_buf()];
     let sources = vec![input.to_string_lossy().into_owned()];
-    let summary = build_feedback_summary(
-        outcome.records.len(),
-        &issues,
-        &inputs,
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
+    ));
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(outcome.issues);
+    stream_checks_into(&default_sftr_tr_state_checks(), &sink, |c| {
+        c.run(&outcome.records, &prior, &ctx)
+    });
+    if !prior_tsr.is_empty() {
+        stream_checks_into(&default_sftr_tr_state_lifecycle_checks(), &sink, |c| {
+            c.run(&outcome.records, &prior_tsr, &ctx)
+        });
+    }
+    let (summary, sorted) = sink.into_inner().expect("issue sink mutex").finish(
+        Regime::Sftr,
+        inputs.len() as u32,
+        outcome.records.len() as u32,
         started_at,
         Utc::now(),
     );
@@ -1069,11 +1068,16 @@ fn run_tr_state_scan(
     std::fs::create_dir_all(out)
         .with_context(|| format!("creating output directory {}", out.display()))?;
     write_summary_json(&out.join("summary.json"), &summary)?;
-    write_issues_csv(&out.join("tr_state_issues.csv"), &issues)?;
+    let mut top = TopIssues::with_capacity(20);
+    write_issues_csv_from_iter(
+        &out.join("tr_state_issues.csv"),
+        sorted.inspect(|issue| top.offer(issue)),
+    )?;
+    let top = top.into_sorted();
     write_report_html(
         &out.join("tr_state_report.html"),
         &summary,
-        &issues,
+        &top,
         &sources,
     )?;
 
@@ -1194,23 +1198,28 @@ fn run_tr_activity_scan(
         event_distribution,
     };
 
-    let activity_issues = run_all_sftr_tr_activity(
-        &default_sftr_tr_activity_checks(),
-        &records,
-        &prior,
-        tsr_records.as_deref(),
-        &ctx,
+    // Streaming pipeline (Milestone 0.26): format + SFTR TAR issues
+    // fold into one spill-capable sink; `records_processed` =
+    // records.len() (Pattern A, exactly as the former `build_summary`).
+    // The activity distribution sibling JSON is record-derived and
+    // unchanged. Byte-identical for non-spilling inputs.
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
+    ));
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(format_issues);
+    stream_checks_into(&default_sftr_tr_activity_checks(), &sink, |c| {
+        c.run(&records, &prior, tsr_records.as_deref(), &ctx)
+    });
+    let (summary, sorted) = sink.into_inner().expect("issue sink mutex").finish(
+        Regime::Sftr,
+        inputs.len() as u32,
+        records.len() as u32,
+        started_at,
+        Utc::now(),
     );
-    info!(
-        activity_issues = activity_issues.len(),
-        "SFTR TAR checks run"
-    );
-
-    let mut issues: Vec<DqIssue> = format_issues;
-    issues.extend(activity_issues);
-    finalize_issues(&mut issues, &ctx);
-
-    let summary = build_summary(&records, &issues, &inputs, started_at, Utc::now());
 
     std::fs::create_dir_all(out)
         .with_context(|| format!("creating output directory {}", out.display()))?;
@@ -1219,11 +1228,16 @@ fn run_tr_activity_scan(
         serde_json::to_string_pretty(&activity_summary).context("serialising TrActivitySummary")?;
     std::fs::write(out.join("tr_activity_summary.json"), activity_json)
         .context("writing tr_activity_summary.json")?;
-    write_issues_csv(&out.join("tr_activity_issues.csv"), &issues)?;
+    let mut top = TopIssues::with_capacity(20);
+    write_issues_csv_from_iter(
+        &out.join("tr_activity_issues.csv"),
+        sorted.inspect(|issue| top.offer(issue)),
+    )?;
+    let top = top.into_sorted();
     write_report_html(
         &out.join("tr_activity_report.html"),
         &summary,
-        &issues,
+        &top,
         &sources,
     )?;
 
@@ -1290,9 +1304,6 @@ fn run_tr_audit(
         .with_context(|| format!("reading SFTR TSR {}", tsr_path.display()))?;
     info!(records = tsr_outcome.records.len(), "loaded SFTR TSR");
 
-    let mut issues: Vec<DqIssue> = tar_issues;
-    issues.extend(tsr_outcome.issues.clone());
-
     let prior: Vec<SftrRecord> = if let Some(sp) = store_path {
         let store = opendqi_store::open_store(sp)
             .with_context(|| format!("opening history store at {}", sp.display()))?;
@@ -1326,51 +1337,64 @@ fn run_tr_audit(
         now,
     };
 
-    let tar_checks = run_all_sftr(&default_sftr_checks(), &tar_records, &ctx);
-    issues.extend(tar_checks);
-    let lifecycle =
-        run_all_sftr_lifecycle(&default_sftr_lifecycle_checks(), &tar_records, &prior, &ctx);
-    issues.extend(lifecycle);
-    let tsr_checks = run_all_sftr_tr_state(
-        &default_sftr_tr_state_checks(),
-        &tsr_outcome.records,
-        &prior,
-        &ctx,
-    );
-    issues.extend(tsr_checks);
-    let activity_checks = run_all_sftr_tr_activity(
-        &default_sftr_tr_activity_checks(),
-        &tar_records,
-        &prior,
-        Some(&tsr_outcome.records),
-        &ctx,
-    );
-    issues.extend(activity_checks);
-
-    // Cross-layer coherence (SFTR.AUD.*, TAR↔TSR only).
-    issues.extend(opendqi_core::dq::compute_tr_audit_sftr_issues(
-        &tar_records,
-        &tsr_outcome.records,
-        &tsr_path.to_string_lossy(),
-    ));
-
-    finalize_issues(&mut issues, &ctx);
-
-    let all_inputs = vec![tar_path.to_path_buf(), tsr_path.to_path_buf()];
+    // Streaming pipeline (Milestone 0.26): every layer's issues fold
+    // into one spill-capable sink (Pattern A: `records_processed` =
+    // tar_records.len(), exactly as the former `build_summary`).
+    // Byte-identical for non-spilling inputs.
+    let all_inputs = [tar_path.to_path_buf(), tsr_path.to_path_buf()];
     let sources: Vec<String> = all_inputs
         .iter()
         .map(|p| p.to_string_lossy().into_owned())
         .collect();
-    let summary = build_summary(&tar_records, &issues, &all_inputs, started_at, Utc::now());
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
+    ));
+    {
+        let mut s = sink.lock().expect("issue sink mutex");
+        s.push_batch(tar_issues);
+        s.push_batch(tsr_outcome.issues.clone());
+    }
+    stream_checks_into(&default_sftr_checks(), &sink, |c| c.run(&tar_records, &ctx));
+    stream_checks_into(&default_sftr_lifecycle_checks(), &sink, |c| {
+        c.run(&tar_records, &prior, &ctx)
+    });
+    stream_checks_into(&default_sftr_tr_state_checks(), &sink, |c| {
+        c.run(&tsr_outcome.records, &prior, &ctx)
+    });
+    stream_checks_into(&default_sftr_tr_activity_checks(), &sink, |c| {
+        c.run(&tar_records, &prior, Some(&tsr_outcome.records), &ctx)
+    });
+    // Cross-layer coherence (SFTR.AUD.*, TAR↔TSR only).
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(opendqi_core::dq::compute_tr_audit_sftr_issues(
+            &tar_records,
+            &tsr_outcome.records,
+            &tsr_path.to_string_lossy(),
+        ));
+
+    let (summary, sorted) = sink.into_inner().expect("issue sink mutex").finish(
+        Regime::Sftr,
+        all_inputs.len() as u32,
+        tar_records.len() as u32,
+        started_at,
+        Utc::now(),
+    );
 
     std::fs::create_dir_all(out)
         .with_context(|| format!("creating output directory {}", out.display()))?;
     write_summary_json(&out.join("summary.json"), &summary)?;
-    write_issues_csv(&out.join("tr_audit_issues.csv"), &issues)?;
+    let mut top = TopIssues::with_capacity(20);
+    write_issues_csv_from_iter(
+        &out.join("tr_audit_issues.csv"),
+        sorted.inspect(|issue| top.offer(issue)),
+    )?;
+    let top = top.into_sorted();
     write_report_html(
         &out.join("tr_audit_report.html"),
         &summary,
-        &issues,
+        &top,
         &sources,
     )?;
 
@@ -1432,28 +1456,51 @@ fn run_book_reconcile(
         .with_context(|| format!("reading SFTR TSR {}", tsr_path.display()))?;
     info!(records = tsr_outcome.records.len(), "loaded SFTR TSR");
 
-    let mut issues: Vec<DqIssue> = tsr_outcome.issues.clone();
-    issues.extend(compute_sftr_book_reconcile_issues(
-        &book_records,
-        &tsr_outcome.records,
-    ));
-    sort_issues(&mut issues);
-
-    let inputs = vec![book_path.to_path_buf(), tsr_path.to_path_buf()];
+    // Streaming pipeline (Milestone 0.26): book-vs-TSR issues fold
+    // into one spill-capable sink. No `--config` ⇒ default (empty)
+    // severity overrides, so the sink's override+`issue_cmp` finish
+    // == the former `sort_issues` (no overrides). Pattern A:
+    // `records_processed` = book_records.len(), as the former
+    // `build_summary`. Byte-identical for non-spilling inputs.
+    let inputs = [book_path.to_path_buf(), tsr_path.to_path_buf()];
     let sources: Vec<String> = inputs
         .iter()
         .map(|p| p.to_string_lossy().into_owned())
         .collect();
-    let summary = build_summary(&book_records, &issues, &inputs, started_at, Utc::now());
+    let thresholds = Thresholds::default();
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &thresholds,
+        STREAM_SPILL_MAX_ISSUES,
+    ));
+    {
+        let mut s = sink.lock().expect("issue sink mutex");
+        s.push_batch(tsr_outcome.issues.clone());
+        s.push_batch(compute_sftr_book_reconcile_issues(
+            &book_records,
+            &tsr_outcome.records,
+        ));
+    }
+    let (summary, sorted) = sink.into_inner().expect("issue sink mutex").finish(
+        Regime::Sftr,
+        inputs.len() as u32,
+        book_records.len() as u32,
+        started_at,
+        Utc::now(),
+    );
 
     std::fs::create_dir_all(out)
         .with_context(|| format!("creating output directory {}", out.display()))?;
     write_summary_json(&out.join("summary.json"), &summary)?;
-    write_issues_csv(&out.join("book_vs_tsr_issues.csv"), &issues)?;
+    let mut top = TopIssues::with_capacity(20);
+    write_issues_csv_from_iter(
+        &out.join("book_vs_tsr_issues.csv"),
+        sorted.inspect(|issue| top.offer(issue)),
+    )?;
+    let top = top.into_sorted();
     write_report_html(
         &out.join("book_vs_tsr_report.html"),
         &summary,
-        &issues,
+        &top,
         &sources,
     )?;
 
@@ -1602,24 +1649,6 @@ mod sftr_book_reconcile_tests {
             .iter()
             .any(|i| i.check_id == "SFTR.BREC.STATUS_MISMATCH"));
     }
-}
-
-fn build_summary(
-    records: &[SftrRecord],
-    issues: &[DqIssue],
-    inputs: &[PathBuf],
-    started_at: chrono::DateTime<Utc>,
-    finished_at: chrono::DateTime<Utc>,
-) -> ScanSummary {
-    // Thin signature adapter; the summary logic lives once in
-    // `opendqi_core::IssueAggregator` (Milestone 0.21).
-    opendqi_core::IssueAggregator::from_issues(issues).into_summary(
-        Regime::Sftr,
-        inputs.len() as u32,
-        records.len() as u32,
-        started_at,
-        finished_at,
-    )
 }
 
 fn xsd_violation_issue(path: &Path, violation: &XsdViolation) -> DqIssue {
