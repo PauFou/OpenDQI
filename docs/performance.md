@@ -52,6 +52,12 @@ where T: Sync, F: Fn(&T) -> Vec<DqIssue> + Sync + Send {
   rearchitecture. The current shape is kept for its genuine
   structural cleanliness (one DRY chokepoint; no all-per-check-Vecs
   hold), not as a memory win.
+  **Update (M0.21–0.27 + D5, 2026-05-19):** that no-retain
+  rearchitecture *was* built (streaming `SortedIssueSink` pipeline)
+  and **did** move the headline — EMIR 1M peak ~3.9 GiB → ~2.7 GiB
+  (≈ −32 %), a real reduction confirmed on three views. See the
+  "M0.21–0.27 + D5" section below; this note records only the
+  pre-streaming state.
 
 Every check trait (`Check`, `SftrCheck`, `LifecycleCheck`,
 `TrStateCheck`, `MarginActivityCheck`, …) already requires
@@ -540,6 +546,85 @@ M0.14/M0.17/M0.19 honesty discipline. (Total-RSS bench not re-run:
 dhat is the established decisive low-noise measure and the verdict —
 flat — is unambiguous; a noisy ±0.5–1 GiB bench adds nothing and
 costs a release build.)
+
+## M0.21–0.27 + D5 — the last lever, finally measured (honest WIN)
+
+**Captured:** 2026-05-19, same Apple Silicon box, release `lto=thin`,
+branch `increment-d-streaming-rollout` (M0.10–0.27, **not merged /
+tagged / pushed**). This is the **first headline reduction in the
+whole M0.13→M0.27 chantier** — and, unlike M0.17–0.20, it is a real
+reduction, not a relocation, confirmed on three independent measures.
+
+**What shipped (the M0.20 "only remaining lever"):** the streaming
+issue pipeline A→D — M0.21 `IssueAggregator` (online summary), M0.22
+`SortedIssueSink` (spill-capable k-way merge), M0.23 EMIR `run_scan`,
+**Increment D** (M0.24 generic `stream_checks_into`, M0.25 EMIR CLI,
+M0.26 SFTR CLI, M0.27 server chokepoint). The materialised union
+`Vec<DqIssue>` is now gone from **every** scan path; issues spill at
+`STREAM_SPILL_MAX_ISSUES = 65_536` and `issues.csv` is streamed from
+the merge, never resident. Byte-identical (18/18 goldens,
+`UPDATE_GOLDEN` unset; 16 server integration tests).
+
+**End-to-end (`scripts/bench-scale.sh --mem-trace`, captured run):**
+
+| pipeline | records | wall (baseline→D5) | OS-max RSS (baseline→D5) |
+|---|---|---|---|
+| emir scan | 100 000 | ~5.2 s → **4.7 s** | ~819 MiB → **729 MiB** |
+| **emir scan** | **1 000 000** | **~80 s → 50.4 s** | **~3994 MiB → 2722 MiB (≈ −1.25 GiB, −32%)** |
+| sftr scan | 100 000 | ~1.8 s → 1.7 s | 338 → 337 MiB (flat, expected) |
+| sftr scan | 1 000 000 | ~26 s → 18.2 s | ~2150 MiB → **1954 MiB (−~9%)** |
+
+Background sampler true-peak (EMIR 1M): baseline **3901 MiB @
+`post_write_summary_json`** → D5 **2679 MiB @ `post_parse`** (OS-max
+2722, within ~1.6 % — consistent). Run-to-run variance observed
+**~2.68–3.24 GiB** at 1M across two `--mem-trace` runs; even the
+worst case is well under the stable ~3.9–4.0 GiB baseline, so the
+reduction is **~0.7–1.3 GiB (~18–32 %)** — reported as a range, not
+the best number.
+
+**Mechanism — proven on three views (this is why it's a reduction,
+not the M0.17–0.20 relocation):**
+
+1. *Phase trace (EMIR 1M):* `post_finalize` 3819 → **2369 MiB** (the
+   ~2.3 GiB finalize sort-scratch jump is **gone** — sink streams,
+   no all-issues sort); `post_write_issues_csv` **1585 → 8 MiB**
+   (issues stream from spilled runs, never resident). The true peak
+   *relocated to `post_parse`* — i.e. the binding constraint is now
+   the irreducible resident `Vec<EmirRecord>` + parse buffers,
+   **exactly as M0.20 predicted** ("records stay resident… the only
+   lever is not retaining all issues").
+2. *dhat @100k (apples-to-apples vs M0.18):* live heap at t-gmax
+   **752 MB → 489 MB (−35 %)**. The M0.18 drivers are eliminated:
+   `Vec<DqIssue>` collect in `run_all` (**160 MB → gone**, no
+   `run_all`), rayon parallel-collect intermediates (**~152 MB →
+   gone**, `for_each`+`push_batch` not `.collect()`). The sink's own
+   buffer is only **13 MB** (bounded, spills). Residual: per-check
+   transient batches (~26 MB × a few concurrent rayon workers —
+   bounded by concurrency, **not** total issues), `format!` message
+   strings (~80 MB @100k, inherent to issue construction,
+   unchanged), records/parse (~107 + 11 MB).
+3. *OS `/usr/bin/time -l`* corroborates the sampler within 2 %.
+
+**Honest caveats.** (a) SFTR's gain is modest (~9 %) because SFTR was
+never issue-`Vec`-bound — its peak was always `post_parse` (records
+during checks); predicted, **not** a shortfall. (b) The new floor is
+resident records (~208 MB @1M EMIR) + parse buffers + ~0.8 GB of
+`format!`'d issue messages @1M + the bounded sink — further reduction
+would need lazy/interned messages or record chunking (future,
+out of scope; not promised). (c) Run-to-run variance is real; the
+range above is the honest claim. (d) Nothing tagged/pushed; this is
+a branch measurement. The `--mem-trace`-absent `set -u` unbound-array
+bug in `bench-scale.sh` (latent since M0.13, only hit when
+`--mem-trace` is omitted) was fixed in the same change
+(`${MT_ENV[@]+"${MT_ENV[@]}"}`) — tooling only, no measurement
+semantics change.
+
+**Verdict.** The M0.20 conclusion was correct: contained levers were
+exhausted and *not retaining all issues* was the only one left.
+Increment D delivered it, and D5 measures the payoff honestly — a
+real **~1.25 GiB / ~32 %** EMIR-1M peak cut (captured run; ~0.7 GiB
+worst-case across variance) plus a ~37 % wall-time win, byte-identical
+output. The EMIR-1M ceiling is no longer the issue pipeline.
 
 ## Conventions
 

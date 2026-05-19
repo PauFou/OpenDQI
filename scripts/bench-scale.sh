@@ -78,7 +78,7 @@ for regime in emir sftr; do
         # /usr/bin/time -l writes its report to stderr; the scan's own
         # stdout/stderr are discarded so only the time report (and, with
         # --mem-trace, the scan's MEMTRACE lines) land in $tf.
-        "${MT_ENV[@]}" /usr/bin/time -l "$BIN" "$regime" scan "$in" --out "$out" \
+        ${MT_ENV[@]+"${MT_ENV[@]}"} /usr/bin/time -l "$BIN" "$regime" scan "$in" --out "$out" \
             >/dev/null 2>"$tf" || { echo "scan failed for $regime n=$n"; cat "$tf"; exit 1; }
         wall="$(awk '/ real/{print $1; exit}' "$tf")"
         rss_bytes="$(awk '/maximum resident set size/{print $1; exit}' "$tf")"
