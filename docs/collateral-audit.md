@@ -92,4 +92,4 @@ runs against a previous-business-day MSR).
   and [`docs/auth-messages/emir-auth109.md`](auth-messages/emir-auth109.md) —
   field-by-field parser extraction maps.
 - [`docs/emir-checks.md`](emir-checks.md) — the global EMIR catalog
-  count (150 checks, of which the 2 `EMIR.COL.*` here).
+  count (151 checks, of which the 2 `EMIR.COL.*` here).

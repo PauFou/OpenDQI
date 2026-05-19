@@ -529,6 +529,85 @@ impl Check for EmirRmtMasterAgreementRequired {
     }
 }
 
+/// Compression / novation event records (`event_type` ∈ {`COMP`, `NOVA`})
+/// must carry both the lineage (`prior_uti`) and the portfolio
+/// identifier (`collateral_portfolio_code`) — without them the event
+/// is unanalysable for Article 11(1)(c) portfolio-compression
+/// follow-up. One issue per missing field is emitted (so a record
+/// missing both produces two issues with the same `check_id`).
+pub struct EmirRmtCompressionEventIncomplete;
+
+impl Check for EmirRmtCompressionEventIncomplete {
+    fn id(&self) -> &'static str {
+        "EMIR.RMT.COMPRESSION_EVENT_INCOMPLETE"
+    }
+    fn dimension(&self) -> DqDimension {
+        DqDimension::Completeness
+    }
+    fn severity(&self) -> Severity {
+        Severity::Warning
+    }
+    fn run(&self, records: &[EmirRecord], _ctx: &CheckContext) -> Vec<DqIssue> {
+        let mut out = Vec::new();
+        for r in records
+            .iter()
+            .filter(|r| is_uncleared(r.clearing_status.as_deref()))
+        {
+            // Only fires on compression / novation events; other
+            // event_types are silently skipped (they carry their own
+            // unrelated obligations).
+            let is_compression = r
+                .event_type
+                .as_deref()
+                .map(|e| {
+                    let e = e.trim();
+                    e.eq_ignore_ascii_case("COMP") || e.eq_ignore_ascii_case("NOVA")
+                })
+                .unwrap_or(false);
+            if !is_compression {
+                continue;
+            }
+            let prior_uti_missing = r
+                .prior_uti
+                .as_deref()
+                .map(|s| s.trim().is_empty())
+                .unwrap_or(true);
+            let portfolio_missing = r
+                .collateral_portfolio_code
+                .as_deref()
+                .map(|s| s.trim().is_empty())
+                .unwrap_or(true);
+            if prior_uti_missing {
+                out.push(issue(
+                    self.id(),
+                    self.severity(),
+                    self.dimension(),
+                    r,
+                    Some("prior_uti"),
+                    None,
+                    "Compression / novation event (event_type COMP or NOVA) has no prior_uti — \
+                     the lineage required to analyse Article 11(1)(c) portfolio-compression activity is missing."
+                        .into(),
+                ));
+            }
+            if portfolio_missing {
+                out.push(issue(
+                    self.id(),
+                    self.severity(),
+                    self.dimension(),
+                    r,
+                    Some("collateral_portfolio_code"),
+                    None,
+                    "Compression / novation event (event_type COMP or NOVA) has no collateral_portfolio_code — \
+                     compression operates at portfolio level (Article 11(1)(c))."
+                        .into(),
+                ));
+            }
+        }
+        out
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -805,5 +884,66 @@ mod tests {
     #[allow(dead_code)]
     fn _unused_date_import() -> Option<NaiveDate> {
         None
+    }
+
+    // -------- EMIR.RMT.COMPRESSION_EVENT_INCOMPLETE --------
+
+    fn compression_event(uti: &str, event: &str) -> EmirRecord {
+        let mut r = uncleared();
+        r.uti = Some(uti.into());
+        r.event_type = Some(event.into());
+        r
+    }
+
+    #[test]
+    fn compression_missing_both_emits_two_issues() {
+        let r = compression_event("U1", "COMP"); // no prior_uti, no portfolio
+        let issues = EmirRmtCompressionEventIncomplete.run(&[r], &ctx());
+        assert_eq!(issues.len(), 2, "one issue per missing field");
+        let fields: Vec<&str> = issues
+            .iter()
+            .filter_map(|i| i.field.as_deref())
+            .collect();
+        assert!(fields.contains(&"prior_uti"));
+        assert!(fields.contains(&"collateral_portfolio_code"));
+    }
+
+    #[test]
+    fn nova_with_portfolio_only_flags_prior_uti() {
+        let mut r = compression_event("U2", "NOVA");
+        r.collateral_portfolio_code = Some("PORT-X".into());
+        let issues = EmirRmtCompressionEventIncomplete.run(&[r], &ctx());
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].field.as_deref(), Some("prior_uti"));
+    }
+
+    #[test]
+    fn compression_with_both_clean() {
+        let mut r = compression_event("U3", "COMP");
+        r.prior_uti = Some("PRIOR-U3".into());
+        r.collateral_portfolio_code = Some("PORT-Y".into());
+        assert!(EmirRmtCompressionEventIncomplete
+            .run(&[r], &ctx())
+            .is_empty());
+    }
+
+    #[test]
+    fn non_compression_event_skipped() {
+        let mut r = uncleared();
+        r.uti = Some("U4".into());
+        r.event_type = Some("TRAD".into());
+        // Missing prior_uti + portfolio — but event_type is not COMP/NOVA.
+        assert!(EmirRmtCompressionEventIncomplete
+            .run(&[r], &ctx())
+            .is_empty());
+    }
+
+    #[test]
+    fn cleared_compression_skipped() {
+        let mut r = compression_event("U5", "COMP");
+        r.clearing_status = Some("CLRD".into()); // cleared → skip
+        assert!(EmirRmtCompressionEventIncomplete
+            .run(&[r], &ctx())
+            .is_empty());
     }
 }

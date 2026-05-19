@@ -196,9 +196,9 @@ pub use price_val_currency_mismatch::PriceValCurrencyMismatch;
 pub use product_id_missing::ProductIdMissing;
 pub use reporting_before_execution::ReportingBeforeExecution;
 pub use risk_mitigation::{
-    is_uncleared, EmirRmtCollateralCategoryRequired, EmirRmtDailyValuationMissing,
-    EmirRmtInitialMarginThreshold, EmirRmtIntragroupNeedsIndicator, EmirRmtLateConfirmation,
-    EmirRmtMasterAgreementRequired, EmirRmtNfcAboveClearingThreshold,
+    is_uncleared, EmirRmtCollateralCategoryRequired, EmirRmtCompressionEventIncomplete,
+    EmirRmtDailyValuationMissing, EmirRmtInitialMarginThreshold, EmirRmtIntragroupNeedsIndicator,
+    EmirRmtLateConfirmation, EmirRmtMasterAgreementRequired, EmirRmtNfcAboveClearingThreshold,
     EmirRmtPortfolioReconciliationMissing, EmirRmtUnclearedNeedsConfirmation,
     EmirRmtVariationMarginMissing,
 };
@@ -370,7 +370,7 @@ pub fn default_checks() -> Vec<Box<dyn Check>> {
         // Consistency (action × event matrix + UTI semantics)
         Box::new(ActionEventCompatibility),
         Box::new(ModiPreservesUti),
-        // ---- Article 11 risk-mitigation for non-cleared OTC (10) ----
+        // ---- Article 11 risk-mitigation for non-cleared OTC (11) ----
         Box::new(EmirRmtUnclearedNeedsConfirmation),
         Box::new(EmirRmtLateConfirmation),
         Box::new(EmirRmtPortfolioReconciliationMissing),
@@ -381,6 +381,7 @@ pub fn default_checks() -> Vec<Box<dyn Check>> {
         Box::new(EmirRmtNfcAboveClearingThreshold),
         Box::new(EmirRmtIntragroupNeedsIndicator),
         Box::new(EmirRmtMasterAgreementRequired),
+        Box::new(EmirRmtCompressionEventIncomplete),
         // ---- Field-coverage gap-fillers (6) ----
         Box::new(EmirCorporateSectorEnum),
         Box::new(EmirReportingObligationIndicatorEnum),

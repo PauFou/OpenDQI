@@ -5,7 +5,7 @@ to a non-centrally-cleared OTC derivative: timely confirmation, portfolio
 reconciliation, dispute resolution, compression, daily valuation, and
 the exchange of variation / initial margin.
 
-OpenDQI ships 10 `EMIR.RMT.*` checks that look at the canonical
+OpenDQI ships 11 `EMIR.RMT.*` checks that look at the canonical
 `EmirRecord` fields and surface gaps in those duties. Every check
 filters on `clearing_status` first and only runs when the trade is
 **non-cleared** — accepted shorthand: `NCLR`, `NCMP`, `non-cleared`,
@@ -29,6 +29,7 @@ scan` runs.
 | `EMIR.RMT.NFC_ABOVE_CLEARING_THRESHOLD` | Accuracy | Warning | NFC counterparty trading uncleared above its asset-class-specific clearing threshold — verify Article 10. Defaults: IR/FX 3 G€, CR/EQ 1 G€, CO 4 G€. |
 | `EMIR.RMT.INTRAGROUP_NEEDS_INDICATOR` | Completeness | Warning | Reporting entity = a counterparty but `intragroup_indicator` absent. |
 | `EMIR.RMT.MASTER_AGREEMENT_REQUIRED` | Completeness | Warning | Non-cleared trade with no `master_agreement_type`. |
+| `EMIR.RMT.COMPRESSION_EVENT_INCOMPLETE` | Completeness | Warning | Compression/novation event (`event_type` ∈ {`COMP`, `NOVA`}) missing `prior_uti` (lineage) or `collateral_portfolio_code` — one issue per missing field. Makes Art. 11(1)(c) portfolio-compression activity unanalysable. |
 
 ## Thresholds (configurable)
 
@@ -93,6 +94,14 @@ thresholds for triage.
   RMT check).
 - Row R011 is clean — should fire nothing.
 - Row R012 is cleared — should fire nothing (the filter must skip).
+- Row R013 is an `event_type=COMP` compression event missing both
+  `prior_uti` and `collateral_portfolio_code` — exercises the new
+  `EMIR.RMT.COMPRESSION_EVENT_INCOMPLETE` (two issues, one per
+  missing field). Like the other rows, it also incidentally triggers
+  overlapping completeness/consistency checks (e.g.
+  `EMIR.RMT.PORTFOLIO_RECONCILIATION_MISSING` because margin is
+  reported alongside the empty portfolio code) — the fixture's goal
+  is to demonstrate each check fires, not to isolate it.
 
 Run:
 
@@ -104,7 +113,7 @@ opendqi emir scan \
 grep 'EMIR.RMT' ./report-rmt/issues.csv | cut -d, -f1 | sort -u
 ```
 
-All 10 `EMIR.RMT.*` check IDs should appear at least once.
+All 11 `EMIR.RMT.*` check IDs should appear at least once.
 
 ## Collateral obligation — TSR ↔ MSR cross-reference (`EMIR.COL.*`)
 
