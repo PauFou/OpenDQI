@@ -15,24 +15,19 @@ use opendqi_core::dq::{
     default_pre_submission_checks, default_recon_stats_checks, default_reconciliation_checks,
     default_tr_activity_checks, default_tr_state_checks, default_tr_state_lifecycle_checks,
     default_warnings_checks, default_warnings_counterparty_checks,
-    default_warnings_transaction_checks, finalize_issues, run_all, run_all_feedback,
-    run_all_lifecycle, run_all_margin_activity, run_all_margin_state,
-    run_all_margin_state_lifecycle, run_all_pre_submission, run_all_recon_stats,
-    run_all_reconciliation, run_all_tr_activity, run_all_tr_state, run_all_tr_state_lifecycle,
-    run_all_warnings, run_all_warnings_counterparty, run_all_warnings_transaction, sort_issues,
-    CheckContext,
+    default_warnings_transaction_checks, run_all_lifecycle, run_all_pre_submission, CheckContext,
 };
 use opendqi_core::{
-    stream_emir_checks_into, DqDimension, DqIssue, EmirRecord, MarginActivityRecord,
-    MarginStateRecord, Regime, ScanSummary, Severity, SortedIssueSink, Thresholds,
-    TrActivitySummary, TrStateRecord, STREAM_SPILL_MAX_ISSUES,
+    stream_checks_into, stream_emir_checks_into, DqDimension, DqIssue, EmirRecord,
+    MarginActivityRecord, MarginStateRecord, Regime, Severity, SortedIssueSink,
+    Thresholds, TrActivitySummary, TrStateRecord, STREAM_SPILL_MAX_ISSUES,
 };
 use opendqi_io::{
     discover_emir_inputs, has_extension, read_emir_csv, read_emir_parquet, write_emir_parquet,
     CsvMapping,
 };
 use opendqi_report::{
-    write_issues_csv, write_issues_csv_from_iter, write_report_html, write_summary_json, TopIssues,
+    write_issues_csv_from_iter, write_report_html, write_summary_json, TopIssues,
 };
 use opendqi_xml::{
     check_wellformedness, read_emir_feedback_xml, read_emir_mar_xml, read_emir_msr_xml,
@@ -846,8 +841,6 @@ fn run_feedback(
         "loaded EMIR feedback XML",
     );
 
-    let mut issues: Vec<DqIssue> = outcome.issues;
-
     let mut store = opendqi_store::open_store(store_path)
         .with_context(|| format!("opening history store at {}", store_path.display()))?;
 
@@ -876,19 +869,28 @@ fn run_feedback(
         today: now.date_naive(),
         now,
     };
-    let fbk_issues = run_all_feedback(&default_feedback_checks(), &outcome.records, &prior, &ctx);
-    info!(feedback_issues = fbk_issues.len(), "feedback checks run");
-    issues.extend(fbk_issues);
-    finalize_issues(&mut issues, &ctx);
-
-    // Build a minimal summary. records_processed = number of feedback
-    // lines parsed (acts as the "throughput" indicator).
-    let inputs = vec![input.to_path_buf()];
+    // Streaming pipeline (Milestone 0.25): every issue source flows
+    // into one spill-capable sink instead of a union `Vec<DqIssue>`.
+    // `records_processed` = number of feedback lines parsed (the
+    // "throughput" indicator), exactly as the former
+    // `build_feedback_summary`; small inputs never spill ⇒ output
+    // byte-identical.
+    let inputs = [input.to_path_buf()];
     let sources = vec![input.to_string_lossy().into_owned()];
-    let summary = build_feedback_summary(
-        outcome.records.len(),
-        &issues,
-        &inputs,
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
+    ));
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(outcome.issues);
+    stream_checks_into(&default_feedback_checks(), &sink, |c| {
+        c.run(&outcome.records, &prior, &ctx)
+    });
+    let (summary, sorted) = sink.into_inner().expect("issue sink mutex").finish(
+        Regime::Emir,
+        inputs.len() as u32,
+        outcome.records.len() as u32,
         started_at,
         Utc::now(),
     );
@@ -896,8 +898,13 @@ fn run_feedback(
     std::fs::create_dir_all(out)
         .with_context(|| format!("creating output directory {}", out.display()))?;
     write_summary_json(&out.join("summary.json"), &summary)?;
-    write_issues_csv(&out.join("issues.csv"), &issues)?;
-    write_report_html(&out.join("report.html"), &summary, &issues, &sources)?;
+    let mut top = TopIssues::with_capacity(20);
+    write_issues_csv_from_iter(
+        &out.join("issues.csv"),
+        sorted.inspect(|issue| top.offer(issue)),
+    )?;
+    let top = top.into_sorted();
+    write_report_html(&out.join("report.html"), &summary, &top, &sources)?;
 
     if let Some(path) = email_config_path {
         let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
@@ -931,32 +938,6 @@ fn run_feedback(
     );
     println!("Report: {}", out.join("report.html").display());
     Ok(())
-}
-
-fn build_feedback_summary(
-    feedback_count: usize,
-    issues: &[DqIssue],
-    inputs: &[PathBuf],
-    started_at: chrono::DateTime<Utc>,
-    finished_at: chrono::DateTime<Utc>,
-) -> ScanSummary {
-    let mut by_sev: BTreeMap<Severity, u32> = BTreeMap::new();
-    let mut by_dim: BTreeMap<DqDimension, u32> = BTreeMap::new();
-    for i in issues {
-        *by_sev.entry(i.severity).or_insert(0) += 1;
-        *by_dim.entry(i.dimension).or_insert(0) += 1;
-    }
-    ScanSummary {
-        regime: Regime::Emir,
-        files_processed: inputs.len() as u32,
-        records_processed: feedback_count as u32,
-        issues_total: issues.len() as u32,
-        issues_by_severity: by_sev,
-        issues_by_dimension: by_dim,
-        quality_score: opendqi_core::quality_score(feedback_count as u32, issues),
-        started_at,
-        finished_at,
-    }
 }
 
 fn run_recon_stats(
@@ -998,8 +979,6 @@ fn run_recon_stats(
         Vec::new()
     };
 
-    let mut issues: Vec<DqIssue> = outcome.issues;
-
     let now = Utc::now();
     let ctx = CheckContext {
         thresholds,
@@ -1007,38 +986,31 @@ fn run_recon_stats(
         now,
     };
 
-    let rst_issues = run_all_recon_stats(
-        &default_recon_stats_checks(),
-        &outcome.records,
-        &prior,
-        &ctx,
-    );
-    info!(rst_issues = rst_issues.len(), "recon-stats checks run");
-    issues.extend(rst_issues);
-
+    // Streaming pipeline (Milestone 0.25): one spill-capable sink for
+    // every issue source; `records_processed` = parsed auth.091 record
+    // count (exactly as the former `build_feedback_summary`).
+    // Byte-identical for non-spilling inputs.
+    let inputs = [input.to_path_buf()];
+    let sources = vec![input.to_string_lossy().into_owned()];
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
+    ));
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(outcome.issues);
+    stream_checks_into(&default_recon_stats_checks(), &sink, |c| {
+        c.run(&outcome.records, &prior, &ctx)
+    });
     // Per-transaction RcncltnRpt detail (UTI, cohort-inherited
     // pairing/recon status, mismatched criterion names) → EMIR.REC.*.
-    let rec_issues = run_all_reconciliation(
-        &default_reconciliation_checks(),
-        &outcome.reconciliation_records,
-        &[],
-        &ctx,
-    );
-    info!(
-        recon_tx_records = outcome.reconciliation_records.len(),
-        rec_issues = rec_issues.len(),
-        "per-transaction reconciliation checks run",
-    );
-    issues.extend(rec_issues);
-
-    finalize_issues(&mut issues, &ctx);
-
-    let inputs = vec![input.to_path_buf()];
-    let sources = vec![input.to_string_lossy().into_owned()];
-    let summary = build_feedback_summary(
-        outcome.records.len(),
-        &issues,
-        &inputs,
+    stream_checks_into(&default_reconciliation_checks(), &sink, |c| {
+        c.run(&outcome.reconciliation_records, &[], &ctx)
+    });
+    let (summary, sorted) = sink.into_inner().expect("issue sink mutex").finish(
+        Regime::Emir,
+        inputs.len() as u32,
+        outcome.records.len() as u32,
         started_at,
         Utc::now(),
     );
@@ -1046,11 +1018,16 @@ fn run_recon_stats(
     std::fs::create_dir_all(out)
         .with_context(|| format!("creating output directory {}", out.display()))?;
     write_summary_json(&out.join("summary.json"), &summary)?;
-    write_issues_csv(&out.join("recon_stats_issues.csv"), &issues)?;
+    let mut top = TopIssues::with_capacity(20);
+    write_issues_csv_from_iter(
+        &out.join("recon_stats_issues.csv"),
+        sorted.inspect(|issue| top.offer(issue)),
+    )?;
+    let top = top.into_sorted();
     write_report_html(
         &out.join("recon_stats_report.html"),
         &summary,
-        &issues,
+        &top,
         &sources,
     )?;
 
@@ -1114,8 +1091,6 @@ fn run_warnings(
         "loaded EMIR auth.106 XML",
     );
 
-    let mut issues: Vec<DqIssue> = outcome.issues;
-
     let now = Utc::now();
     let ctx = CheckContext {
         thresholds,
@@ -1123,42 +1098,35 @@ fn run_warnings(
         now,
     };
 
-    let wrn_issues = run_all_warnings(&default_warnings_checks(), &outcome.records, &ctx);
-    info!(wrn_issues = wrn_issues.len(), "warnings checks run");
-    issues.extend(wrn_issues);
+    // Streaming pipeline (Milestone 0.25): report-level, per-counterparty
+    // and per-UTI warnings all fold into one spill-capable sink;
+    // `records_processed` = parsed auth.106 record count (as the former
+    // `build_feedback_summary`). Byte-identical for non-spilling inputs.
+    let inputs = [input.to_path_buf()];
+    let sources = vec![input.to_string_lossy().into_owned()];
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
+    ));
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(outcome.issues);
+    stream_checks_into(&default_warnings_checks(), &sink, |c| {
+        c.run(&outcome.records, &ctx)
+    });
     // Fold the per-counterparty `Wrnngs` issues into the same report
     // (shared core; same precedent as recon-stats' per-tx fold).
-    let cp_issues = run_all_warnings_counterparty(
-        &default_warnings_counterparty_checks(),
-        &outcome.counterparty_records,
-        &ctx,
-    );
-    info!(
-        warnings_counterparty_issues = cp_issues.len(),
-        counterparty_records = outcome.counterparty_records.len(),
-        "per-counterparty warnings checks run"
-    );
-    issues.extend(cp_issues);
+    stream_checks_into(&default_warnings_counterparty_checks(), &sink, |c| {
+        c.run(&outcome.counterparty_records, &ctx)
+    });
     // Per-UTI `Wrnngs/TxDtls` issues — same report, same CSV.
-    let tx_issues = run_all_warnings_transaction(
-        &default_warnings_transaction_checks(),
-        &outcome.transaction_records,
-        &ctx,
-    );
-    info!(
-        warnings_transaction_issues = tx_issues.len(),
-        transaction_records = outcome.transaction_records.len(),
-        "per-UTI warnings checks run"
-    );
-    issues.extend(tx_issues);
-    finalize_issues(&mut issues, &ctx);
-
-    let inputs = vec![input.to_path_buf()];
-    let sources = vec![input.to_string_lossy().into_owned()];
-    let summary = build_feedback_summary(
-        outcome.records.len(),
-        &issues,
-        &inputs,
+    stream_checks_into(&default_warnings_transaction_checks(), &sink, |c| {
+        c.run(&outcome.transaction_records, &ctx)
+    });
+    let (summary, sorted) = sink.into_inner().expect("issue sink mutex").finish(
+        Regime::Emir,
+        inputs.len() as u32,
+        outcome.records.len() as u32,
         started_at,
         Utc::now(),
     );
@@ -1166,11 +1134,16 @@ fn run_warnings(
     std::fs::create_dir_all(out)
         .with_context(|| format!("creating output directory {}", out.display()))?;
     write_summary_json(&out.join("summary.json"), &summary)?;
-    write_issues_csv(&out.join("warnings_issues.csv"), &issues)?;
+    let mut top = TopIssues::with_capacity(20);
+    write_issues_csv_from_iter(
+        &out.join("warnings_issues.csv"),
+        sorted.inspect(|issue| top.offer(issue)),
+    )?;
+    let top = top.into_sorted();
     write_report_html(
         &out.join("warnings_report.html"),
         &summary,
-        &issues,
+        &top,
         &sources,
     )?;
 
@@ -1224,8 +1197,6 @@ fn run_tr_state_scan(
         "loaded EMIR TSR XML",
     );
 
-    let mut issues: Vec<DqIssue> = outcome.issues;
-
     // Optional store enrichment: persist this TSR snapshot, load
     // prior EMIR records for the UTIs present in the TSR, and run
     // the cross-batch lifecycle layer against prior TSR snapshots.
@@ -1265,27 +1236,31 @@ fn run_tr_state_scan(
         today: now.date_naive(),
         now,
     };
-    let tsr_issues = run_all_tr_state(&default_tr_state_checks(), &outcome.records, &prior, &ctx);
-    info!(tsr_issues = tsr_issues.len(), "TSR checks run");
-    issues.extend(tsr_issues);
-    if !prior_tsr.is_empty() {
-        let lfc_issues = run_all_tr_state_lifecycle(
-            &default_tr_state_lifecycle_checks(),
-            &outcome.records,
-            &prior_tsr,
-            &ctx,
-        );
-        info!(lfc_issues = lfc_issues.len(), "TSR lifecycle checks run");
-        issues.extend(lfc_issues);
-    }
-    finalize_issues(&mut issues, &ctx);
-
-    let inputs = vec![input.to_path_buf()];
+    // Streaming pipeline (Milestone 0.25): TSR + conditional lifecycle
+    // fold into one spill-capable sink; `records_processed` = parsed
+    // TSR record count (as the former `build_feedback_summary`).
+    // Byte-identical for non-spilling inputs.
+    let inputs = [input.to_path_buf()];
     let sources = vec![input.to_string_lossy().into_owned()];
-    let summary = build_feedback_summary(
-        outcome.records.len(),
-        &issues,
-        &inputs,
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
+    ));
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(outcome.issues);
+    stream_checks_into(&default_tr_state_checks(), &sink, |c| {
+        c.run(&outcome.records, &prior, &ctx)
+    });
+    if !prior_tsr.is_empty() {
+        stream_checks_into(&default_tr_state_lifecycle_checks(), &sink, |c| {
+            c.run(&outcome.records, &prior_tsr, &ctx)
+        });
+    }
+    let (summary, sorted) = sink.into_inner().expect("issue sink mutex").finish(
+        Regime::Emir,
+        inputs.len() as u32,
+        outcome.records.len() as u32,
         started_at,
         Utc::now(),
     );
@@ -1293,11 +1268,16 @@ fn run_tr_state_scan(
     std::fs::create_dir_all(out)
         .with_context(|| format!("creating output directory {}", out.display()))?;
     write_summary_json(&out.join("summary.json"), &summary)?;
-    write_issues_csv(&out.join("tr_state_issues.csv"), &issues)?;
+    let mut top = TopIssues::with_capacity(20);
+    write_issues_csv_from_iter(
+        &out.join("tr_state_issues.csv"),
+        sorted.inspect(|issue| top.offer(issue)),
+    )?;
+    let top = top.into_sorted();
     write_report_html(
         &out.join("tr_state_report.html"),
         &summary,
-        &issues,
+        &top,
         &sources,
     )?;
 
@@ -1351,8 +1331,6 @@ fn run_mar_scan(
         "loaded EMIR MAR XML",
     );
 
-    let mut issues: Vec<DqIssue> = outcome.issues;
-
     let prior: Vec<MarginActivityRecord> = if let Some(store_path) = store_path {
         let mut store = opendqi_store::open_store(store_path)
             .with_context(|| format!("opening history store at {}", store_path.display()))?;
@@ -1375,32 +1353,31 @@ fn run_mar_scan(
         today: now.date_naive(),
         now,
     };
-    let mar_issues = run_all_margin_activity(
-        &default_margin_activity_checks(),
-        &outcome.records,
-        &prior,
-        &ctx,
-    );
-    info!(mar_issues = mar_issues.len(), "MAR checks run");
-    issues.extend(mar_issues);
-    if !prior.is_empty() {
-        let lfc_issues = run_all_margin_activity(
-            &default_margin_activity_lifecycle_checks(),
-            &outcome.records,
-            &prior,
-            &ctx,
-        );
-        info!(lfc_issues = lfc_issues.len(), "MAR lifecycle checks run");
-        issues.extend(lfc_issues);
-    }
-    finalize_issues(&mut issues, &ctx);
-
-    let inputs = vec![input.to_path_buf()];
+    // Streaming pipeline (Milestone 0.25): MAR + conditional lifecycle
+    // fold into one spill-capable sink; `records_processed` = parsed
+    // MAR record count (as the former `build_feedback_summary`).
+    // Byte-identical for non-spilling inputs.
+    let inputs = [input.to_path_buf()];
     let sources = vec![input.to_string_lossy().into_owned()];
-    let summary = build_feedback_summary(
-        outcome.records.len(),
-        &issues,
-        &inputs,
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
+    ));
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(outcome.issues);
+    stream_checks_into(&default_margin_activity_checks(), &sink, |c| {
+        c.run(&outcome.records, &prior, &ctx)
+    });
+    if !prior.is_empty() {
+        stream_checks_into(&default_margin_activity_lifecycle_checks(), &sink, |c| {
+            c.run(&outcome.records, &prior, &ctx)
+        });
+    }
+    let (summary, sorted) = sink.into_inner().expect("issue sink mutex").finish(
+        Regime::Emir,
+        inputs.len() as u32,
+        outcome.records.len() as u32,
         started_at,
         Utc::now(),
     );
@@ -1408,8 +1385,13 @@ fn run_mar_scan(
     std::fs::create_dir_all(out)
         .with_context(|| format!("creating output directory {}", out.display()))?;
     write_summary_json(&out.join("summary.json"), &summary)?;
-    write_issues_csv(&out.join("mar_issues.csv"), &issues)?;
-    write_report_html(&out.join("mar_report.html"), &summary, &issues, &sources)?;
+    let mut top = TopIssues::with_capacity(20);
+    write_issues_csv_from_iter(
+        &out.join("mar_issues.csv"),
+        sorted.inspect(|issue| top.offer(issue)),
+    )?;
+    let top = top.into_sorted();
+    write_report_html(&out.join("mar_report.html"), &summary, &top, &sources)?;
 
     if let Some(path) = email_config_path {
         let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
@@ -1461,8 +1443,6 @@ fn run_msr_scan(
         "loaded EMIR MSR XML",
     );
 
-    let mut issues: Vec<DqIssue> = outcome.issues;
-
     let (prior, prior_msr): (Vec<EmirRecord>, Vec<MarginStateRecord>) =
         if let Some(store_path) = store_path {
             let mut store = opendqi_store::open_store(store_path)
@@ -1499,32 +1479,31 @@ fn run_msr_scan(
         today: now.date_naive(),
         now,
     };
-    let msr_issues = run_all_margin_state(
-        &default_margin_state_checks(),
-        &outcome.records,
-        &prior,
-        &ctx,
-    );
-    info!(msr_issues = msr_issues.len(), "MSR checks run");
-    issues.extend(msr_issues);
-    if !prior_msr.is_empty() {
-        let lfc_issues = run_all_margin_state_lifecycle(
-            &default_margin_state_lifecycle_checks(),
-            &outcome.records,
-            &prior_msr,
-            &ctx,
-        );
-        info!(lfc_issues = lfc_issues.len(), "MSR lifecycle checks run");
-        issues.extend(lfc_issues);
-    }
-    finalize_issues(&mut issues, &ctx);
-
-    let inputs = vec![input.to_path_buf()];
+    // Streaming pipeline (Milestone 0.25): MSR + conditional lifecycle
+    // fold into one spill-capable sink; `records_processed` = parsed
+    // MSR record count (as the former `build_feedback_summary`).
+    // Byte-identical for non-spilling inputs.
+    let inputs = [input.to_path_buf()];
     let sources = vec![input.to_string_lossy().into_owned()];
-    let summary = build_feedback_summary(
-        outcome.records.len(),
-        &issues,
-        &inputs,
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
+    ));
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(outcome.issues);
+    stream_checks_into(&default_margin_state_checks(), &sink, |c| {
+        c.run(&outcome.records, &prior, &ctx)
+    });
+    if !prior_msr.is_empty() {
+        stream_checks_into(&default_margin_state_lifecycle_checks(), &sink, |c| {
+            c.run(&outcome.records, &prior_msr, &ctx)
+        });
+    }
+    let (summary, sorted) = sink.into_inner().expect("issue sink mutex").finish(
+        Regime::Emir,
+        inputs.len() as u32,
+        outcome.records.len() as u32,
         started_at,
         Utc::now(),
     );
@@ -1532,8 +1511,13 @@ fn run_msr_scan(
     std::fs::create_dir_all(out)
         .with_context(|| format!("creating output directory {}", out.display()))?;
     write_summary_json(&out.join("summary.json"), &summary)?;
-    write_issues_csv(&out.join("msr_issues.csv"), &issues)?;
-    write_report_html(&out.join("msr_report.html"), &summary, &issues, &sources)?;
+    let mut top = TopIssues::with_capacity(20);
+    write_issues_csv_from_iter(
+        &out.join("msr_issues.csv"),
+        sorted.inspect(|issue| top.offer(issue)),
+    )?;
+    let top = top.into_sorted();
+    write_report_html(&out.join("msr_report.html"), &summary, &top, &sources)?;
 
     if let Some(path) = email_config_path {
         let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
@@ -1654,20 +1638,28 @@ fn run_tr_activity_scan(
         event_distribution,
     };
 
-    let activity_issues = run_all_tr_activity(
-        &default_tr_activity_checks(),
-        &records,
-        &prior,
-        tsr_records.as_deref(),
-        &ctx,
+    // Streaming pipeline (Milestone 0.25): format + TAR issues fold
+    // into one spill-capable sink; `records_processed` = records.len()
+    // (Pattern A, exactly as the former `build_summary`). The activity
+    // distribution sibling JSON is record-derived and unchanged.
+    // Byte-identical for non-spilling inputs.
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
+    ));
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(format_issues);
+    stream_checks_into(&default_tr_activity_checks(), &sink, |c| {
+        c.run(&records, &prior, tsr_records.as_deref(), &ctx)
+    });
+    let (summary, sorted) = sink.into_inner().expect("issue sink mutex").finish(
+        Regime::Emir,
+        inputs.len() as u32,
+        records.len() as u32,
+        started_at,
+        Utc::now(),
     );
-    info!(activity_issues = activity_issues.len(), "TAR checks run");
-
-    let mut issues: Vec<DqIssue> = format_issues;
-    issues.extend(activity_issues);
-    finalize_issues(&mut issues, &ctx);
-
-    let summary = build_summary(&records, &issues, &inputs, started_at, Utc::now());
 
     std::fs::create_dir_all(out)
         .with_context(|| format!("creating output directory {}", out.display()))?;
@@ -1678,11 +1670,16 @@ fn run_tr_activity_scan(
         serde_json::to_string_pretty(&activity_summary).context("serialising TrActivitySummary")?;
     std::fs::write(out.join("tr_activity_summary.json"), activity_json)
         .context("writing tr_activity_summary.json")?;
-    write_issues_csv(&out.join("tr_activity_issues.csv"), &issues)?;
+    let mut top = TopIssues::with_capacity(20);
+    write_issues_csv_from_iter(
+        &out.join("tr_activity_issues.csv"),
+        sorted.inspect(|issue| top.offer(issue)),
+    )?;
+    let top = top.into_sorted();
     write_report_html(
         &out.join("tr_activity_report.html"),
         &summary,
-        &issues,
+        &top,
         &sources,
     )?;
 
@@ -1754,10 +1751,6 @@ fn run_tr_audit(
         .with_context(|| format!("reading feedback {}", feedback_path.display()))?;
     info!(records = feedback_outcome.records.len(), "loaded feedback");
 
-    let mut issues: Vec<DqIssue> = tar_issues;
-    issues.extend(tsr_outcome.issues.clone());
-    issues.extend(feedback_outcome.issues.clone());
-
     // 2. Optional store enrichment.
     let prior: Vec<EmirRecord> = if let Some(sp) = store_path {
         let store = opendqi_store::open_store(sp)
@@ -1800,47 +1793,12 @@ fn run_tr_audit(
         now,
     };
 
-    // 3. Run each layer's checks.
-    let tar_checks = run_all(&default_checks(), &tar_records, &ctx);
-    issues.extend(tar_checks);
-    let lifecycle = run_all_lifecycle(&default_lifecycle_checks(), &tar_records, &prior, &ctx);
-    issues.extend(lifecycle);
-    let tsr_checks = run_all_tr_state(
-        &default_tr_state_checks(),
-        &tsr_outcome.records,
-        &prior,
-        &ctx,
-    );
-    issues.extend(tsr_checks);
-    let fbk_checks = run_all_feedback(
-        &default_feedback_checks(),
-        &feedback_outcome.records,
-        &prior,
-        &ctx,
-    );
-    issues.extend(fbk_checks);
-    let activity_checks = run_all_tr_activity(
-        &default_tr_activity_checks(),
-        &tar_records,
-        &prior,
-        Some(&tsr_outcome.records),
-        &ctx,
-    );
-    issues.extend(activity_checks);
-
-    // 4. Cross-layer coherence checks (EMIR.AUD.*).
-    issues.extend(opendqi_core::dq::compute_tr_audit_emir_issues(
-        &tar_records,
-        &tsr_outcome.records,
-        &feedback_outcome.records,
-        &tsr_path.to_string_lossy(),
-        &feedback_path.to_string_lossy(),
-    ));
-
-    finalize_issues(&mut issues, &ctx);
-
-    // 5. Write outputs.
-    let all_inputs = vec![
+    // 3. Streaming pipeline (Milestone 0.25): every layer's issues
+    //    fold into one spill-capable sink (Pattern A:
+    //    `records_processed` = tar_records.len(), exactly as the
+    //    former `build_summary`). Byte-identical for non-spilling
+    //    inputs.
+    let all_inputs = [
         tar_path.to_path_buf(),
         tsr_path.to_path_buf(),
         feedback_path.to_path_buf(),
@@ -1849,16 +1807,62 @@ fn run_tr_audit(
         .iter()
         .map(|p| p.to_string_lossy().into_owned())
         .collect();
-    let summary = build_summary(&tar_records, &issues, &all_inputs, started_at, Utc::now());
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
+    ));
+    {
+        let mut s = sink.lock().expect("issue sink mutex");
+        s.push_batch(tar_issues);
+        s.push_batch(tsr_outcome.issues.clone());
+        s.push_batch(feedback_outcome.issues.clone());
+    }
+    stream_checks_into(&default_checks(), &sink, |c| c.run(&tar_records, &ctx));
+    stream_checks_into(&default_lifecycle_checks(), &sink, |c| {
+        c.run(&tar_records, &prior, &ctx)
+    });
+    stream_checks_into(&default_tr_state_checks(), &sink, |c| {
+        c.run(&tsr_outcome.records, &prior, &ctx)
+    });
+    stream_checks_into(&default_feedback_checks(), &sink, |c| {
+        c.run(&feedback_outcome.records, &prior, &ctx)
+    });
+    stream_checks_into(&default_tr_activity_checks(), &sink, |c| {
+        c.run(&tar_records, &prior, Some(&tsr_outcome.records), &ctx)
+    });
+    // 4. Cross-layer coherence checks (EMIR.AUD.*).
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(opendqi_core::dq::compute_tr_audit_emir_issues(
+            &tar_records,
+            &tsr_outcome.records,
+            &feedback_outcome.records,
+            &tsr_path.to_string_lossy(),
+            &feedback_path.to_string_lossy(),
+        ));
 
+    let (summary, sorted) = sink.into_inner().expect("issue sink mutex").finish(
+        Regime::Emir,
+        all_inputs.len() as u32,
+        tar_records.len() as u32,
+        started_at,
+        Utc::now(),
+    );
+
+    // 5. Write outputs.
     std::fs::create_dir_all(out)
         .with_context(|| format!("creating output directory {}", out.display()))?;
     write_summary_json(&out.join("summary.json"), &summary)?;
-    write_issues_csv(&out.join("tr_audit_issues.csv"), &issues)?;
+    let mut top = TopIssues::with_capacity(20);
+    write_issues_csv_from_iter(
+        &out.join("tr_audit_issues.csv"),
+        sorted.inspect(|issue| top.offer(issue)),
+    )?;
+    let top = top.into_sorted();
     write_report_html(
         &out.join("tr_audit_report.html"),
         &summary,
-        &issues,
+        &top,
         &sources,
     )?;
 
@@ -1921,28 +1925,51 @@ fn run_book_reconcile(
         .with_context(|| format!("reading TSR {}", tsr_path.display()))?;
     info!(records = tsr_outcome.records.len(), "loaded TSR");
 
-    let mut issues: Vec<DqIssue> = tsr_outcome.issues.clone();
-    issues.extend(compute_book_reconcile_issues(
-        &book_records,
-        &tsr_outcome.records,
-    ));
-    sort_issues(&mut issues);
-
-    let inputs = vec![book_path.to_path_buf(), tsr_path.to_path_buf()];
+    // Streaming pipeline (Milestone 0.25): book-vs-TSR issues fold
+    // into one spill-capable sink. No `--config` ⇒ default (empty)
+    // severity overrides, so the sink's override+`issue_cmp` finish
+    // == the former `sort_issues` (no overrides). Pattern A:
+    // `records_processed` = book_records.len(), as the former
+    // `build_summary`. Byte-identical for non-spilling inputs.
+    let inputs = [book_path.to_path_buf(), tsr_path.to_path_buf()];
     let sources: Vec<String> = inputs
         .iter()
         .map(|p| p.to_string_lossy().into_owned())
         .collect();
-    let summary = build_summary(&book_records, &issues, &inputs, started_at, Utc::now());
+    let thresholds = Thresholds::default();
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &thresholds,
+        STREAM_SPILL_MAX_ISSUES,
+    ));
+    {
+        let mut s = sink.lock().expect("issue sink mutex");
+        s.push_batch(tsr_outcome.issues.clone());
+        s.push_batch(compute_book_reconcile_issues(
+            &book_records,
+            &tsr_outcome.records,
+        ));
+    }
+    let (summary, sorted) = sink.into_inner().expect("issue sink mutex").finish(
+        Regime::Emir,
+        inputs.len() as u32,
+        book_records.len() as u32,
+        started_at,
+        Utc::now(),
+    );
 
     std::fs::create_dir_all(out)
         .with_context(|| format!("creating output directory {}", out.display()))?;
     write_summary_json(&out.join("summary.json"), &summary)?;
-    write_issues_csv(&out.join("book_vs_tsr_issues.csv"), &issues)?;
+    let mut top = TopIssues::with_capacity(20);
+    write_issues_csv_from_iter(
+        &out.join("book_vs_tsr_issues.csv"),
+        sorted.inspect(|issue| top.offer(issue)),
+    )?;
+    let top = top.into_sorted();
     write_report_html(
         &out.join("book_vs_tsr_report.html"),
         &summary,
-        &issues,
+        &top,
         &sources,
     )?;
 
@@ -2111,24 +2138,6 @@ mod book_reconcile_tests {
             .iter()
             .any(|i| i.check_id == "EMIR.BREC.STATUS_MISMATCH"));
     }
-}
-
-fn build_summary(
-    records: &[EmirRecord],
-    issues: &[DqIssue],
-    inputs: &[PathBuf],
-    started_at: chrono::DateTime<Utc>,
-    finished_at: chrono::DateTime<Utc>,
-) -> ScanSummary {
-    // Thin signature adapter; the summary logic lives once in
-    // `opendqi_core::IssueAggregator` (Milestone 0.21).
-    opendqi_core::IssueAggregator::from_issues(issues).into_summary(
-        Regime::Emir,
-        inputs.len() as u32,
-        records.len() as u32,
-        started_at,
-        finished_at,
-    )
 }
 
 fn xsd_violation_issue(path: &Path, violation: &XsdViolation) -> DqIssue {
