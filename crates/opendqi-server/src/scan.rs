@@ -14,17 +14,16 @@ use opendqi_core::dq::{
     default_reconciliation_checks, default_sftr_checks, default_sftr_tr_activity_checks,
     default_sftr_tr_state_checks, default_tr_activity_checks, default_tr_state_checks,
     default_warnings_checks, default_warnings_counterparty_checks,
-    default_warnings_transaction_checks, finalize_issues, run_all, run_all_feedback,
-    run_all_margin_activity, run_all_margin_state, run_all_missing_collateral, run_all_recon_stats,
-    run_all_reconciliation, run_all_sftr, run_all_sftr_tr_activity, run_all_sftr_tr_state,
-    run_all_tr_activity, run_all_tr_state, run_all_warnings, run_all_warnings_counterparty,
-    run_all_warnings_transaction, CheckContext,
+    default_warnings_transaction_checks, stream_checks_into, CheckContext,
 };
 use opendqi_core::{
-    DqDimension, DqIssue, EmirRecord, Regime, ScanSummary, Severity, SftrRecord, Thresholds,
+    DqDimension, DqIssue, EmirRecord, Regime, Severity, SftrRecord, SortedIssueSink, Thresholds,
+    STREAM_SPILL_MAX_ISSUES,
 };
 use opendqi_io::{has_extension, read_emir_parquet, read_sftr_parquet};
-use opendqi_report::{write_issues_csv, write_report_html, write_summary_json};
+use opendqi_report::{
+    write_issues_csv_from_iter, write_report_html, write_summary_json, TopIssues,
+};
 use opendqi_xml::{
     check_wellformedness, read_emir_feedback_xml, read_emir_mar_xml, read_emir_msr_xml,
     read_emir_recon_stats_xml, read_emir_tr_state_xml, read_emir_warnings_xml, read_emir_xml,
@@ -299,23 +298,23 @@ fn run_emir_book_reconcile_server(
     let tsr_outcome =
         read_emir_tr_state_xml(tsr).with_context(|| format!("reading TSR {}", tsr.display()))?;
 
-    let mut issues = tsr_outcome.issues;
-    issues.extend(compute_book_reconcile_issues(
-        &book_records,
-        &tsr_outcome.records,
-    ));
     let ctx = CheckContext {
         thresholds: Thresholds::default(),
         today: Utc::now().date_naive(),
         now: Utc::now(),
     };
-    finalize_issues(&mut issues, &ctx);
+    let mut sink = SortedIssueSink::new(&ctx.thresholds, STREAM_SPILL_MAX_ISSUES);
+    sink.push_batch(tsr_outcome.issues);
+    sink.push_batch(compute_book_reconcile_issues(
+        &book_records,
+        &tsr_outcome.records,
+    ));
     finalize_artifacts(
         out_dir,
         Regime::Emir,
         UiRegime::Emir,
         book_records.len() as u32,
-        &issues,
+        sink,
         &[
             book.to_string_lossy().into_owned(),
             tsr.to_string_lossy().into_owned(),
@@ -343,23 +342,23 @@ fn run_sftr_book_reconcile_server(
     let tsr_outcome = read_sftr_tr_state_xml(tsr)
         .with_context(|| format!("reading SFTR TSR {}", tsr.display()))?;
 
-    let mut issues = tsr_outcome.issues;
-    issues.extend(compute_sftr_book_reconcile_issues(
-        &book_records,
-        &tsr_outcome.records,
-    ));
     let ctx = CheckContext {
         thresholds: Thresholds::default(),
         today: Utc::now().date_naive(),
         now: Utc::now(),
     };
-    finalize_issues(&mut issues, &ctx);
+    let mut sink = SortedIssueSink::new(&ctx.thresholds, STREAM_SPILL_MAX_ISSUES);
+    sink.push_batch(tsr_outcome.issues);
+    sink.push_batch(compute_sftr_book_reconcile_issues(
+        &book_records,
+        &tsr_outcome.records,
+    ));
     finalize_artifacts(
         out_dir,
         Regime::Sftr,
         UiRegime::Sftr,
         book_records.len() as u32,
-        &issues,
+        sink,
         &[
             book.to_string_lossy().into_owned(),
             tsr.to_string_lossy().into_owned(),
@@ -390,43 +389,43 @@ fn run_emir_tr_audit_server(
         today: Utc::now().date_naive(),
         now: Utc::now(),
     };
-    let mut issues = tar_outcome.issues;
-    issues.extend(tsr_outcome.issues.clone());
-    issues.extend(fb_outcome.issues.clone());
-    issues.extend(run_all(&default_checks(), &tar_outcome.records, &ctx));
-    issues.extend(run_all_tr_state(
-        &default_tr_state_checks(),
-        &tsr_outcome.records,
-        &[],
-        &ctx,
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
     ));
-    issues.extend(run_all_feedback(
-        &default_feedback_checks(),
-        &fb_outcome.records,
-        &[],
-        &ctx,
-    ));
-    issues.extend(run_all_tr_activity(
-        &default_tr_activity_checks(),
-        &tar_outcome.records,
-        &[],
-        Some(&tsr_outcome.records),
-        &ctx,
-    ));
-    issues.extend(compute_tr_audit_emir_issues(
-        &tar_outcome.records,
-        &tsr_outcome.records,
-        &fb_outcome.records,
-        &tsr.to_string_lossy(),
-        &feedback.to_string_lossy(),
-    ));
-    finalize_issues(&mut issues, &ctx);
+    {
+        let mut s = sink.lock().expect("issue sink mutex");
+        s.push_batch(tar_outcome.issues);
+        s.push_batch(tsr_outcome.issues.clone());
+        s.push_batch(fb_outcome.issues.clone());
+    }
+    stream_checks_into(&default_checks(), &sink, |c| {
+        c.run(&tar_outcome.records, &ctx)
+    });
+    stream_checks_into(&default_tr_state_checks(), &sink, |c| {
+        c.run(&tsr_outcome.records, &[], &ctx)
+    });
+    stream_checks_into(&default_feedback_checks(), &sink, |c| {
+        c.run(&fb_outcome.records, &[], &ctx)
+    });
+    stream_checks_into(&default_tr_activity_checks(), &sink, |c| {
+        c.run(&tar_outcome.records, &[], Some(&tsr_outcome.records), &ctx)
+    });
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(compute_tr_audit_emir_issues(
+            &tar_outcome.records,
+            &tsr_outcome.records,
+            &fb_outcome.records,
+            &tsr.to_string_lossy(),
+            &feedback.to_string_lossy(),
+        ));
     finalize_artifacts(
         out_dir,
         Regime::Emir,
         UiRegime::Emir,
         tar_outcome.records.len() as u32,
-        &issues,
+        sink.into_inner().expect("issue sink mutex"),
         &[
             tar.to_string_lossy().into_owned(),
             tsr.to_string_lossy().into_owned(),
@@ -452,38 +451,37 @@ fn run_sftr_tr_audit_server(tar: &Path, tsr: &Path, out_dir: &Path) -> Result<Sc
         today: Utc::now().date_naive(),
         now: Utc::now(),
     };
-    let mut issues = tar_outcome.issues;
-    issues.extend(tsr_outcome.issues.clone());
-    issues.extend(run_all_sftr(
-        &default_sftr_checks(),
-        &tar_outcome.records,
-        &ctx,
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
     ));
-    issues.extend(run_all_sftr_tr_state(
-        &default_sftr_tr_state_checks(),
-        &tsr_outcome.records,
-        &[],
-        &ctx,
-    ));
-    issues.extend(run_all_sftr_tr_activity(
-        &default_sftr_tr_activity_checks(),
-        &tar_outcome.records,
-        &[],
-        Some(&tsr_outcome.records),
-        &ctx,
-    ));
-    issues.extend(compute_tr_audit_sftr_issues(
-        &tar_outcome.records,
-        &tsr_outcome.records,
-        &tsr.to_string_lossy(),
-    ));
-    finalize_issues(&mut issues, &ctx);
+    {
+        let mut s = sink.lock().expect("issue sink mutex");
+        s.push_batch(tar_outcome.issues);
+        s.push_batch(tsr_outcome.issues.clone());
+    }
+    stream_checks_into(&default_sftr_checks(), &sink, |c| {
+        c.run(&tar_outcome.records, &ctx)
+    });
+    stream_checks_into(&default_sftr_tr_state_checks(), &sink, |c| {
+        c.run(&tsr_outcome.records, &[], &ctx)
+    });
+    stream_checks_into(&default_sftr_tr_activity_checks(), &sink, |c| {
+        c.run(&tar_outcome.records, &[], Some(&tsr_outcome.records), &ctx)
+    });
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(compute_tr_audit_sftr_issues(
+            &tar_outcome.records,
+            &tsr_outcome.records,
+            &tsr.to_string_lossy(),
+        ));
     finalize_artifacts(
         out_dir,
         Regime::Sftr,
         UiRegime::Sftr,
         tar_outcome.records.len() as u32,
-        &issues,
+        sink.into_inner().expect("issue sink mutex"),
         &[
             tar.to_string_lossy().into_owned(),
             tsr.to_string_lossy().into_owned(),
@@ -499,7 +497,12 @@ pub fn run_server_scan(input: &Path, regime: UiRegime, out_dir: &Path) -> Result
     let started_at = Utc::now();
     let sources = vec![input.to_string_lossy().into_owned()];
 
-    let (records_processed, summary, issues) = match regime {
+    // Streaming pipeline (Milestone 0.27): each regime arm streams its
+    // checks into a spill-capable sink; the shared `finalize_artifacts`
+    // chokepoint finishes it (files = 1) — byte-identical to the prior
+    // run_all + finalize_issues + build_summary path for non-spilling
+    // inputs.
+    let (core_regime, records_processed, sink) = match regime {
         UiRegime::Emir => {
             let records = load_emir(input)?;
             let now = Utc::now();
@@ -508,17 +511,16 @@ pub fn run_server_scan(input: &Path, regime: UiRegime, out_dir: &Path) -> Result
                 today: now.date_naive(),
                 now,
             };
-            let mut issues = run_all(&default_checks(), &records, &ctx);
-            finalize_issues(&mut issues, &ctx);
-            let summary = build_summary(
+            let sink = std::sync::Mutex::new(SortedIssueSink::new(
+                &ctx.thresholds,
+                STREAM_SPILL_MAX_ISSUES,
+            ));
+            stream_checks_into(&default_checks(), &sink, |c| c.run(&records, &ctx));
+            (
                 Regime::Emir,
                 records.len() as u32,
-                &issues,
-                1,
-                started_at,
-                Utc::now(),
-            );
-            (records.len() as u32, summary, issues)
+                sink.into_inner().expect("issue sink mutex"),
+            )
         }
         UiRegime::Sftr => {
             let records = load_sftr(input)?;
@@ -528,51 +530,29 @@ pub fn run_server_scan(input: &Path, regime: UiRegime, out_dir: &Path) -> Result
                 today: now.date_naive(),
                 now,
             };
-            let mut issues = run_all_sftr(&default_sftr_checks(), &records, &ctx);
-            finalize_issues(&mut issues, &ctx);
-            let summary = build_summary(
+            let sink = std::sync::Mutex::new(SortedIssueSink::new(
+                &ctx.thresholds,
+                STREAM_SPILL_MAX_ISSUES,
+            ));
+            stream_checks_into(&default_sftr_checks(), &sink, |c| c.run(&records, &ctx));
+            (
                 Regime::Sftr,
                 records.len() as u32,
-                &issues,
-                1,
-                started_at,
-                Utc::now(),
-            );
-            (records.len() as u32, summary, issues)
+                sink.into_inner().expect("issue sink mutex"),
+            )
         }
     };
 
-    write_summary_json(&out_dir.join("summary.json"), &summary).context("writing summary.json")?;
-    write_issues_csv(&out_dir.join("issues.csv"), &issues).context("writing issues.csv")?;
-    write_report_html(&out_dir.join("report.html"), &summary, &issues, &sources)
-        .context("writing report.html")?;
-
-    let critical = summary
-        .issues_by_severity
-        .get(&Severity::Critical)
-        .copied()
-        .unwrap_or(0);
-    let high = summary
-        .issues_by_severity
-        .get(&Severity::High)
-        .copied()
-        .unwrap_or(0);
-
-    let artifact_files = vec![
-        "report.html".to_string(),
-        "summary.json".to_string(),
-        "issues.csv".to_string(),
-    ];
-
-    Ok(ScanArtifacts {
+    finalize_artifacts(
+        out_dir,
+        core_regime,
         regime,
-        records: records_processed,
-        issues_total: summary.issues_total,
-        issues_critical: critical,
-        issues_high: high,
-        quality_score: summary.quality_score,
-        artifact_files,
-    })
+        records_processed,
+        sink,
+        &sources,
+        started_at,
+        Utc::now(),
+    )
 }
 
 /// EMIR Trade State Report (auth.107) scan — server-side.
@@ -592,20 +572,22 @@ fn run_emir_tr_state_server(input: &Path, out_dir: &Path) -> Result<ScanArtifact
         today: now.date_naive(),
         now,
     };
-    let mut issues = outcome.issues;
-    issues.extend(run_all_tr_state(
-        &default_tr_state_checks(),
-        &outcome.records,
-        &[],
-        &ctx,
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
     ));
-    finalize_issues(&mut issues, &ctx);
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(outcome.issues);
+    stream_checks_into(&default_tr_state_checks(), &sink, |c| {
+        c.run(&outcome.records, &[], &ctx)
+    });
     finalize_artifacts(
         out_dir,
         Regime::Emir,
         UiRegime::Emir,
         outcome.records.len() as u32,
-        &issues,
+        sink.into_inner().expect("issue sink mutex"),
         &[input.to_string_lossy().into_owned()],
         started_at,
         Utc::now(),
@@ -629,20 +611,22 @@ fn run_sftr_tr_state_server(input: &Path, out_dir: &Path) -> Result<ScanArtifact
         today: now.date_naive(),
         now,
     };
-    let mut issues = outcome.issues;
-    issues.extend(run_all_sftr_tr_state(
-        &default_sftr_tr_state_checks(),
-        &outcome.records,
-        &[],
-        &ctx,
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
     ));
-    finalize_issues(&mut issues, &ctx);
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(outcome.issues);
+    stream_checks_into(&default_sftr_tr_state_checks(), &sink, |c| {
+        c.run(&outcome.records, &[], &ctx)
+    });
     finalize_artifacts(
         out_dir,
         Regime::Sftr,
         UiRegime::Sftr,
         outcome.records.len() as u32,
-        &issues,
+        sink.into_inner().expect("issue sink mutex"),
         &[input.to_string_lossy().into_owned()],
         started_at,
         Utc::now(),
@@ -666,21 +650,22 @@ fn run_emir_tr_activity_server(input: &Path, out_dir: &Path) -> Result<ScanArtif
         today: now.date_naive(),
         now,
     };
-    let mut issues = outcome.issues;
-    issues.extend(run_all_tr_activity(
-        &default_tr_activity_checks(),
-        &outcome.records,
-        &[],
-        None,
-        &ctx,
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
     ));
-    finalize_issues(&mut issues, &ctx);
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(outcome.issues);
+    stream_checks_into(&default_tr_activity_checks(), &sink, |c| {
+        c.run(&outcome.records, &[], None, &ctx)
+    });
     finalize_artifacts(
         out_dir,
         Regime::Emir,
         UiRegime::Emir,
         outcome.records.len() as u32,
-        &issues,
+        sink.into_inner().expect("issue sink mutex"),
         &[input.to_string_lossy().into_owned()],
         started_at,
         Utc::now(),
@@ -704,21 +689,22 @@ fn run_sftr_tr_activity_server(input: &Path, out_dir: &Path) -> Result<ScanArtif
         today: now.date_naive(),
         now,
     };
-    let mut issues = outcome.issues;
-    issues.extend(run_all_sftr_tr_activity(
-        &default_sftr_tr_activity_checks(),
-        &outcome.records,
-        &[],
-        None,
-        &ctx,
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
     ));
-    finalize_issues(&mut issues, &ctx);
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(outcome.issues);
+    stream_checks_into(&default_sftr_tr_activity_checks(), &sink, |c| {
+        c.run(&outcome.records, &[], None, &ctx)
+    });
     finalize_artifacts(
         out_dir,
         Regime::Sftr,
         UiRegime::Sftr,
         outcome.records.len() as u32,
-        &issues,
+        sink.into_inner().expect("issue sink mutex"),
         &[input.to_string_lossy().into_owned()],
         started_at,
         Utc::now(),
@@ -744,20 +730,22 @@ fn run_emir_feedback_server(input: &Path, out_dir: &Path) -> Result<ScanArtifact
         today: now.date_naive(),
         now,
     };
-    let mut issues = outcome.issues;
-    issues.extend(run_all_feedback(
-        &default_feedback_checks(),
-        &outcome.records,
-        &[],
-        &ctx,
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
     ));
-    finalize_issues(&mut issues, &ctx);
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(outcome.issues);
+    stream_checks_into(&default_feedback_checks(), &sink, |c| {
+        c.run(&outcome.records, &[], &ctx)
+    });
     finalize_artifacts(
         out_dir,
         Regime::Emir,
         UiRegime::Emir,
         outcome.records.len() as u32,
-        &issues,
+        sink.into_inner().expect("issue sink mutex"),
         &[input.to_string_lossy().into_owned()],
         started_at,
         Utc::now(),
@@ -781,20 +769,22 @@ fn run_emir_mar_server(input: &Path, out_dir: &Path) -> Result<ScanArtifacts> {
         today: now.date_naive(),
         now,
     };
-    let mut issues = outcome.issues;
-    issues.extend(run_all_margin_activity(
-        &default_margin_activity_checks(),
-        &outcome.records,
-        &[],
-        &ctx,
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
     ));
-    finalize_issues(&mut issues, &ctx);
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(outcome.issues);
+    stream_checks_into(&default_margin_activity_checks(), &sink, |c| {
+        c.run(&outcome.records, &[], &ctx)
+    });
     finalize_artifacts(
         out_dir,
         Regime::Emir,
         UiRegime::Emir,
         outcome.records.len() as u32,
-        &issues,
+        sink.into_inner().expect("issue sink mutex"),
         &[input.to_string_lossy().into_owned()],
         started_at,
         Utc::now(),
@@ -818,20 +808,22 @@ fn run_emir_msr_server(input: &Path, out_dir: &Path) -> Result<ScanArtifacts> {
         today: now.date_naive(),
         now,
     };
-    let mut issues = outcome.issues;
-    issues.extend(run_all_margin_state(
-        &default_margin_state_checks(),
-        &outcome.records,
-        &[],
-        &ctx,
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
     ));
-    finalize_issues(&mut issues, &ctx);
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(outcome.issues);
+    stream_checks_into(&default_margin_state_checks(), &sink, |c| {
+        c.run(&outcome.records, &[], &ctx)
+    });
     finalize_artifacts(
         out_dir,
         Regime::Emir,
         UiRegime::Emir,
         outcome.records.len() as u32,
-        &issues,
+        sink.into_inner().expect("issue sink mutex"),
         &[input.to_string_lossy().into_owned()],
         started_at,
         Utc::now(),
@@ -883,13 +875,18 @@ fn run_validate_server(input: &Path, regime: UiRegime, out_dir: &Path) -> Result
             evidence: Vec::new(),
         },
     };
-    let issues = vec![issue];
+    // Single well-formedness issue; no checks, no overrides (default
+    // empty thresholds) — the sink's finish is byte-identical to the
+    // former one-element write.
+    let thresholds = Thresholds::default();
+    let mut sink = SortedIssueSink::new(&thresholds, STREAM_SPILL_MAX_ISSUES);
+    sink.push_batch(vec![issue]);
     finalize_artifacts(
         out_dir,
         core_regime,
         regime,
         0,
-        &issues,
+        sink,
         &[source_label],
         started_at,
         Utc::now(),
@@ -913,28 +910,27 @@ fn run_emir_recon_stats_server(input: &Path, out_dir: &Path) -> Result<ScanArtif
         today: now.date_naive(),
         now,
     };
-    let mut issues = outcome.issues;
-    issues.extend(run_all_recon_stats(
-        &default_recon_stats_checks(),
-        &outcome.records,
-        &[],
-        &ctx,
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
     ));
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(outcome.issues);
+    stream_checks_into(&default_recon_stats_checks(), &sink, |c| {
+        c.run(&outcome.records, &[], &ctx)
+    });
     // Per-transaction RcncltnRpt detail → EMIR.REC.* (same fold as the
     // CLI `opendqi emir recon-stats`; shared core, no duplicated logic).
-    issues.extend(run_all_reconciliation(
-        &default_reconciliation_checks(),
-        &outcome.reconciliation_records,
-        &[],
-        &ctx,
-    ));
-    finalize_issues(&mut issues, &ctx);
+    stream_checks_into(&default_reconciliation_checks(), &sink, |c| {
+        c.run(&outcome.reconciliation_records, &[], &ctx)
+    });
     finalize_artifacts(
         out_dir,
         Regime::Emir,
         UiRegime::Emir,
         outcome.records.len() as u32,
-        &issues,
+        sink.into_inner().expect("issue sink mutex"),
         &[input.to_string_lossy().into_owned()],
         started_at,
         Utc::now(),
@@ -959,29 +955,28 @@ fn run_emir_warnings_server(input: &Path, out_dir: &Path) -> Result<ScanArtifact
         today: now.date_naive(),
         now,
     };
-    let mut issues = outcome.issues;
-    issues.extend(run_all_warnings(
-        &default_warnings_checks(),
-        &outcome.records,
-        &ctx,
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
     ));
-    issues.extend(run_all_warnings_counterparty(
-        &default_warnings_counterparty_checks(),
-        &outcome.counterparty_records,
-        &ctx,
-    ));
-    issues.extend(run_all_warnings_transaction(
-        &default_warnings_transaction_checks(),
-        &outcome.transaction_records,
-        &ctx,
-    ));
-    finalize_issues(&mut issues, &ctx);
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(outcome.issues);
+    stream_checks_into(&default_warnings_checks(), &sink, |c| {
+        c.run(&outcome.records, &ctx)
+    });
+    stream_checks_into(&default_warnings_counterparty_checks(), &sink, |c| {
+        c.run(&outcome.counterparty_records, &ctx)
+    });
+    stream_checks_into(&default_warnings_transaction_checks(), &sink, |c| {
+        c.run(&outcome.transaction_records, &ctx)
+    });
     finalize_artifacts(
         out_dir,
         Regime::Emir,
         UiRegime::Emir,
         outcome.records.len() as u32,
-        &issues,
+        sink.into_inner().expect("issue sink mutex"),
         &[input.to_string_lossy().into_owned()],
         started_at,
         Utc::now(),
@@ -1026,17 +1021,24 @@ fn run_sftr_missing_collateral_server(
         today: now.date_naive(),
         now,
     };
-    let mut issues = outcome.issues;
-    if let Some(o) = &tsr_outcome {
-        issues.extend(o.issues.clone());
-    }
-    issues.extend(run_all_missing_collateral(
-        &default_missing_collateral_checks(),
-        &outcome.records,
-        tsr_outcome.as_ref().map(|o| o.records.as_slice()),
-        &ctx,
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
     ));
-    finalize_issues(&mut issues, &ctx);
+    {
+        let mut s = sink.lock().expect("issue sink mutex");
+        s.push_batch(outcome.issues);
+        if let Some(o) = &tsr_outcome {
+            s.push_batch(o.issues.clone());
+        }
+    }
+    stream_checks_into(&default_missing_collateral_checks(), &sink, |c| {
+        c.run(
+            &outcome.records,
+            tsr_outcome.as_ref().map(|o| o.records.as_slice()),
+            &ctx,
+        )
+    });
 
     let mut sources = vec![input.to_string_lossy().into_owned()];
     if let Some(p) = tsr {
@@ -1047,7 +1049,7 @@ fn run_sftr_missing_collateral_server(
         Regime::Sftr,
         UiRegime::Sftr,
         outcome.records.len() as u32,
-        &issues,
+        sink.into_inner().expect("issue sink mutex"),
         &sources,
         started_at,
         Utc::now(),
@@ -1062,15 +1064,27 @@ fn finalize_artifacts(
     regime: Regime,
     ui_regime: UiRegime,
     records: u32,
-    issues: &[DqIssue],
+    sink: SortedIssueSink,
     sources: &[String],
     started_at: chrono::DateTime<Utc>,
     finished_at: chrono::DateTime<Utc>,
 ) -> Result<ScanArtifacts> {
-    let summary = build_summary(regime, records, issues, 1, started_at, finished_at);
+    // Streaming finalize (Milestone 0.27): the sink owns the online
+    // aggregator + spill-capable issue store; `finish` yields the
+    // `ScanSummary` and issues in exact `issue_cmp` order. files = 1
+    // (one uploaded file) — exactly the former
+    // `build_summary(regime, records, &issues, 1, …)`. Small inputs
+    // never spill ⇒ byte-identical to the prior finalize path.
+    let (summary, sorted) = sink.finish(regime, 1, records, started_at, finished_at);
     write_summary_json(&out_dir.join("summary.json"), &summary).context("writing summary.json")?;
-    write_issues_csv(&out_dir.join("issues.csv"), issues).context("writing issues.csv")?;
-    write_report_html(&out_dir.join("report.html"), &summary, issues, sources)
+    let mut top = TopIssues::with_capacity(20);
+    write_issues_csv_from_iter(
+        &out_dir.join("issues.csv"),
+        sorted.inspect(|issue| top.offer(issue)),
+    )
+    .context("writing issues.csv")?;
+    let top = top.into_sorted();
+    write_report_html(&out_dir.join("report.html"), &summary, &top, sources)
         .context("writing report.html")?;
 
     let critical = summary
@@ -1128,25 +1142,6 @@ fn load_sftr(input: &Path) -> Result<Vec<SftrRecord>> {
             input.display()
         ))
     }
-}
-
-fn build_summary(
-    regime: Regime,
-    records: u32,
-    issues: &[DqIssue],
-    files: u32,
-    started_at: chrono::DateTime<Utc>,
-    finished_at: chrono::DateTime<Utc>,
-) -> ScanSummary {
-    // Thin signature adapter; the summary logic lives once in
-    // `opendqi_core::IssueAggregator` (Milestone 0.21).
-    opendqi_core::IssueAggregator::from_issues(issues).into_summary(
-        regime,
-        files,
-        records,
-        started_at,
-        finished_at,
-    )
 }
 
 /// Resolve the original filename to a sane safe stem suitable for
