@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic ISO 20022 auth.109 EMIR Margin State Report fixture
+  paired with the sibling tsr.xml. Hand-authored — not derived from,
+  and does not redistribute, any ESMA or SWIFT example or schema.
+  Schema-shaped per auth.109.001.01_ESMAUG_DATMDS_1.1.0 (see
+  docs/auth-messages/emir-auth109.md).
+
+  Only three of the four TSR UTIs have a matching MSR row. The
+  missing one (OPENDQI-COL-NOLINK-0001) is the "no link" case.
+
+  - OPENDQI-COL-ZERO-0002  : RptgTmStmp 2026-05-13, every IM/VM
+                              (posted/collected) explicitly 0.00
+                              → drives the "all-zero" branch of
+                              EMIR.COL.MISSING.
+  - OPENDQI-COL-FRESH-0003 : RptgTmStmp 2026-05-13, IM posted
+                              500 000.00 → clean.
+  - OPENDQI-COL-STALE-0004 : RptgTmStmp 2026-05-10 (3 calendar days
+                              before the TSR's 2026-05-13 state_as_of,
+                              above the default 1-day threshold), IM
+                              posted 250 000.00 → EMIR.COL.STALE.
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.109.001.01">
+  <DerivsTradMrgnDataTxStatRpt>
+    <RptHdr><NbRcrds>3</NbRcrds></RptHdr>
+    <TradData>
+
+      <!-- All IM/VM (posted + collected) explicitly zero. -->
+      <Stat>
+        <RptgTmStmp>2026-05-13T08:00:00Z</RptgTmStmp>
+        <CtrPtyId>
+          <RptgCtrPty><Id><Lgl><Id><LEI>12345678901234567890</LEI></Id></Lgl></Id></RptgCtrPty>
+          <OthrCtrPty><IdTp><Lgl><Id><LEI>09876543210987654321</LEI></Id></Lgl></IdTp></OthrCtrPty>
+        </CtrPtyId>
+        <TxId><UnqTxIdr>OPENDQI-COL-ZERO-0002</UnqTxIdr></TxId>
+        <Coll><CollPrtflCd><Prtfl><Cd>PORT-B</Cd></Prtfl></CollPrtflCd></Coll>
+        <PstdMrgnOrColl>
+          <InitlMrgnPstdPstHrcut Ccy="EUR">0.00</InitlMrgnPstdPstHrcut>
+          <VartnMrgnPstdPstHrcut Ccy="EUR">0.00</VartnMrgnPstdPstHrcut>
+        </PstdMrgnOrColl>
+        <RcvdMrgnOrColl>
+          <InitlMrgnRcvdPstHrcut Ccy="EUR">0.00</InitlMrgnRcvdPstHrcut>
+          <VartnMrgnRcvdPstHrcut Ccy="EUR">0.00</VartnMrgnRcvdPstHrcut>
+        </RcvdMrgnOrColl>
+      </Stat>
+
+      <!-- Non-zero IM, fresh snapshot → no issue. -->
+      <Stat>
+        <RptgTmStmp>2026-05-13T08:00:00Z</RptgTmStmp>
+        <CtrPtyId>
+          <RptgCtrPty><Id><Lgl><Id><LEI>12345678901234567890</LEI></Id></Lgl></Id></RptgCtrPty>
+          <OthrCtrPty><IdTp><Lgl><Id><LEI>09876543210987654321</LEI></Id></Lgl></IdTp></OthrCtrPty>
+        </CtrPtyId>
+        <TxId><UnqTxIdr>OPENDQI-COL-FRESH-0003</UnqTxIdr></TxId>
+        <Coll><CollPrtflCd><Prtfl><Cd>PORT-C</Cd></Prtfl></CollPrtflCd></Coll>
+        <PstdMrgnOrColl>
+          <InitlMrgnPstdPstHrcut Ccy="EUR">500000.00</InitlMrgnPstdPstHrcut>
+        </PstdMrgnOrColl>
+      </Stat>
+
+      <!-- Non-zero IM, snapshot 3 days old → EMIR.COL.STALE. -->
+      <Stat>
+        <RptgTmStmp>2026-05-10T08:00:00Z</RptgTmStmp>
+        <CtrPtyId>
+          <RptgCtrPty><Id><Lgl><Id><LEI>12345678901234567890</LEI></Id></Lgl></Id></RptgCtrPty>
+          <OthrCtrPty><IdTp><Lgl><Id><LEI>09876543210987654321</LEI></Id></Lgl></IdTp></OthrCtrPty>
+        </CtrPtyId>
+        <TxId><UnqTxIdr>OPENDQI-COL-STALE-0004</UnqTxIdr></TxId>
+        <Coll><CollPrtflCd><Prtfl><Cd>PORT-D</Cd></Prtfl></CollPrtflCd></Coll>
+        <PstdMrgnOrColl>
+          <InitlMrgnPstdPstHrcut Ccy="EUR">250000.00</InitlMrgnPstdPstHrcut>
+        </PstdMrgnOrColl>
+      </Stat>
+
+    </TradData>
+  </DerivsTradMrgnDataTxStatRpt>
+</Document>

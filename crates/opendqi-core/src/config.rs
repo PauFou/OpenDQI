@@ -135,6 +135,13 @@ pub struct EmirRmtThresholds {
     /// new phase takes effect.
     #[serde(default = "default_aana_im_threshold_eur")]
     pub aana_im_threshold_eur: i64,
+    /// Maximum age, in calendar days, of an MSR `state_as_of` snapshot
+    /// relative to the companion TSR `state_as_of` (fallback: `ctx.now`)
+    /// before the collateral state is considered stale. EMIR Article 11
+    /// requires daily margining for non-cleared OTC, so the default is
+    /// **1**. Used by `EMIR.COL.STALE` in `compute_collateral_emir_issues`.
+    #[serde(default = "default_collateral_max_age_days")]
+    pub collateral_max_age_days: i64,
 }
 
 fn default_nfc_clearing_thresholds_eur() -> BTreeMap<String, i64> {
@@ -151,11 +158,16 @@ fn default_aana_im_threshold_eur() -> i64 {
     8_000_000_000
 }
 
+fn default_collateral_max_age_days() -> i64 {
+    1
+}
+
 impl Default for EmirRmtThresholds {
     fn default() -> Self {
         Self {
             nfc_clearing_thresholds_eur: default_nfc_clearing_thresholds_eur(),
             aana_im_threshold_eur: default_aana_im_threshold_eur(),
+            collateral_max_age_days: default_collateral_max_age_days(),
         }
     }
 }

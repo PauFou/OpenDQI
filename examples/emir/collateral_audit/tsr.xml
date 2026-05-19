@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic ISO 20022 auth.107 EMIR Trade State Report fixture for
+  the `opendqi emir collateral-audit` cross-reference. Hand-authored —
+  not derived from, and does not redistribute, any ESMA or SWIFT
+  example or schema. Schema-shaped per
+  auth.107.001.01_ESMAUG_DATTSR_1.1.0; only the subset OpenDQI
+  extracts is populated (see docs/auth-messages/emir-auth107.md).
+
+  Pairs with the sibling msr.xml to exercise the four
+  `EMIR.COL.*` cross-layer cases:
+
+    OPENDQI-COL-NOLINK-0001 — outstanding TSR row, no MSR match
+                              → EMIR.COL.MISSING (no link)
+    OPENDQI-COL-ZERO-0002   — outstanding TSR row, MSR match where
+                              every IM/VM (posted/collected) is 0
+                              → EMIR.COL.MISSING (all-zero)
+    OPENDQI-COL-FRESH-0003  — outstanding TSR row, MSR match with
+                              non-zero IM and fresh `state_as_of`
+                              → no issue
+    OPENDQI-COL-STALE-0004  — outstanding TSR row, MSR match with
+                              non-zero IM but `state_as_of` 3 days
+                              older than TSR
+                              → EMIR.COL.STALE
+
+  TSR per-record RptgTmStmp 2026-05-13T08:00:00Z is the shared
+  state-as-of. Note auth.107 has no per-trade status element —
+  presence in a TSR IS the outstanding state, so every record below
+  is treated as outstanding by `is_outstanding`.
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.107.001.01">
+  <DerivsTradStatRpt>
+    <RptHdr>
+      <NbRcrds>4</NbRcrds>
+    </RptHdr>
+    <TradData>
+
+      <!-- Case 1: outstanding, no MSR row → EMIR.COL.MISSING (no link). -->
+      <Stat>
+        <CtrPtySpcfcData>
+          <CtrPty>
+            <RptgCtrPty><Id><Lgl><Id><LEI>12345678901234567890</LEI></Id></Lgl></Id></RptgCtrPty>
+            <OthrCtrPty><IdTp><Lgl><Id><LEI>09876543210987654321</LEI></Id></Lgl></IdTp></OthrCtrPty>
+          </CtrPty>
+          <Valtn>
+            <CtrctVal><Amt Ccy="EUR">100.00</Amt></CtrctVal>
+            <TmStmp>2026-05-13T07:00:00Z</TmStmp>
+          </Valtn>
+          <RptgTmStmp>2026-05-13T08:00:00Z</RptgTmStmp>
+        </CtrPtySpcfcData>
+        <CmonTradData>
+          <TxData>
+            <TxId><UnqTxIdr>OPENDQI-COL-NOLINK-0001</UnqTxIdr></TxId>
+            <NtnlAmt><FrstLeg><Amt><Amt Ccy="EUR">1000000.00</Amt></Amt></FrstLeg></NtnlAmt>
+            <XprtnDt>2031-04-02</XprtnDt>
+            <CollPrtflCd><Prtfl><Cd>PORT-A</Cd></Prtfl></CollPrtflCd>
+          </TxData>
+        </CmonTradData>
+      </Stat>
+
+      <!-- Case 2: outstanding, MSR row exists but IM/VM all zero
+           → EMIR.COL.MISSING (all-zero). -->
+      <Stat>
+        <CtrPtySpcfcData>
+          <CtrPty>
+            <RptgCtrPty><Id><Lgl><Id><LEI>12345678901234567890</LEI></Id></Lgl></Id></RptgCtrPty>
+            <OthrCtrPty><IdTp><Lgl><Id><LEI>09876543210987654321</LEI></Id></Lgl></IdTp></OthrCtrPty>
+          </CtrPty>
+          <Valtn>
+            <CtrctVal><Amt Ccy="EUR">200.00</Amt></CtrctVal>
+            <TmStmp>2026-05-13T07:00:00Z</TmStmp>
+          </Valtn>
+          <RptgTmStmp>2026-05-13T08:00:00Z</RptgTmStmp>
+        </CtrPtySpcfcData>
+        <CmonTradData>
+          <TxData>
+            <TxId><UnqTxIdr>OPENDQI-COL-ZERO-0002</UnqTxIdr></TxId>
+            <NtnlAmt><FrstLeg><Amt><Amt Ccy="EUR">2000000.00</Amt></Amt></FrstLeg></NtnlAmt>
+            <XprtnDt>2031-04-02</XprtnDt>
+            <CollPrtflCd><Prtfl><Cd>PORT-B</Cd></Prtfl></CollPrtflCd>
+          </TxData>
+        </CmonTradData>
+      </Stat>
+
+      <!-- Case 3: outstanding, MSR row fresh and non-zero → clean. -->
+      <Stat>
+        <CtrPtySpcfcData>
+          <CtrPty>
+            <RptgCtrPty><Id><Lgl><Id><LEI>12345678901234567890</LEI></Id></Lgl></Id></RptgCtrPty>
+            <OthrCtrPty><IdTp><Lgl><Id><LEI>09876543210987654321</LEI></Id></Lgl></IdTp></OthrCtrPty>
+          </CtrPty>
+          <Valtn>
+            <CtrctVal><Amt Ccy="EUR">300.00</Amt></CtrctVal>
+            <TmStmp>2026-05-13T07:00:00Z</TmStmp>
+          </Valtn>
+          <RptgTmStmp>2026-05-13T08:00:00Z</RptgTmStmp>
+        </CtrPtySpcfcData>
+        <CmonTradData>
+          <TxData>
+            <TxId><UnqTxIdr>OPENDQI-COL-FRESH-0003</UnqTxIdr></TxId>
+            <NtnlAmt><FrstLeg><Amt><Amt Ccy="EUR">3000000.00</Amt></Amt></FrstLeg></NtnlAmt>
+            <XprtnDt>2031-04-02</XprtnDt>
+            <CollPrtflCd><Prtfl><Cd>PORT-C</Cd></Prtfl></CollPrtflCd>
+          </TxData>
+        </CmonTradData>
+      </Stat>
+
+      <!-- Case 4: outstanding, MSR row non-zero but 3 days old
+           (vs TSR state_as_of 2026-05-13) → EMIR.COL.STALE. -->
+      <Stat>
+        <CtrPtySpcfcData>
+          <CtrPty>
+            <RptgCtrPty><Id><Lgl><Id><LEI>12345678901234567890</LEI></Id></Lgl></Id></RptgCtrPty>
+            <OthrCtrPty><IdTp><Lgl><Id><LEI>09876543210987654321</LEI></Id></Lgl></IdTp></OthrCtrPty>
+          </CtrPty>
+          <Valtn>
+            <CtrctVal><Amt Ccy="EUR">400.00</Amt></CtrctVal>
+            <TmStmp>2026-05-13T07:00:00Z</TmStmp>
+          </Valtn>
+          <RptgTmStmp>2026-05-13T08:00:00Z</RptgTmStmp>
+        </CtrPtySpcfcData>
+        <CmonTradData>
+          <TxData>
+            <TxId><UnqTxIdr>OPENDQI-COL-STALE-0004</UnqTxIdr></TxId>
+            <NtnlAmt><FrstLeg><Amt><Amt Ccy="EUR">4000000.00</Amt></Amt></FrstLeg></NtnlAmt>
+            <XprtnDt>2031-04-02</XprtnDt>
+            <CollPrtflCd><Prtfl><Cd>PORT-D</Cd></Prtfl></CollPrtflCd>
+          </TxData>
+        </CmonTradData>
+      </Stat>
+
+    </TradData>
+  </DerivsTradStatRpt>
+</Document>

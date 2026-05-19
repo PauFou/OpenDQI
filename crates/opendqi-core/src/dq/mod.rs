@@ -1225,12 +1225,14 @@ pub fn run_all_pre_submission(
 // ---- Book vs TSR reconciliation (shared CLI + web UI) ----------
 
 mod book_reconcile;
+mod collateral_audit;
 mod tr_audit;
 
 pub use book_reconcile::{
     compute_book_reconcile_issues, compute_sftr_book_reconcile_issues, valuation_within_tolerance,
     value_within_tolerance, BOOK_VALUATION_TOLERANCE_PCT, SFTR_BOOK_VALUE_TOLERANCE_PCT,
 };
+pub use collateral_audit::compute_collateral_emir_issues;
 pub use tr_audit::{compute_tr_audit_emir_issues, compute_tr_audit_sftr_issues};
 
 // ---- SFTR pre-submission checks (rejection-profile driven) ------

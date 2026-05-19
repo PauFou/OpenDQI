@@ -353,6 +353,18 @@ golden_test!(
         &ex("examples/emir/feedback/auth092-sample.xml")
     ])
 );
+golden_test!(
+    emir_collateral_audit,
+    "emir-collateral-audit",
+    a(&[
+        "emir",
+        "collateral-audit",
+        "--tsr",
+        &ex("examples/emir/collateral_audit/tsr.xml"),
+        "--msr",
+        &ex("examples/emir/collateral_audit/msr.xml")
+    ])
+);
 
 // ---- EMIR (store-backed) -------------------------------------------
 #[test]

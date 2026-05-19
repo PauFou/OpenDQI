@@ -191,6 +191,39 @@ pub enum EmirAction {
         #[arg(long, value_name = "PATH")]
         email_config: Option<PathBuf>,
     },
+    /// EMIR Article 11 collateral obligation: cross-reference the
+    /// **TSR** (`auth.107`, trade state) against the **MSR**
+    /// (`auth.109`, margin state). Joins on UTI and emits
+    /// `EMIR.COL.MISSING` (no MSR link, or all four IM/VM
+    /// posted+collected absent/zero) and `EMIR.COL.STALE` (linked
+    /// non-zero MSR snapshot older than
+    /// `emir_rmt.collateral_max_age_days`, default 1, vs the TSR
+    /// snapshot). Outputs `summary.json`,
+    /// `collateral_audit_issues.csv`, `collateral_audit_report.html`.
+    CollateralAudit {
+        /// Path to the TSR `auth.107` XML file.
+        #[arg(long)]
+        tsr: PathBuf,
+        /// Path to the MSR `auth.109` XML file.
+        #[arg(long)]
+        msr: PathBuf,
+        /// Optional path to the SQLite history store. Reserved for
+        /// future cross-batch enrichments — currently unused by this
+        /// command (cross-message single-snapshot only).
+        #[arg(long)]
+        store: Option<PathBuf>,
+        /// Optional YAML config overriding `Thresholds`
+        /// (notably `emir_rmt.collateral_max_age_days`).
+        #[arg(long)]
+        config: Option<PathBuf>,
+        /// Directory where reports are written.
+        #[arg(long)]
+        out: PathBuf,
+        /// Optional SMTP configuration YAML. When set, the
+        /// `collateral_audit_report.html` is emailed.
+        #[arg(long, value_name = "PATH")]
+        email_config: Option<PathBuf>,
+    },
     /// Reconcile a firm's internal booking system export against a
     /// TR Trade State Report (auth.107). Produces `EMIR.BREC.*`
     /// issues for missing UTIs (in either direction) and field
@@ -387,6 +420,24 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
                 &tsr,
                 &feedback,
                 store.as_deref(),
+                &out,
+                email_config.as_deref(),
+            )?;
+            Ok(ExitCode::SUCCESS)
+        }
+        EmirAction::CollateralAudit {
+            tsr,
+            msr,
+            store,
+            config,
+            out,
+            email_config,
+        } => {
+            run_collateral_audit(
+                &tsr,
+                &msr,
+                store.as_deref(),
+                config.as_deref(),
                 &out,
                 email_config.as_deref(),
             )?;
@@ -1903,6 +1954,133 @@ fn run_tr_audit(
         summary.quality_score
     );
     println!("Report: {}", out.join("tr_audit_report.html").display());
+    Ok(())
+}
+
+fn run_collateral_audit(
+    tsr_path: &Path,
+    msr_path: &Path,
+    _store_path: Option<&Path>,
+    config_path: Option<&Path>,
+    out: &Path,
+    email_config_path: Option<&Path>,
+) -> Result<()> {
+    let started_at = Utc::now();
+
+    // 1. Load thresholds (optional YAML; defaults otherwise).
+    let thresholds = match config_path {
+        Some(p) => {
+            let s = std::fs::read_to_string(p)
+                .with_context(|| format!("reading config {}", p.display()))?;
+            serde_yaml::from_str(&s).with_context(|| format!("parsing config {}", p.display()))?
+        }
+        None => Thresholds::default(),
+    };
+
+    // 2. Load both messages.
+    let tsr_outcome = read_emir_tr_state_xml(tsr_path)
+        .with_context(|| format!("reading TSR {}", tsr_path.display()))?;
+    info!(records = tsr_outcome.records.len(), "loaded TSR");
+    let msr_outcome = read_emir_msr_xml(msr_path)
+        .with_context(|| format!("reading MSR {}", msr_path.display()))?;
+    info!(records = msr_outcome.records.len(), "loaded MSR");
+
+    // 3. Streaming pipeline (post-Increment D rebase): format issues
+    //    from both parses + the cross-layer collateral compute
+    //    (`EMIR.COL.MISSING` / `EMIR.COL.STALE`) fold into one
+    //    spill-capable sink. Mirrors the M0.25 pattern used by every
+    //    other EMIR command on main. `records_processed` = parsed
+    //    TSR record count (the cross-ref's "outstanding" universe).
+    //    Byte-equivalent (no-spill == finalize, M0.22-locked invariant).
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds,
+        today: now.date_naive(),
+        now,
+    };
+    let all_inputs = [tsr_path.to_path_buf(), msr_path.to_path_buf()];
+    let sources: Vec<String> = all_inputs
+        .iter()
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect();
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
+    ));
+    {
+        let mut s = sink.lock().expect("issue sink mutex");
+        s.push_batch(tsr_outcome.issues.clone());
+        s.push_batch(msr_outcome.issues.clone());
+        s.push_batch(opendqi_core::dq::compute_collateral_emir_issues(
+            &tsr_outcome.records,
+            &msr_outcome.records,
+            &ctx.thresholds,
+            now,
+        ));
+    }
+    let (summary, sorted) = sink.into_inner().expect("issue sink mutex").finish(
+        Regime::Emir,
+        all_inputs.len() as u32,
+        tsr_outcome.records.len() as u32,
+        started_at,
+        Utc::now(),
+    );
+
+    std::fs::create_dir_all(out)
+        .with_context(|| format!("creating output directory {}", out.display()))?;
+    write_summary_json(&out.join("summary.json"), &summary)?;
+    let mut top = TopIssues::with_capacity(20);
+    write_issues_csv_from_iter(
+        &out.join("collateral_audit_issues.csv"),
+        sorted.inspect(|issue| top.offer(issue)),
+    )?;
+    let top = top.into_sorted();
+    write_report_html(
+        &out.join("collateral_audit_report.html"),
+        &summary,
+        &top,
+        &sources,
+    )?;
+
+    if let Some(path) = email_config_path {
+        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
+        let sent = opendqi_report::send_report_email(
+            &cfg,
+            &summary,
+            &out.join("collateral_audit_report.html"),
+            &out.join("summary.json"),
+            &out.join("collateral_audit_issues.csv"),
+        )?;
+        if sent {
+            info!(to = ?cfg.to, "collateral audit report emailed");
+        } else {
+            info!("email config is disabled — skipped send");
+        }
+    }
+
+    let critical = summary
+        .issues_by_severity
+        .get(&Severity::Critical)
+        .copied()
+        .unwrap_or(0);
+    let high = summary
+        .issues_by_severity
+        .get(&Severity::High)
+        .copied()
+        .unwrap_or(0);
+    println!(
+        "Cross-checked {} TSR record(s) against {} MSR row(s). {} issues ({} critical, {} high). Score: {:.1}/100.",
+        summary.records_processed,
+        msr_outcome.records.len(),
+        summary.issues_total,
+        critical,
+        high,
+        summary.quality_score
+    );
+    println!(
+        "Report: {}",
+        out.join("collateral_audit_report.html").display()
+    );
     Ok(())
 }
 

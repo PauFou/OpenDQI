@@ -105,3 +105,52 @@ grep 'EMIR.RMT' ./report-rmt/issues.csv | cut -d, -f1 | sort -u
 ```
 
 All 10 `EMIR.RMT.*` check IDs should appear at least once.
+
+## Collateral obligation — TSR ↔ MSR cross-reference (`EMIR.COL.*`)
+
+Two of the three Article 11 obligations are observable from a single
+submission (`EmirRecord` carries the relevant fields); the **collateral
+obligation** is not: the data lives in a separate ESMA message — the
+**MSR**, `auth.109`, margin state — and must be cross-referenced
+against the **TSR** (`auth.107`, trade state) by `uti`. OpenDQI ships
+two checks for this cross-message family, run by a dedicated
+subcommand:
+
+```bash
+opendqi emir collateral-audit \
+  --tsr ./auth.107.xml \
+  --msr ./auth.109.xml \
+  --out ./report/
+# optional: --config thresholds.yml   --email-config smtp.yml
+```
+
+| Check ID | Dim | Severity | Trigger |
+|---|---|---|---|
+| `EMIR.COL.MISSING` | Completeness | High | For each outstanding TSR derivative with a non-empty UTI: either (a) **no joinable MSR row** by UTI, or (b) every one of the four IM/VM (posted/collected) current amounts is absent or zero across all matching MSR rows. |
+| `EMIR.COL.STALE` | Timeliness | Warning | Linked, non-zero MSR snapshot whose `state_as_of` is older than `emir_rmt.collateral_max_age_days` (default **1**) calendar day(s) vs the TSR `state_as_of` (fallback: `now`). |
+
+Honest scoping caveat: `TrStateRecord` (auth.107) does not carry a
+clearing-status flag, so this check applies to every outstanding TSR
+derivative. It is therefore a **data-quality signal** — "TSR
+outstanding derivative without linkable / fresh MSR margin state" —
+not a verdict of non-compliance with the Article 11 non-cleared
+collateral obligation. See [`collateral-audit.md`](collateral-audit.md)
+for the command-level details.
+
+## Obligation × {missing, timely} matrix
+
+For at-a-glance navigation, every Article 11 obligation OpenDQI
+currently observes (no duplication — the table just maps each cell to
+the live check IDs):
+
+| Obligation | Missing | Timely |
+|---|---|---|
+| **Confirmation** (Art. 11(1)(a)) | `EMIR.RMT.UNCLEARED_NEEDS_CONFIRMATION` | `EMIR.RMT.LATE_CONFIRMATION` |
+| **Valuation** (Art. 11(2)) | `EMIR.TST.MISSING_VALUATION` (TSR view) · `EMIR.RMT.DAILY_VALUATION_MISSING` (submission view — combined missing-or-stale) | `EMIR.TST.STALE_VALUATION` (TSR view) |
+| **Collateral** (Art. 11(3)) | `EMIR.COL.MISSING` *(new)* | `EMIR.COL.STALE` *(new)* |
+
+Items intentionally out of scope of this increment, kept here as a
+roadmap: **portfolio compression** (Art. 11(1)(c)), **dispute
+resolution timeline** (Art. 11(1)(d), needs cross-batch joins with
+`auth.091`/`auth.106` reconciliation records), and **IM cadence**
+(Art. 11(3), needs cross-batch `auth.108` margin-activity history).

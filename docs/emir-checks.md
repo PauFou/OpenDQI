@@ -28,10 +28,15 @@ families: **7 TSR** state-health, **5 TAR** activity, **8 MAR**
 margin-activity, **8 MSR** margin-state, **5 lifecycle** (cross-batch),
 **4 feedback**, **3 reconciliation**, **4 RST** recon-statistics
 (auth.091), **13 WRN** data-quality warnings (auth.106 — 5
-report-level + 5 per-counterparty + 3 per-UTI), and **2 PSC**
-pre-submission (rejection-profile driven, auth.092 → next scan)
-checks — see the dedicated docs. **Total live EMIR catalog: 148
-checks**, plus 65 SFTR counterparts (`docs/sftr-checks.md`).
+report-level + 5 per-counterparty + 3 per-UTI), **2 PSC**
+pre-submission (rejection-profile driven, auth.092 → next scan), and
+the **2 `EMIR.COL.*` cross-message collateral checks** — Article 11
+collateral obligation, TSR (auth.107) ↔ MSR (auth.109) cross-reference
+exposed by `opendqi emir collateral-audit` (see
+[`docs/collateral-audit.md`](collateral-audit.md) and the new section
+in [`docs/emir-risk-mitigation.md`](emir-risk-mitigation.md)) — see
+the dedicated docs. **Total live EMIR catalog: 150 checks**, plus
+65 SFTR counterparts (`docs/sftr-checks.md`).
 
 Severity scale: `info` < `warning` < `high` < `critical`.
 
