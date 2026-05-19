@@ -453,31 +453,43 @@ pub fn run_all(
 /// resident plus on-disk runs, not the whole ~10 M-issue `Vec`).
 pub const STREAM_SPILL_MAX_ISSUES: usize = 65_536;
 
-/// Run every EMIR check in parallel and stream each check's issues
-/// into `sink` as it finishes (no materialised union `Vec<DqIssue>`).
+/// Run a slice of checks in parallel and stream each check's issues
+/// into `sink` as it finishes — no materialised union `Vec<DqIssue>`.
 ///
+/// Regime/family-agnostic (Milestone 0.24): the `run` closure
+/// captures the record(s)/prior/`ctx`, so this one helper feeds
+/// **every** `run_all_*` family (`Check`, `SftrCheck`, feedback,
+/// lifecycle, tr-state, margin, …) without per-regime variants.
 /// Mirrors [`run_all`]'s parallel-over-checks shape but feeds the
 /// spill-capable [`SortedIssueSink`] instead of returning a `Vec`:
-/// the expensive `c.run` is outside the lock; one `push_batch` lock
-/// acquire per check (a spill, if any, happens under it — rare and
-/// I/O-bound). The caller pushes any other issue sources
-/// (format/lifecycle/pre-submission) into the same `sink`, then
-/// `finish()`es it. EMIR-specific for Milestone 0.23; later
-/// increments generalise the rollout.
-pub fn stream_emir_checks_into(
-    checks: &[Box<dyn Check>],
-    records: &[EmirRecord],
-    ctx: &CheckContext,
+/// the expensive `run` is outside the lock; one `push_batch` lock
+/// acquire per non-empty check (a spill, if any, happens under it —
+/// rare and I/O-bound). The caller pushes any other issue sources
+/// into the same `sink`, then `finish()`es it.
+pub fn stream_checks_into<C: ?Sized + Sync>(
+    checks: &[Box<C>],
     sink: &std::sync::Mutex<SortedIssueSink>,
+    run: impl Fn(&C) -> Vec<DqIssue> + Sync + Send,
 ) {
     checks.par_iter().for_each(|c| {
-        let produced = c.run(records, ctx);
+        let produced = run(&**c);
         if !produced.is_empty() {
             sink.lock()
                 .expect("issue sink mutex (a check panicked)")
                 .push_batch(produced);
         }
     });
+}
+
+/// EMIR single-batch convenience over [`stream_checks_into`] (the
+/// Milestone 0.23 `run_scan` call site; kept byte-identical).
+pub fn stream_emir_checks_into(
+    checks: &[Box<dyn Check>],
+    records: &[EmirRecord],
+    ctx: &CheckContext,
+    sink: &std::sync::Mutex<SortedIssueSink>,
+) {
+    stream_checks_into(checks, sink, |c| c.run(records, ctx));
 }
 
 /// Deterministic **content** total order over a `DqIssue`: by
@@ -1473,5 +1485,78 @@ mod tests {
         let checks: Vec<u32> = Vec::new();
         let out = collect_finalize(&checks, &ctx, |_| vec![msg("EMIR.A", "x")]);
         assert!(out.is_empty());
+    }
+
+    fn epoch() -> chrono::DateTime<chrono::Utc> {
+        chrono::DateTime::from_timestamp(0, 0).unwrap()
+    }
+
+    #[test]
+    fn stream_checks_into_equals_finalize_issues() {
+        // The load-bearing D1 invariant: streaming every check's batch
+        // into a `SortedIssueSink` then `finish`ing yields exactly the
+        // `finalize_issues`-sorted, override-applied union — empty
+        // batches skipped harmlessly, severity overrides applied once.
+        struct Batch(Vec<DqIssue>);
+        let mk = || -> Vec<Box<Batch>> {
+            vec![
+                Box::new(Batch(vec![
+                    issue("EMIR.Z", Severity::High),
+                    issue("EMIR.A", Severity::Warning),
+                ])),
+                Box::new(Batch(Vec::new())), // empty: must be skipped
+                Box::new(Batch(vec![
+                    issue("EMIR.A", Severity::High),
+                    issue("EMIR.M", Severity::Critical),
+                ])),
+            ]
+        };
+        let mut t = Thresholds::default();
+        t.severity_overrides
+            .insert("EMIR.M".into(), Severity::Warning);
+        let ctx = CheckContext {
+            thresholds: t.clone(),
+            ..CheckContext::now_with_defaults()
+        };
+
+        // Streaming path.
+        let checks = mk();
+        let sink = std::sync::Mutex::new(SortedIssueSink::new(&t, STREAM_SPILL_MAX_ISSUES));
+        stream_checks_into(&checks, &sink, |c| c.0.clone());
+        let (summary, sorted) = sink
+            .into_inner()
+            .unwrap()
+            .finish(Regime::Emir, 1, 2, epoch(), epoch());
+        let streamed: Vec<DqIssue> = sorted.collect();
+
+        // Reference path: concat all batches + finalize_issues.
+        let mut reference: Vec<DqIssue> = mk().into_iter().flat_map(|b| b.0).collect();
+        finalize_issues(&mut reference, &ctx);
+
+        // `DqIssue` has no `PartialEq`; compare the serialised form
+        // (the output-byte proxy used across the sink tests).
+        let to_json = |v: &[DqIssue]| -> Vec<String> {
+            v.iter().map(|i| serde_json::to_string(i).unwrap()).collect()
+        };
+        assert_eq!(
+            to_json(&streamed),
+            to_json(&reference),
+            "stream path must equal finalize path"
+        );
+        assert_eq!(summary.issues_total as usize, reference.len());
+    }
+
+    #[test]
+    fn stream_checks_into_empty_checks_is_noop() {
+        let t = Thresholds::default();
+        let checks: Vec<Box<[DqIssue]>> = Vec::new();
+        let sink = std::sync::Mutex::new(SortedIssueSink::new(&t, STREAM_SPILL_MAX_ISSUES));
+        stream_checks_into(&checks, &sink, |c: &[DqIssue]| c.to_vec());
+        let (summary, sorted) = sink
+            .into_inner()
+            .unwrap()
+            .finish(Regime::Emir, 0, 0, epoch(), epoch());
+        assert_eq!(sorted.count(), 0);
+        assert_eq!(summary.issues_total, 0);
     }
 }
