@@ -9,6 +9,11 @@ authors.workspace = true
 description = "OpenDQI command-line interface."
 publish = false
 
+# `publish = false` would otherwise hide this binary from cargo-dist;
+# we ship it via GitHub Releases, not crates.io.
+[package.metadata.dist]
+dist = true
+
 [[bin]]
 name = "opendqi"
 path = "src/main.rs"

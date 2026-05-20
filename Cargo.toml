@@ -60,3 +60,8 @@ codegen-units = 1
 # point at source locations.
 [profile.dev]
 debug = "line-tables-only"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
