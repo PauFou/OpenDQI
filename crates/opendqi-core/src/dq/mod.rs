@@ -1526,10 +1526,10 @@ mod tests {
         let checks = mk();
         let sink = std::sync::Mutex::new(SortedIssueSink::new(&t, STREAM_SPILL_MAX_ISSUES));
         stream_checks_into(&checks, &sink, |c| c.0.clone());
-        let (summary, sorted) = sink
-            .into_inner()
-            .unwrap()
-            .finish(Regime::Emir, 1, 2, epoch(), epoch());
+        let (summary, sorted) =
+            sink.into_inner()
+                .unwrap()
+                .finish(Regime::Emir, 1, 2, epoch(), epoch());
         let streamed: Vec<DqIssue> = sorted.collect();
 
         // Reference path: concat all batches + finalize_issues.
@@ -1539,7 +1539,9 @@ mod tests {
         // `DqIssue` has no `PartialEq`; compare the serialised form
         // (the output-byte proxy used across the sink tests).
         let to_json = |v: &[DqIssue]| -> Vec<String> {
-            v.iter().map(|i| serde_json::to_string(i).unwrap()).collect()
+            v.iter()
+                .map(|i| serde_json::to_string(i).unwrap())
+                .collect()
         };
         assert_eq!(
             to_json(&streamed),
@@ -1555,10 +1557,10 @@ mod tests {
         let checks: Vec<Box<[DqIssue]>> = Vec::new();
         let sink = std::sync::Mutex::new(SortedIssueSink::new(&t, STREAM_SPILL_MAX_ISSUES));
         stream_checks_into(&checks, &sink, |c: &[DqIssue]| c.to_vec());
-        let (summary, sorted) = sink
-            .into_inner()
-            .unwrap()
-            .finish(Regime::Emir, 0, 0, epoch(), epoch());
+        let (summary, sorted) =
+            sink.into_inner()
+                .unwrap()
+                .finish(Regime::Emir, 0, 0, epoch(), epoch());
         assert_eq!(sorted.count(), 0);
         assert_eq!(summary.issues_total, 0);
     }

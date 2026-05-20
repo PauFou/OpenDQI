@@ -900,10 +900,7 @@ mod tests {
         let r = compression_event("U1", "COMP"); // no prior_uti, no portfolio
         let issues = EmirRmtCompressionEventIncomplete.run(&[r], &ctx());
         assert_eq!(issues.len(), 2, "one issue per missing field");
-        let fields: Vec<&str> = issues
-            .iter()
-            .filter_map(|i| i.field.as_deref())
-            .collect();
+        let fields: Vec<&str> = issues.iter().filter_map(|i| i.field.as_deref()).collect();
         assert!(fields.contains(&"prior_uti"));
         assert!(fields.contains(&"collateral_portfolio_code"));
     }

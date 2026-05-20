@@ -194,8 +194,7 @@ pub fn compute_collateral_emir_issues(
 
         // (c) Linked, has some non-zero margin → staleness check.
         //     Take the most-recent MSR `state_as_of` for this UTI.
-        let msr_latest: Option<DateTime<Utc>> =
-            rows.iter().filter_map(|m| m.state_as_of).max();
+        let msr_latest: Option<DateTime<Utc>> = rows.iter().filter_map(|m| m.state_as_of).max();
         let Some(msr_ts) = msr_latest else {
             // Non-stale fingerprint: we have margin but no snapshot
             // timestamp anywhere — can't assess staleness, don't flag
@@ -233,11 +232,7 @@ pub fn compute_collateral_emir_issues(
     // Stable, deterministic order: by check-id then UTI. The downstream
     // `finalize_issues` re-imposes the canonical content total-order,
     // so this is mainly for test/debug readability.
-    out.sort_by(|a, b| {
-        a.check_id
-            .cmp(&b.check_id)
-            .then_with(|| a.uti.cmp(&b.uti))
-    });
+    out.sort_by(|a, b| a.check_id.cmp(&b.check_id).then_with(|| a.uti.cmp(&b.uti)));
     out
 }
 
@@ -298,7 +293,10 @@ mod tests {
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].check_id, "EMIR.COL.MISSING");
         assert_eq!(issues[0].uti.as_deref(), Some("U1"));
-        assert!(issues[0].evidence.is_empty(), "no-link issue carries no evidence");
+        assert!(
+            issues[0].evidence.is_empty(),
+            "no-link issue carries no evidence"
+        );
     }
 
     #[test]
@@ -310,7 +308,11 @@ mod tests {
         let issues = compute_collateral_emir_issues(&tsr_rows, &[m], &t(), now());
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].check_id, "EMIR.COL.MISSING");
-        assert_eq!(issues[0].evidence.len(), 4, "all four IM/VM fields recorded");
+        assert_eq!(
+            issues[0].evidence.len(),
+            4,
+            "all four IM/VM fields recorded"
+        );
     }
 
     #[test]
@@ -353,10 +355,7 @@ mod tests {
         let tsr_rows = vec![tsr("U1", "OUTSTANDING")];
         let mut zero_row = msr("U1", ts("2026-05-19T00:00:00Z"));
         zero_row.initial_margin_posted_current = Some(Decimal::ZERO);
-        let live_row = with_margin(
-            msr("U1", ts("2026-05-19T01:00:00Z")),
-            Decimal::new(750, 0),
-        );
+        let live_row = with_margin(msr("U1", ts("2026-05-19T01:00:00Z")), Decimal::new(750, 0));
         let issues = compute_collateral_emir_issues(&tsr_rows, &[zero_row, live_row], &t(), now());
         assert!(
             issues.is_empty(),

@@ -19,8 +19,8 @@ use opendqi_core::dq::{
 };
 use opendqi_core::{
     stream_checks_into, stream_emir_checks_into, DqDimension, DqIssue, EmirRecord,
-    MarginActivityRecord, MarginStateRecord, Regime, Severity, SortedIssueSink,
-    Thresholds, TrActivitySummary, TrStateRecord, STREAM_SPILL_MAX_ISSUES,
+    MarginActivityRecord, MarginStateRecord, Regime, Severity, SortedIssueSink, Thresholds,
+    TrActivitySummary, TrStateRecord, STREAM_SPILL_MAX_ISSUES,
 };
 use opendqi_io::{
     discover_emir_inputs, has_extension, read_emir_csv, read_emir_parquet, write_emir_parquet,
@@ -1191,12 +1191,7 @@ fn run_warnings(
         sorted.inspect(|issue| top.offer(issue)),
     )?;
     let top = top.into_sorted();
-    write_report_html(
-        &out.join("warnings_report.html"),
-        &summary,
-        &top,
-        &sources,
-    )?;
+    write_report_html(&out.join("warnings_report.html"), &summary, &top, &sources)?;
 
     if let Some(path) = email_config_path {
         let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
@@ -1325,12 +1320,7 @@ fn run_tr_state_scan(
         sorted.inspect(|issue| top.offer(issue)),
     )?;
     let top = top.into_sorted();
-    write_report_html(
-        &out.join("tr_state_report.html"),
-        &summary,
-        &top,
-        &sources,
-    )?;
+    write_report_html(&out.join("tr_state_report.html"), &summary, &top, &sources)?;
 
     if let Some(path) = email_config_path {
         let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
@@ -1882,15 +1872,15 @@ fn run_tr_audit(
         c.run(&tar_records, &prior, Some(&tsr_outcome.records), &ctx)
     });
     // 4. Cross-layer coherence checks (EMIR.AUD.*).
-    sink.lock()
-        .expect("issue sink mutex")
-        .push_batch(opendqi_core::dq::compute_tr_audit_emir_issues(
+    sink.lock().expect("issue sink mutex").push_batch(
+        opendqi_core::dq::compute_tr_audit_emir_issues(
             &tar_records,
             &tsr_outcome.records,
             &feedback_outcome.records,
             &tsr_path.to_string_lossy(),
             &feedback_path.to_string_lossy(),
-        ));
+        ),
+    );
 
     let (summary, sorted) = sink.into_inner().expect("issue sink mutex").finish(
         Regime::Emir,
@@ -1910,12 +1900,7 @@ fn run_tr_audit(
         sorted.inspect(|issue| top.offer(issue)),
     )?;
     let top = top.into_sorted();
-    write_report_html(
-        &out.join("tr_audit_report.html"),
-        &summary,
-        &top,
-        &sources,
-    )?;
+    write_report_html(&out.join("tr_audit_report.html"), &summary, &top, &sources)?;
 
     if let Some(path) = email_config_path {
         let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
@@ -2115,10 +2100,7 @@ fn run_book_reconcile(
         .map(|p| p.to_string_lossy().into_owned())
         .collect();
     let thresholds = Thresholds::default();
-    let sink = std::sync::Mutex::new(SortedIssueSink::new(
-        &thresholds,
-        STREAM_SPILL_MAX_ISSUES,
-    ));
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(&thresholds, STREAM_SPILL_MAX_ISSUES));
     {
         let mut s = sink.lock().expect("issue sink mutex");
         s.push_batch(tsr_outcome.issues.clone());

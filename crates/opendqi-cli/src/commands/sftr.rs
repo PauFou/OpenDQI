@@ -1074,12 +1074,7 @@ fn run_tr_state_scan(
         sorted.inspect(|issue| top.offer(issue)),
     )?;
     let top = top.into_sorted();
-    write_report_html(
-        &out.join("tr_state_report.html"),
-        &summary,
-        &top,
-        &sources,
-    )?;
+    write_report_html(&out.join("tr_state_report.html"), &summary, &top, &sources)?;
 
     if let Some(path) = email_config_path {
         let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
@@ -1366,13 +1361,13 @@ fn run_tr_audit(
         c.run(&tar_records, &prior, Some(&tsr_outcome.records), &ctx)
     });
     // Cross-layer coherence (SFTR.AUD.*, TAR↔TSR only).
-    sink.lock()
-        .expect("issue sink mutex")
-        .push_batch(opendqi_core::dq::compute_tr_audit_sftr_issues(
+    sink.lock().expect("issue sink mutex").push_batch(
+        opendqi_core::dq::compute_tr_audit_sftr_issues(
             &tar_records,
             &tsr_outcome.records,
             &tsr_path.to_string_lossy(),
-        ));
+        ),
+    );
 
     let (summary, sorted) = sink.into_inner().expect("issue sink mutex").finish(
         Regime::Sftr,
@@ -1391,12 +1386,7 @@ fn run_tr_audit(
         sorted.inspect(|issue| top.offer(issue)),
     )?;
     let top = top.into_sorted();
-    write_report_html(
-        &out.join("tr_audit_report.html"),
-        &summary,
-        &top,
-        &sources,
-    )?;
+    write_report_html(&out.join("tr_audit_report.html"), &summary, &top, &sources)?;
 
     if let Some(path) = email_config_path {
         let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
@@ -1468,10 +1458,7 @@ fn run_book_reconcile(
         .map(|p| p.to_string_lossy().into_owned())
         .collect();
     let thresholds = Thresholds::default();
-    let sink = std::sync::Mutex::new(SortedIssueSink::new(
-        &thresholds,
-        STREAM_SPILL_MAX_ISSUES,
-    ));
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(&thresholds, STREAM_SPILL_MAX_ISSUES));
     {
         let mut s = sink.lock().expect("issue sink mutex");
         s.push_batch(tsr_outcome.issues.clone());
