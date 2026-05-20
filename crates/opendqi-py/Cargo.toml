@@ -1,0 +1,63 @@
+# Empty `[workspace]` declares this crate as its own workspace
+# root, opting it out of `../../Cargo.toml`. Without this, Cargo
+# refuses to compile because the parent workspace neither lists
+# it in `[workspace] members` nor in `[workspace] exclude`. See
+# the comment on `[lib]` below for the rationale.
+[workspace]
+
+[package]
+name         = "opendqi-py"
+version      = "0.12.0"
+edition      = "2021"
+rust-version = "1.87.0"
+license      = "Apache-2.0"
+repository   = "https://github.com/PauFou/OpenDQI"
+authors      = ["OpenDQI contributors"]
+description  = "Python / Arrow bindings for the OpenDQI EMIR/SFTR data-quality engine."
+publish      = false
+
+# This crate is built by `maturin`, not by `cargo build` at the
+# workspace root — it is deliberately NOT a member of the root
+# `[workspace] members`. Adding it would pull pyo3 into the
+# workspace resolver and pollute the existing CI (Ubuntu + macOS
+# Rust-only jobs that have no Python venv). Maturin invokes
+# `cargo build` from this directory with its own resolver.
+#
+# Path dependencies on the workspace crates still work because
+# Cargo resolves them via the relative path, not via workspace
+# membership.
+
+[lib]
+# `import opendqi` from Python looks up a shared library called
+# `opendqi.<arch>.so` (or `.pyd`) — `cdylib` is what PyO3 needs.
+name       = "opendqi"
+crate-type = ["cdylib"]
+
+[dependencies]
+# Local workspace crates — the entire engine is reused, no parser
+# or check is reimplemented in the Python bindings.
+opendqi-core   = { path = "../opendqi-core" }
+opendqi-xml    = { path = "../opendqi-xml" }
+opendqi-io     = { path = "../opendqi-io" }
+opendqi-report = { path = "../opendqi-report" }
+
+# PyO3 0.22.x is the version `arrow = "53"` requires (cargo info
+# arrow → `pyo3 ^0.22.2`). abi3-py39 gives one wheel per target
+# that runs on Python 3.9+ unchanged (forward-compatible to 3.14).
+pyo3 = { version = "0.22", features = ["extension-module", "abi3-py39"] }
+
+# Arrow PyArrow bindings live as a feature of the `arrow` umbrella
+# crate at 53.x (the dedicated `arrow-pyarrow` crate only exists
+# from 55.x onward). Must match the workspace `arrow-array = "53"`
+# pinning exactly — sharing a single Arrow version across the
+# Rust → Python boundary is the precondition for zero-copy
+# RecordBatch handoff via Arrow C Data Interface.
+arrow = { version = "53", features = ["pyarrow"] }
+
+# Workspace-consistent versions of these utility crates — avoid
+# pulling fresh majors that could conflict with the path deps
+# above.
+anyhow       = "1"
+chrono       = { version = "0.4", features = ["serde"] }
+rust_decimal = "1"
+serde_json   = "1"

@@ -1,0 +1,54 @@
+[build-system]
+requires      = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name            = "opendqi"
+version         = "0.12.0"
+description     = "Local-first EMIR/SFTR data quality engine — Python / Arrow bindings"
+readme          = "README.md"
+requires-python = ">=3.9"
+license         = { text = "Apache-2.0" }
+authors         = [{ name = "OpenDQI contributors" }]
+keywords        = ["emir", "sftr", "regulatory", "data-quality", "arrow"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Rust",
+    "Topic :: Office/Business :: Financial",
+]
+dependencies = [
+    # PyArrow is the contract — Arrow C Data Interface is stable
+    # across PyArrow majors, so any reasonably modern PyArrow works
+    # against the Rust-side `arrow = "53"` (verified locally with
+    # pyarrow 24.0).
+    "pyarrow>=15.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7",
+    "pyarrow>=15.0",
+]
+
+[project.urls]
+Homepage      = "https://github.com/PauFou/OpenDQI"
+Repository    = "https://github.com/PauFou/OpenDQI"
+Documentation = "https://github.com/PauFou/OpenDQI/blob/main/docs/python-roadmap.md"
+Changelog     = "https://github.com/PauFou/OpenDQI/blob/main/CHANGELOG.md"
+
+[tool.maturin]
+# `pyo3/extension-module` tells PyO3 to build a Python extension
+# module (libpython is linked at load-time by the interpreter, not
+# at build-time — this is what makes the wheel portable).
+features = ["pyo3/extension-module"]
+# Strip symbols on release builds — wheels stay small.
+strip = true

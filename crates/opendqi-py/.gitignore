@@ -1,0 +1,16 @@
+# Local maturin / cargo build artefacts — never committed.
+/target/
+/dist/
+/build/
+*.egg-info/
+__pycache__/
+*.pyc
+
+# Local Python venv used during `maturin develop`.
+.venv/
+venv/
+
+# pytest / coverage state.
+.pytest_cache/
+.coverage
+htmlcov/
