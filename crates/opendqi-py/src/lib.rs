@@ -16,12 +16,8 @@ use pyo3::prelude::*;
 
 mod emir;
 mod errors;
+mod result;
 mod sftr;
-
-/// Re-export the boundary helper for use by `emir.rs` / `sftr.rs`
-/// once those gain real functions in P2.
-#[allow(unused_imports)]
-pub(crate) use errors::to_py_err;
 
 /// The `opendqi` Python module — entry point loaded by
 /// `import opendqi`.

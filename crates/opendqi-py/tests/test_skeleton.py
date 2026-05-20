@@ -37,12 +37,8 @@ def test_submodules_present() -> None:
     assert opendqi.sftr.__doc__ is not None
 
 
-def test_submodules_empty_in_p1() -> None:
-    """P1 submodules carry no functions yet; P2 adds `scan_parquet`."""
+def test_submodules_carry_scan_parquet() -> None:
+    """P2: each regime submodule exposes `scan_parquet(path)`."""
     import opendqi
-    assert not hasattr(opendqi.emir, "scan_parquet"), (
-        "scan_parquet should not exist until P2"
-    )
-    assert not hasattr(opendqi.sftr, "scan_parquet"), (
-        "scan_parquet should not exist until P2"
-    )
+    assert callable(opendqi.emir.scan_parquet)
+    assert callable(opendqi.sftr.scan_parquet)
