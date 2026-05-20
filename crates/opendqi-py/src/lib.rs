@@ -14,6 +14,7 @@
 
 use pyo3::prelude::*;
 
+mod convert;
 mod emir;
 mod errors;
 mod issues;
