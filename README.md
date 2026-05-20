@@ -58,10 +58,10 @@ cargo install --git https://github.com/PauFou/OpenDQI --tag v0.11.0 opendqi-cli
 
 A `cargo-dist`-generated GitHub Release with pre-built binaries (Linux x86_64 + ARM64, macOS x86_64 + ARM64) ships from v0.11.0 — `curl -sSL .../installer.sh | sh` from the [Releases](https://github.com/PauFou/OpenDQI/releases) page.
 
-**Python / Arrow bindings** (v0.12.0+) :
+**Python / Arrow bindings** (v0.12.1+) :
 
 ```bash
-pip install <wheel URL from the v0.12.0 GitHub Release page>
+pip install opendqi
 ```
 
 ```python
@@ -71,7 +71,7 @@ result.summary       # dict — same shape as summary.json
 result.issues        # pyarrow.Table — v1.0 stable 11-column schema
 ```
 
-Same engine, same checks, embedded in your Python pipeline. See [`docs/python-roadmap.md`](docs/python-roadmap.md) for the full API + architecture spec.
+Same engine, same 216 checks, embedded in your Python pipeline. 3 quickstart patterns in [`docs/python.md`](docs/python.md) · runnable scripts in [`examples/python/`](examples/python/) · executable Jupyter notebook in [`examples/python/quickstart.ipynb`](examples/python/quickstart.ipynb) · architecture spec in [`docs/python-roadmap.md`](docs/python-roadmap.md).
 
 ## Coverage at a glance
 
@@ -85,12 +85,12 @@ Same engine, same checks, embedded in your Python pipeline. See [`docs/python-ro
 
 ## Documentation
 
-- **Get started** : [`docs/use-cases.md`](docs/use-cases.md) (operator scenarios) · [`examples/quickstart-emir/`](examples/quickstart-emir/) (3-file kit) · [`scripts/demo.sh`](scripts/demo.sh) (one-shot).
+- **Get started** : [`docs/use-cases.md`](docs/use-cases.md) (operator scenarios) · [`examples/quickstart-emir/`](examples/quickstart-emir/) (3-file kit) · [`scripts/demo.sh`](scripts/demo.sh) (one-shot) · [`docs/python.md`](docs/python.md) (Python quickstart) · [`examples/python/`](examples/python/) (3 scripts + Jupyter notebook).
 - **Positioning** : [`docs/positioning.md`](docs/positioning.md) (3-layer mental model).
 - **Per-workflow** : [`docs/tr-state-checks.md`](docs/tr-state-checks.md) · [`docs/tr-activity-checks.md`](docs/tr-activity-checks.md) · [`docs/tr-audit.md`](docs/tr-audit.md) · [`docs/tr-feedback.md`](docs/tr-feedback.md) · [`docs/rejection-analytics.md`](docs/rejection-analytics.md) · [`docs/pre-submission-checks.md`](docs/pre-submission-checks.md) · [`docs/book-reconcile.md`](docs/book-reconcile.md) · [`docs/collateral-audit.md`](docs/collateral-audit.md) · [`docs/emir-mar-msr.md`](docs/emir-mar-msr.md) · [`docs/emir-recon-stats.md`](docs/emir-recon-stats.md) · [`docs/emir-warnings.md`](docs/emir-warnings.md) · [`docs/sftr-missing-collateral.md`](docs/sftr-missing-collateral.md).
 - **Engineering** : [`docs/auth-messages.md`](docs/auth-messages.md) · [`docs/iso20022-emir.md`](docs/iso20022-emir.md) · [`docs/iso20022-sftr.md`](docs/iso20022-sftr.md) · [`docs/xml-format.md`](docs/xml-format.md) · [`docs/xsd-validation.md`](docs/xsd-validation.md) · [`docs/parquet-normalize.md`](docs/parquet-normalize.md) · [`docs/history-store.md`](docs/history-store.md) · [`docs/lifecycle-cross-batch.md`](docs/lifecycle-cross-batch.md) · [`docs/desktop-web-ui.md`](docs/desktop-web-ui.md) · [`docs/email-notifications.md`](docs/email-notifications.md).
 - **Reliability** : [`docs/reliability.md`](docs/reliability.md) · [`docs/performance.md`](docs/performance.md) · [`CHANGELOG.md`](CHANGELOG.md).
-- **What's next** : [`docs/python-roadmap.md`](docs/python-roadmap.md) (v0.12 Python/Arrow bindings architecture).
+- **What's next** : [`docs/python-roadmap.md`](docs/python-roadmap.md) (Python/Arrow bindings architecture; v0.12 implemented, v0.13+ deferred).
 
 ## Input formats
 
