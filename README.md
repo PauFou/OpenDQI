@@ -5,161 +5,103 @@
 
 **OpenDQI turns EMIR/SFTR Trade Repository activity, state, and rejection files into actionable data quality intelligence.**
 
-A local-first engine that ingests both the reports a firm submits to its Trade Repository and the files the TR sends back, and converts them into reproducible HTML, JSON, CSV, and Parquet outputs.
+A local-first Rust engine that ingests both the reports a firm submits to its Trade Repository and the files the TR sends back, then produces reproducible HTML, JSON, CSV, and Parquet outputs. No network calls. No cloud dependency. Embeds in your own pipeline.
 
-## Why OpenDQI?
+## The three things OpenDQI does
 
-Trade Repositories process regulatory reports and return activity, state, rejection, and other feedback files. These files are essential, but they are not always easy to analyse operationally.
+Three workflows mirror the three layers of any TR/firm conversation. Each one is one command. Each one writes a deterministic HTML/CSV/JSON triple under `--out`.
 
-OpenDQI turns raw EMIR/SFTR submissions and TR feedback files into actionable data quality intelligence.
-
-It helps teams answer:
-
-- What did the TR accept?
-- What did the TR reject?
-- Which rejection causes are recurring?
-- What is the current TR state?
-- Which outstanding trades have stale or missing valuations?
-- Which trades look active at the TR but should not be?
-- Which accepted records still look risky from a data quality perspective?
-- How does the TR state compare with internal booking data? *(planned)*
-
-OpenDQI runs locally by default and produces reproducible HTML, JSON, CSV, and Parquet outputs.
-
-## Product layers
-
-OpenDQI organises its work around the three layers of a TR-firm conversation. See [`docs/positioning.md`](docs/positioning.md) for the full picture.
-
-1. **Activity layer (TAR)** — what was submitted or processed during a period. Today: `opendqi emir scan` for firm submissions and `opendqi emir tr-activity-scan` for TR replays of `auth.030`, with 5 EMIR.TRA.* checks (repeated correction, NEWT/MODI/TERM spikes, duplicate NEWT in batch, TAR↔TSR coherence). See [`docs/tr-activity-checks.md`](docs/tr-activity-checks.md).
-2. **State layer (TSR)** — what the TR currently believes is outstanding. Today: `opendqi emir tr-state-scan <auth.107>` with 7 state-health checks (outstanding-summary, stale / missing valuation, active-past-maturity, placeholder-date, duplicate-active-UTI, valuation-after-termination). Outputs `tr_state_issues.csv` / `tr_state_report.html`, distinct from the activity / feedback layers. See [`docs/tr-state-checks.md`](docs/tr-state-checks.md).
-3. **Rejection layer** — what failed and why. Today: `opendqi emir feedback <auth.092>` plus the top-level `opendqi feedback list/resolve/stale/analytics` workflow over the local SQLite store. The `analytics` action surfaces top rejection causes, repeated rejected UTIs, age buckets, rejected-then-accepted detection, and exports a `rejection_profile.yml`. See [`docs/rejection-analytics.md`](docs/rejection-analytics.md).
-
-The auth.* message catalog and our parser coverage are tracked in [`docs/auth-messages.md`](docs/auth-messages.md).
-
-## Features
-
-- **EMIR and SFTR submission scanning** (`opendqi {emir,sftr} scan`) over CSV (with YAML mapping) or ISO 20022 XML (`auth.030.001.03` for EMIR, `auth.052.001.02` for SFTR), with optional `--xsd` validation via `xmllint`.
-- **TR feedback ingestion** (`opendqi emir feedback`) over `auth.092` files, cross-referenced against the local history store, with a top-level Open/Resolved/Stale workflow (`opendqi feedback list/resolve/stale`). EMIR-only — SFTR has no rejection-feedback message (real `auth.080` is a reconciliation status advice → `opendqi sftr reconcile`).
-- **Local SQLite history store** (opt-in via `--store`) that persists submissions, feedback rows, and reconciliation rows, and enables cross-batch lifecycle checks (MODI/ETRM without a prior NEWT, duplicate NEWT, valuation regression / after-termination across scans).
-- **216 reproducible data-quality checks** today across EMIR (151) and SFTR (65). Layered as single-batch validity / completeness / consistency / accuracy / uniqueness / timeliness, cross-batch lifecycle, MAR/MSR margin reports, TSR / TAR / reconciliation / book-vs-TSR, EMIR `auth.092` feedback, the `EMIR.RST.*` reconciliation statistics family (auth.091), the `EMIR.WRN.*` data-quality warnings family (auth.106), the `SFTR.MCR.*` missing-collateral family (auth.083), the **`EMIR.COL.*` cross-message collateral audit** (Article 11 obligation, TSR auth.107 ↔ MSR auth.109 — `opendqi emir collateral-audit`), and the **`EMIR.PSC.*` + `SFTR.PSC.*` pre-submission families driven by post-TR rejection patterns**. Catalogues: [`docs/emir-checks.md`](docs/emir-checks.md), [`docs/sftr-checks.md`](docs/sftr-checks.md), [`docs/lifecycle-checks.md`](docs/lifecycle-checks.md), [`docs/feedback-checks.md`](docs/feedback-checks.md), [`docs/reconciliation-checks.md`](docs/reconciliation-checks.md), [`docs/emir-recon-stats.md`](docs/emir-recon-stats.md), [`docs/sftr-missing-collateral.md`](docs/sftr-missing-collateral.md), [`docs/collateral-audit.md`](docs/collateral-audit.md), [`docs/pre-submission-checks.md`](docs/pre-submission-checks.md).
-- **Deterministic outputs**: `summary.json`, `issues.csv`, `report.html`, and dedicated artefacts per layer (e.g. `tr_state_issues.csv` for TSR scans).
-- **Runs locally by default**; no network calls, no cloud dependency, no SWIFT-licensed XSD redistribution.
-
-## Quick start
-
-Build from source (requires Rust stable):
+### 1. TR state health — *"what does the TR think I have open?"*
 
 ```bash
-cargo build --release
+opendqi emir tr-state-scan auth107.xml --out ./report/
 ```
 
-Scan a firm's EMIR submission (CSV):
+Ingests the daily `auth.107` Trade State Report and surfaces stale valuations, trades past maturity, duplicate active UTIs, valuation after termination, placeholder maturity dates. **Score + 16 issues** on the shipped 8-record fixture.
+
+### 2. Rejection intelligence — *"what's the TR throwing back, and why?"*
 
 ```bash
-./target/release/opendqi emir scan ./examples/emir/sample.csv \
-  --mapping ./examples/emir/sample_mapping.yml \
-  --out ./report
+opendqi emir feedback auth092.xml --store ./history.db --out ./feedback/
+opendqi feedback analytics --store ./history.db --regime emir --out ./rejection_profile.yml
+opendqi emir scan next-batch.csv --mapping mapping.yml --rejection-profile ./rejection_profile.yml --out ./pre-flight/
 ```
 
-Outputs:
+`auth.092` rejections feed a SQLite history store + an Open/Resolved/Stale workflow, and roll up into a `rejection_profile.yml` that gates the *next* submission via the `EMIR.PSC.*` family. **The post-TR ↔ pre-TR feedback loop.**
 
-```text
-report/report.html
-report/summary.json
-report/issues.csv
-```
-
-Open a history store and ingest a TR rejection file:
+### 3. Combined audit — *"one report for the committee"*
 
 ```bash
-opendqi emir scan ./reports/april/ --mapping ./mapping.yml \
-  --store ./opendqi-history.db --out ./report-april/
-
-opendqi emir feedback ./trade-repo/april/auth092.xml \
-  --store ./opendqi-history.db --out ./feedback-april/
-
-opendqi feedback list --store ./opendqi-history.db --status open
-opendqi feedback resolve --store ./opendqi-history.db --uti <UTI>
+opendqi emir tr-audit --tar auth030.xml --tsr auth107.xml --feedback auth092.xml --out ./audit/
 ```
+
+Three layers, one HTML, plus 3 cross-layer `EMIR.AUD.*` coherence checks (rejected-but-outstanding-in-TSR, MODI-without-prior-NEWT, TERM-but-still-outstanding). **251 issues** on the shipped 20-record audit fixture.
+
+Operator scenarios for each workflow in [`docs/use-cases.md`](docs/use-cases.md). SFTR has the same surface (`opendqi sftr ...`) minus rejection feedback (`auth.080` is a reconciliation status advice, not feedback).
+
+## 30-second demo
+
+```bash
+git clone https://github.com/PauFou/OpenDQI && cd OpenDQI
+bash scripts/demo.sh
+```
+
+Runs all three workflows above against the synthetic kit at [`examples/quickstart-emir/`](examples/quickstart-emir/), drops three `report.html` files under `/tmp/opendqi-demo/`, and opens the consolidated audit report in your default browser. Builds a debug binary on the first run; subsequent runs are sub-second.
+
+## Install
+
+```bash
+cargo install --git https://github.com/PauFou/OpenDQI --tag v0.10.0 opendqi-cli
+```
+
+A `cargo-dist`-generated GitHub Release with pre-built binaries (Linux x86_64 + ARM64, macOS x86_64 + ARM64) ships from v0.11.0 — `curl -sSL .../installer.sh | sh` will appear on the [Releases](https://github.com/PauFou/OpenDQI/releases) page.
+
+## Coverage at a glance
+
+| | EMIR | SFTR | Total |
+|---|---:|---:|---:|
+| Single-batch DQ checks (6 dimensions) | 89 | 44 | 133 |
+| TR-layer & cross-message (TSR · TAR · MAR · MSR · Recon · Warnings · Missing-collat · Audit · Collateral-audit · Book-vs-TR · Lifecycle · Feedback · Pre-submission) | 62 | 21 | 83 |
+| **Live catalog (post-v0.10.0)** | **151** | **65** | **216** |
+
+12 ISO 20022 messages parsed against the real ESMA XSD subset, gated locally by `OPENDQI_XSD_DIR` (SWIFT-licensed XSDs never redistributed). Full catalogues: [`docs/emir-checks.md`](docs/emir-checks.md) · [`docs/sftr-checks.md`](docs/sftr-checks.md). Per-message coverage notes: [`docs/auth-messages/`](docs/auth-messages/).
+
+## Documentation
+
+- **Get started** : [`docs/use-cases.md`](docs/use-cases.md) (operator scenarios) · [`examples/quickstart-emir/`](examples/quickstart-emir/) (3-file kit) · [`scripts/demo.sh`](scripts/demo.sh) (one-shot).
+- **Positioning** : [`docs/positioning.md`](docs/positioning.md) (3-layer mental model).
+- **Per-workflow** : [`docs/tr-state-checks.md`](docs/tr-state-checks.md) · [`docs/tr-activity-checks.md`](docs/tr-activity-checks.md) · [`docs/tr-audit.md`](docs/tr-audit.md) · [`docs/tr-feedback.md`](docs/tr-feedback.md) · [`docs/rejection-analytics.md`](docs/rejection-analytics.md) · [`docs/pre-submission-checks.md`](docs/pre-submission-checks.md) · [`docs/book-reconcile.md`](docs/book-reconcile.md) · [`docs/collateral-audit.md`](docs/collateral-audit.md) · [`docs/emir-mar-msr.md`](docs/emir-mar-msr.md) · [`docs/emir-recon-stats.md`](docs/emir-recon-stats.md) · [`docs/emir-warnings.md`](docs/emir-warnings.md) · [`docs/sftr-missing-collateral.md`](docs/sftr-missing-collateral.md).
+- **Engineering** : [`docs/auth-messages.md`](docs/auth-messages.md) · [`docs/iso20022-emir.md`](docs/iso20022-emir.md) · [`docs/iso20022-sftr.md`](docs/iso20022-sftr.md) · [`docs/xml-format.md`](docs/xml-format.md) · [`docs/xsd-validation.md`](docs/xsd-validation.md) · [`docs/parquet-normalize.md`](docs/parquet-normalize.md) · [`docs/history-store.md`](docs/history-store.md) · [`docs/lifecycle-cross-batch.md`](docs/lifecycle-cross-batch.md) · [`docs/desktop-web-ui.md`](docs/desktop-web-ui.md) · [`docs/email-notifications.md`](docs/email-notifications.md).
+- **Reliability** : [`docs/reliability.md`](docs/reliability.md) · [`docs/performance.md`](docs/performance.md) · [`CHANGELOG.md`](CHANGELOG.md).
+- **What's next** : [`docs/python-roadmap.md`](docs/python-roadmap.md) (v0.12 Python/Arrow bindings architecture).
 
 ## Input formats
 
-Supported today:
+CSV (with YAML mapping), ISO 20022 XML (12 supported messages — see above), directories of mixed files, `.zip` archives (no zip-slip — `csv`/`xml`/`parquet` members only, directory components dropped), single-stream `.gz`, and Parquet (read + write round-trip — same canonical schema as the bindings spec in [`docs/python-roadmap.md`](docs/python-roadmap.md)). Optional XSD validation via `xmllint`.
 
-- CSV with mapping YAML (EMIR).
-- ISO 20022 `auth.030.001.03` (EMIR TAR submissions) — see [`docs/iso20022-emir.md`](docs/iso20022-emir.md).
-- ISO 20022 `auth.052.001.02` (SFTR submissions) — see [`docs/iso20022-sftr.md`](docs/iso20022-sftr.md).
-- ISO 20022 `auth.092` (EMIR TR rejection feedback to firm). SFTR `auth.080` is a reconciliation status advice, parsed via `opendqi sftr reconcile` (not feedback).
-- ISO 20022 `auth.106` (EMIR data-quality *warnings* report, `opendqi emir warnings`). Real `auth.083` is an SFTR *Missing Collateral Request* and is not modelled yet (it is not reconciliation). See [`docs/auth-messages.md`](docs/auth-messages.md).
-- OpenDQI v0.1 simplified XML ([`docs/xml-format.md`](docs/xml-format.md)).
-- Directories of mixed CSV/XML files.
-- `.zip` archives (only `csv` / `xml` / `parquet` members are read;
-  directory components in member names are ignored — no zip-slip) and
-  single-stream `.gz` (e.g. `foo.csv.gz`), accepted wherever a scan
-  command takes a file path. Extraction is to a per-run temp directory,
-  reclaimed by the OS on reboot (same contract as `opendqi desktop`).
-- Optional XSD validation via `xmllint` ([`docs/xsd-validation.md`](docs/xsd-validation.md)).
+## Status & roadmap
 
-Planned:
+| Version | Theme |
+|---|---|
+| **v0.10.0** (current) | Streaming-issue pipeline end-to-end (~32 % EMIR-1M peak RSS reduction, honest measurement on 3 views) + EMIR Article 11 collateral cross-reference (`COL.*`) + compression-event quality check |
+| **v0.11.0** (this release) | Adoption pack — README refonte, `examples/quickstart-emir/`, `scripts/demo.sh`, `docs/use-cases.md`, Python/Arrow architecture spec, `cargo-dist` release workflow with 4-target binaries |
+| **v0.12.0** | **Python/Arrow bindings preview** — `opendqi.emir.scan_parquet` + `scan_table(arrow_tbl, mapping)`, issues as `pyarrow.Table`. Strict scope: no Spark, no SaaS, no magic DataFrame integration. Architecture spec in [`docs/python-roadmap.md`](docs/python-roadmap.md). |
+| **v1.0.0** | Stable CLI / output / Arrow contract. Locked schemas. |
 
-- ISO 20022 `auth.107` (EMIR TSR — Phase 1).
-- TR-output mode for `auth.030` (Phase 2).
-- ISO 20022 `auth.079` (SFTR TSR — Phase 6).
-- Parquet output **and input** — shipped, round-trip complete. `opendqi emir scan path/to/normalized.parquet --out report/` accepts Parquet alongside CSV / XML. See [`docs/parquet-normalize.md`](docs/parquet-normalize.md) for the schema and downstream usage with DuckDB / Polars / PyArrow.
-- Parallel check execution via `rayon` — see [`docs/performance.md`](docs/performance.md) for benchmark numbers (~400 k EMIR records/sec, ~1.2 M SFTR records/sec on commodity hardware).
+**MSRV** Rust 1.87.0 (verified in CI). **CI** `cargo fmt --check`, `cargo clippy -D warnings`, build, **762 tests** + **19/19 goldens** byte-identical, `cargo-deny` daily — all on Ubuntu + macOS. **Local preflight** : `./scripts/preflight.sh` (one-shot setup `cargo install cargo-deny --locked`). **Auto-run on push** : `./scripts/install-hooks.sh`.
 
-## Roadmap
-
-Public summary; see [`docs/positioning.md`](docs/positioning.md) for context.
-
-- **Phase 0** — stabilise current engine, audit auth.* naming, pivot positioning. ✅
-- **Phase 1** — EMIR TSR health (`tr-state-scan` over `auth.107`). ✅
-- **Phase 2** — EMIR TAR activity intelligence (`tr-activity-scan`). ✅
-- **Phase 3** — Rejection analytics (`feedback analytics`). ✅
-- **Phase 4** — Combined `tr-audit` command. ✅
-- **Phase 5** — Book vs TSR reconciliation (`book-reconcile`). ✅
-- **Phase 6** — SFTR equivalent modules. ✅ (`opendqi sftr scan/reconcile/tr-state-scan/tr-activity-scan/tr-audit/book-reconcile/missing-collateral/normalize` — 62 SFTR checks across submission, TSR, TAR, reconciliation, missing-collateral (auth.083), and book-vs-TSR layers, including margin-lending state/activity. SFTR has no feedback message — there is no `sftr feedback`.)
-- **Phase 7** — Local web UI. ✅ (`opendqi desktop` opens http://127.0.0.1:7878 — see [`docs/desktop-web-ui.md`](docs/desktop-web-ui.md).)
-- **Phase 8** — EMIR `auth.091` reconciliation statistics (`recon-stats`) ✅, canonical-model completeness (`source_system`, `security_identifier`, `evidence`, `severity_overrides`) ✅.
-- **Phase 9** — faithful TR-message re-model: faithful `auth.092` rule list, real SFTR `auth.080` reconcile, `auth.091` per-transaction detail, removal of the synthetic SFTR-feedback path, and the **EMIR `auth.106` data-quality warnings** report (`opendqi emir warnings`) ✅; reliability hardening (golden snapshots + parser robustness suite) ✅.
-
-## Status
-
-**Current (post-v0.4.0; M0.5–0.7 under `[Unreleased]`).** EMIR coverage spans submissions, TSR (`auth.107`), TAR (`auth.030`), rejection feedback (`auth.092`), MAR (`auth.108`), MSR (`auth.109`), reconciliation statistics (`auth.091`), and data-quality warnings (`auth.106` via `opendqi emir warnings`). EMIR has no counterparty pairing/reconciliation message — the synthetic `emir reconcile` was removed; `EMIR.REC.*` is fed by the real `auth.091` per-transaction detail. SFTR coverage spans submissions (`auth.052`), TSR (`auth.079`), TAR replay, the real reconciliation status advice (`auth.080` via `sftr reconcile` → `SFTR.REC.*`), and book-vs-TSR. SFTR has no rejection-feedback message; real `auth.083` (Missing Collateral Request) is not modelled yet. The EMIR `auth.107`/`auth.108`/`auth.109`/`auth.091`/`auth.092`/`auth.106` and SFTR `auth.079`/`auth.080` TR parsers are **schema-verified against the real ESMA ISO 20022 XSDs (documented subset)** — per-message coverage notes (extracted fields, ignored branches, honest limits) under [`docs/auth-messages/`](docs/auth-messages/); SWIFT-licensed XSDs are not redistributed. Each schema-verified message also has a **fully XSD-valid conformance fixture** strictly validated against the real ESMA XSD (developer/preflight-local gate, self-skips in public CI — see [`docs/xsd-validation.md`](docs/xsd-validation.md)); the lean test fixtures remain documented schema-shaped subsets. Margin lending (MGLD) integrated into TAR/TSR layers. 200 data-quality checks, the post-TR → pre-TR rejection-profile loop, golden-snapshot + adversarial-parser regression suites, email notifications on every report-producing command, structured evidence rendered in the HTML report, an **11-operation local web UI** (full CLI parity), and shell completions / man page.
-
-- **CI** — `cargo fmt --check`, `cargo clippy -D warnings`, `cargo build`, `cargo test --workspace` on Ubuntu + macOS for every push and PR to `main`.
-- **MSRV** — verified in CI: the workspace builds on Rust **1.87.0** (`cargo check --all-targets --locked`), kept in sync with `rust-version` in `Cargo.toml`.
-- **Coverage** — `cargo-llvm-cov` reports line coverage on every push/PR; surfaced on the run summary (informational, non-gating).
-- **Security audit** — `cargo-deny` runs `check advisories bans licenses sources` daily and on every push/PR.
-- **Run the same checks locally before pushing**: `./scripts/preflight.sh` (one-shot setup: `cargo install cargo-deny --locked`).
-- **Auto-run on every push**: `./scripts/install-hooks.sh` installs the pre-push git hook.
-
-See [`CHANGELOG.md`](CHANGELOG.md) for release notes.
+Full release history in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Shell completions & man page
 
 ```bash
-# Bash (system-wide)
 opendqi completions bash | sudo tee /etc/bash_completion.d/opendqi
-
-# Zsh (into a dir on $fpath)
-opendqi completions zsh > ~/.zfunc/_opendqi
-
-# Fish
+opendqi completions zsh  > ~/.zfunc/_opendqi
 opendqi completions fish > ~/.config/fish/completions/opendqi.fish
-
-# Man page
 opendqi man > opendqi.1 && man ./opendqi.1
 ```
 
 Supported shells: `bash`, `zsh`, `fish`, `powershell`, `elvish`.
-
-## Documentation
-
-- Positioning & roadmap: [`docs/positioning.md`](docs/positioning.md).
-- auth.* message catalog: [`docs/auth-messages.md`](docs/auth-messages.md).
-- CLI reference: `opendqi --help`, `opendqi emir --help`.
-- CSV mapping guide: see `examples/emir/sample_mapping.yml`.
 
 ## Contributing
 
@@ -167,7 +109,7 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Security
 
-See [`SECURITY.md`](SECURITY.md) for the vulnerability disclosure process.
+See [`SECURITY.md`](SECURITY.md) for the vulnerability disclosure process. No SWIFT-licensed XSDs are committed; all fixtures are synthetic.
 
 ## Disclaimer
 
