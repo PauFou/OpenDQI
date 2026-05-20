@@ -13,6 +13,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+## [0.12.1] - 2026-05-20
+
+Python packaging polish + PyPI publish + adoption kit.
+
+v0.12.0 shipped the Python bindings as 4 wheels on the GitHub
+Release page, but installation was `pip install <wheel URL>`
+— friction high. v0.12.1 closes that gap : **`pip install
+opendqi` now works** (via OIDC trusted publishing to PyPI), and
+the repo gains 3 runnable quickstart scripts + a Jupyter
+notebook + a quickstart-facing `docs/python.md`. Pure adoption,
+zero new Python API surface, zero modification of the Rust core
+beyond version bumps.
+
+Backwards-compatible. **Zero code change beyond version bumps**
+in the 3 version-bearing files (`Cargo.toml`,
+`crates/opendqi-py/Cargo.toml`, `crates/opendqi-py/pyproject.toml`)
+and the auto-refreshed lockfiles. **216 checks remain 216**.
+19/19 goldens byte-identical. 762/0 workspace tests. 30/30
+pytest. The v1.0 stable Arrow contract for `result.issues`
+(locked in v0.12.0 P3) is unchanged.
+
+### Added
+
+- **`pip install opendqi` via OIDC trusted publishing.**
+  `.github/workflows/python-release.yml` gains a third job
+  `publish` that runs in parallel with the existing `release`
+  (GitHub Release attach) after the `build` matrix. Uses
+  `pypa/gh-action-pypi-publish@release/v1` with
+  `permissions: id-token: write` (the OIDC scope PyPI's
+  trusted-publisher endpoint requires) — **no `PYPI_API_TOKEN`
+  GitHub secret to create / rotate / leak**. Configured via
+  `environment.name: pypi`, `environment.url:
+  https://pypi.org/p/opendqi`. The publish is idempotent
+  (`skip-existing: true`) so a retag after a CI hiccup is safe.
+  PyPI-side precondition (one-shot, browser): configure a
+  pending publisher for `opendqi` pointing at
+  `PauFou/OpenDQI/python-release.yml` + environment `pypi`.
+
+- **`examples/python/` — 3 runnable quickstart scripts + Jupyter
+  notebook.** Each script is autonomous, ~30–80 lines, with
+  path discovery via `Path(__file__).parents[2]` so it works
+  from any CWD :
+  - `01_scan_parquet.py` — single-call scan on a normalized
+    Parquet (the simplest entry point; generates the Parquet
+    on first run via the CLI binary)
+  - `02_parse_xml_then_scan.py` — `parse_xml → scan_table`
+    chain, no Parquet roundtrip; for in-memory data platforms
+  - `03_custom_mapping.py` — `scan_table` with a user-named
+    Arrow table + custom column mapping; the realistic
+    data-warehouse path
+  - `quickstart.ipynb` — same 3 patterns committed
+    **executed-with-outputs** for GitHub rendering (built via
+    the `_build_notebook.py` helper).
+  - `README.md` — local install / run instructions +
+    when-to-use-which table.
+
+- **`docs/python.md` — quickstart-facing Python doc (~290
+  lines).** Distinct from the existing `docs/python-roadmap.md`
+  (architecture spec — kept for historical reference). Covers:
+  status header (stable v1.0 Arrow contract vs evolving API) ;
+  install ; the 3 patterns ; the 6-function public API surface ;
+  the 3 output shapes (`summary` dict, `issues` Arrow Table,
+  `normalized` Arrow Table) ; integration patterns for **DuckDB
+  / Polars / pandas / Spark** (the Spark section explicitly
+  documents the Arrow / Parquet handoff pattern — a dedicated
+  `opendqi.spark` namespace with a native `mapInPandas` UDF is
+  deferred to v0.13) ; a candid status & limitations list ; a
+  pointer to the architecture spec.
+
+### Changed
+
+- **`README.md` Python install block.** Replaces
+  `pip install <wheel URL from the v0.12.0 GitHub Release page>`
+  with the actual `pip install opendqi`. Adds 4 cross-references
+  in the same block (`docs/python.md`, `examples/python/`, the
+  notebook, `docs/python-roadmap.md`). The "Documentation →
+  Get started" bucket gains `docs/python.md` + `examples/python/`
+  alongside the existing CLI quickstart kit (`docs/use-cases.md`
+  + `examples/quickstart-emir/` + `scripts/demo.sh`). The
+  "What's next" pointer reframes the Python roadmap doc as
+  "v0.12 implemented, v0.13+ deferred".
+
+### Removed
+
 ## [0.12.0] - 2026-05-20
 
 Python / Arrow bindings preview — OpenDQI becomes embeddable.
@@ -1094,7 +1178,8 @@ sends back, and turns them into reproducible HTML / JSON / CSV
 - No SWIFT-licensed XSDs or real client data are committed; all
   fixtures are synthetic.
 
-[Unreleased]: https://github.com/PauFou/OpenDQI/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/PauFou/OpenDQI/compare/v0.12.1...HEAD
+[0.12.1]: https://github.com/PauFou/OpenDQI/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/PauFou/OpenDQI/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/PauFou/OpenDQI/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/PauFou/OpenDQI/compare/v0.9.0...v0.10.0
