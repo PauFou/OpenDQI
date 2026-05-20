@@ -75,7 +75,11 @@ fn write_batch(path: &Path, schema: SchemaRef, batch: RecordBatch) -> Result<()>
 // EMIR schema + batch
 // =================================================================
 
-fn emir_schema() -> SchemaRef {
+/// Public canonical EMIR Arrow schema (Decimal128(38,10) / Date32 /
+/// Timestamp(μs,UTC) / Utf8). The v1.0 stable Parquet contract.
+/// Exposed for downstream Arrow consumers (e.g. `opendqi-py` Python
+/// bindings). Used internally by [`write_emir_parquet`].
+pub fn emir_schema() -> SchemaRef {
     Arc::new(Schema::new(emir_fields()))
 }
 
@@ -144,7 +148,12 @@ fn emir_fields() -> Vec<Field> {
     ]
 }
 
-fn build_emir_batch(schema: &SchemaRef, records: &[EmirRecord]) -> Result<RecordBatch> {
+/// Project a slice of [`EmirRecord`] into the Arrow [`RecordBatch`]
+/// matching [`emir_schema`]. Public for downstream Arrow consumers
+/// (e.g. `opendqi-py` Python bindings) — used internally by
+/// [`write_emir_parquet`] and now exported as the single source of
+/// truth for the EMIR Arrow projection.
+pub fn build_emir_batch(schema: &SchemaRef, records: &[EmirRecord]) -> Result<RecordBatch> {
     let n = records.len();
     let mut source_file = StringBuilder::new();
     let mut record_id = StringBuilder::new();
@@ -357,7 +366,9 @@ fn build_emir_batch(schema: &SchemaRef, records: &[EmirRecord]) -> Result<Record
 // SFTR schema + batch
 // =================================================================
 
-fn sftr_schema() -> SchemaRef {
+/// Public canonical SFTR Arrow schema. The v1.0 stable Parquet
+/// contract — symmetric to [`emir_schema`].
+pub fn sftr_schema() -> SchemaRef {
     Arc::new(Schema::new(sftr_fields()))
 }
 
@@ -403,7 +414,9 @@ fn sftr_fields() -> Vec<Field> {
     ]
 }
 
-fn build_sftr_batch(schema: &SchemaRef, records: &[SftrRecord]) -> Result<RecordBatch> {
+/// Project a slice of [`SftrRecord`] into the Arrow [`RecordBatch`]
+/// matching [`sftr_schema`]. Symmetric to [`build_emir_batch`].
+pub fn build_sftr_batch(schema: &SchemaRef, records: &[SftrRecord]) -> Result<RecordBatch> {
     let n = records.len();
     let mut source_file = StringBuilder::new();
     let mut record_id = StringBuilder::new();

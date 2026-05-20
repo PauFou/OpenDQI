@@ -13,4 +13,7 @@ pub use csv_in::{read_emir_csv, read_sftr_csv};
 pub use discover::{discover_emir_inputs, has_extension};
 pub use mapping::CsvMapping;
 pub use parquet_in::{read_emir_parquet, read_sftr_parquet};
-pub use parquet_out::{write_emir_parquet, write_sftr_parquet};
+pub use parquet_out::{
+    build_emir_batch, build_sftr_batch, emir_schema, sftr_schema, write_emir_parquet,
+    write_sftr_parquet,
+};
