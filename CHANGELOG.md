@@ -9,8 +9,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`SortedIssueSink` + k-way-merge engine — unwired (Milestone
-  0.22; Increment B of the streaming issue pipeline).** New
+### Changed
+
+### Removed
+
+## [0.10.0] - 2026-05-20
+
+Streaming-issue pipeline end-to-end + EMIR Article-11 collateral
+cross-reference + compression-event quality. The chantier opened by
+the M0.13–M0.18 measurement work closes here with the **first real
+EMIR-1M peak reduction** of the whole release line (~3.9 → ~2.7 GiB,
+~32 %), and the EMIR collateral obligation gets its first
+cross-message check pack via a new `emir collateral-audit` subcommand.
+
+Backwards-compatible: every existing command keeps its CLI surface,
+output byte-layout, golden artefacts and store schema. Added one new
+subcommand (`emir collateral-audit`), one new EMIR check family
+(`EMIR.COL.*`, 2 checks), and one new EMIR risk-mitigation check
+(`EMIR.RMT.COMPRESSION_EVENT_INCOMPLETE`). Workspace 213 → **216**
+checks (EMIR 148 → **151**, SFTR **65**).
+
+### Added
+
+- **EMIR collateral audit — `auth.107` (TSR) ↔ `auth.109` (MSR)
+  cross-reference.** New cross-message subcommand
+  `opendqi emir collateral-audit --tsr <auth107> --msr <auth109>
+  [--config] [--out] [--email-config]` that joins outstanding TSR
+  derivatives to MSR margin state by UTI and emits two new
+  `EMIR.COL.*` checks (a new cross-message family, cousin of
+  `EMIR.AUD.*`): `EMIR.COL.MISSING` (Completeness/High) when no MSR
+  row is joinable OR every IM/VM amount (posted + collected, current)
+  is absent-or-zero across all matches; `EMIR.COL.STALE`
+  (Timeliness/Warning) when the linked non-zero MSR snapshot is older
+  than `emir_rmt.collateral_max_age_days` (default 1) vs the TSR
+  `state_as_of` (fallback `now`). Closes the missing Article-11
+  *collateral* cell in the obligation × {missing, timely} matrix
+  (confirmation and valuation were already covered). Free function
+  `opendqi_core::dq::compute_collateral_emir_issues(tsr, msr,
+  thresholds, now)` (mirror of `compute_tr_audit_emir_issues`).
+  Outputs: `summary.json`, `collateral_audit_issues.csv`,
+  `collateral_audit_report.html`. Honest scoping caveat (documented):
+  `TrStateRecord` carries no clearing-status flag in the ESMA usage
+  guideline OpenDQI consumes, so the check applies to every
+  outstanding TSR derivative — it is a *data-quality signal*, not a
+  verdict of Article-11 non-cleared non-compliance. Fixtures:
+  `examples/emir/collateral_audit/{tsr,msr}.xml` covering all 4
+  branches (no-link, all-zero, fresh-OK, stale). Docs:
+  [`docs/collateral-audit.md`](docs/collateral-audit.md),
+  [`docs/emir-risk-mitigation.md`](docs/emir-risk-mitigation.md).
+
+- **EMIR risk-mitigation: `EMIR.RMT.COMPRESSION_EVENT_INCOMPLETE`.**
+  New single-batch check (Completeness/Warning, +1 → 11 in the
+  `EMIR.RMT.*` family) firing on uncleared records where `event_type`
+  ∈ {`COMP`, `NOVA`} and `prior_uti` and/or
+  `collateral_portfolio_code` are absent/blank — one issue per
+  missing field. Surfaces Article-11(1)(c) portfolio-compression
+  reporting gaps that would otherwise make the activity unanalysable.
+  Honest framing: a DQ signal on *reported* compression events, not
+  an inference of compliance with the obligation to *perform*
+  compression (which needs cross-batch portfolio cadence — deferred).
+  Fixture row R013 in `examples/emir/risk_mitigation/rmt_sample.csv`.
+  Docs: [`docs/emir-risk-mitigation.md`](docs/emir-risk-mitigation.md).
+
+- **`SortedIssueSink` + k-way-merge engine (Milestone 0.22;
+  Increment B of the streaming issue pipeline).** New
   `opendqi_core::{SortedIssueSink, SortedIssues}`: buffers issues
   (applying severity overrides + online `IssueAggregator` tally as
   they arrive), spills `issue_cmp`-sorted JSON-Lines runs to a temp
@@ -22,10 +84,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   under `issue_cmp`). RAII temp-dir cleanup. The 8-field comparator
   is extracted to a single `issue_cmp` shared by `sort_issues` and
   the merge so they cannot drift (output-invariant refactor). No new
-  crate (`serde_json` was already a workspace dep). **Dormant** —
-  not wired into any command (Increment C flips EMIR `run_scan` and
-  measures); zero behaviour / golden / conformance change; 11 new
-  exhaustive equivalence/RAII tests.
+  crate (`serde_json` was already a workspace dep). 11 new
+  exhaustive equivalence/RAII tests. *Now wired by M0.23–0.27 below.*
+
+- **Generic `stream_checks_into` helper (Milestone 0.24; Increment
+  D₁).** New `opendqi_core::dq::stream_checks_into<C: ?Sized + Sync>(
+  checks, sink, run)` in `dq/mod.rs`: the closure captures
+  records / prior-history / `CheckContext`, so the helper serves
+  every check family (EMIR single-batch, EMIR lifecycle, SFTR
+  single-batch, SFTR lifecycle, every TR-message family) without
+  per-regime variants. `stream_emir_checks_into` becomes a 1-line
+  delegate (byte-identical to M0.23). Two equivalence tests
+  (`stream_checks_into_equals_finalize_issues`,
+  `stream_checks_into_empty_checks_is_noop`).
 
 - **Large-input scale benchmark + end-to-end memory/time harness
   (tooling).** First increment of the performance/scale work
@@ -86,20 +157,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **EMIR-1M peak RSS reduced ~3.9 GiB → ~2.7 GiB (~32 %), wall-time
+  ~80 s → ~50 s — the first real win of the M0.13→M0.27 chantier
+  (Milestones 0.21–0.27, D5).** End-to-end roll-out of the streaming
+  issue pipeline: every scan path on CLI and the local web UI now
+  pushes issues into a `SortedIssueSink` instead of accumulating a
+  resident `Vec<DqIssue>` for the whole batch, then `finish()` yields
+  the `ScanSummary` plus a sorted iterator that
+  `write_issues_csv_from_iter` consumes lazily. The reduction is
+  honest and measured on three independent views (in
+  [`docs/performance.md`](docs/performance.md)): `OPENDQI_MEM_TRACE`
+  phase trace (the 3819→2369 MiB finalize jump is **gone**;
+  post-`write_issues_csv` resident 1585→**8 MiB**), `dhat-heap` live
+  heap @100k EMIR scan **752→489 MB** (−35 %; `run_all` collect
+  160 MB gone, rayon parallel-collect intermediates ~152 MB gone,
+  sink's own buffer only 13 MB), and `/usr/bin/time -l`
+  corroborates (OS-max 2722 / sampler 2679 MiB across two 1M runs ⇒
+  honest range 2.68–3.24 GiB / ~18–32 %, conservative claim ~32 %
+  midline). SFTR gain modest (~9 %, 1M ~2.1→1.95 GiB), exactly as
+  predicted — SFTR was never issue-`Vec`-bound. New floor: the
+  resident `Vec<EmirRecord>` from parse + per-issue `format!`
+  message strings @1M + the bounded sink buffer; future levers are
+  out of scope.
+
+  - **M0.23 — EMIR `run_scan` flipped to the sink.** First
+    consumer; `STREAM_SPILL_MAX_ISSUES = 65_536` keeps every
+    committed golden in the no-spill path (no-spill =
+    `finalize_issues`, M0.22-locked ⇒ byte-identical issues.csv /
+    summary.json). Bounded top-20 issue selection via `TopIssues`
+    heap (online, no full re-scan).
+  - **M0.25 — 9 EMIR CLI commands migrated.**
+    `run_{feedback, recon_stats, warnings, tr_state_scan, mar_scan,
+    msr_scan, tr_activity_scan, tr_audit, book_reconcile}` all
+    routed through the sink; the dead `build_summary` /
+    `build_feedback_summary` helpers + the unused
+    `run_all_*` / `finalize_issues` / `sort_issues` /
+    `write_issues_csv` imports were pruned.
+  - **M0.26 — 7 SFTR CLI commands migrated.** Mirrors M0.25 across
+    every SFTR scan path (`run_{scan, missing_collateral, reconcile,
+    tr_state_scan, tr_activity_scan, tr_audit, book_reconcile}`).
+  - **M0.27 — Web-UI `finalize_artifacts` chokepoint flipped.** The
+    `opendqi-server` shared finalisation step now consumes a
+    `SortedIssueSink` (its `finish()` replaces the former
+    `build_summary` / `build_feedback_summary`); ~14 `run_*_server`
+    handlers + `run_server_scan` push into a per-request sink (with
+    a `Mutex` when a parallel `stream_checks_into` is used). Verified
+    via the 16 `opendqi-server` integration tests + byte-equivalence
+    by construction (same core path the CLI goldens already lock).
+
+  Output invariants used (all pre-proven): the no-spill sink path is
+  literally `finalize_issues` (M0.22, test-locked); `sink.finish` ==
+  the former `build_summary` (M0.21 — `quality_score` delegates to
+  `quality_score_from_counts`; `IssueAggregator::observe` == the
+  manual loop); `issue_cmp`-equal ⟹ identical CSV row so push order
+  is immaterial. Push-order invariants kept goldens byte-identical
+  across all 19 cases without `UPDATE_GOLDEN`.
+
 - **`IssueAggregator` — online summary; 18 `build_summary` copies
-  de-duplicated (Milestone 0.21).** New
-  `opendqi_core::IssueAggregator` computes `ScanSummary`
-  (severity/dimension counts, total, `quality_score`) from a
-  *stream* of issues without retaining them; `scoring::quality_score`
-  now delegates to a shared `quality_score_from_counts` so the score
-  is reproducible from counts alone. The 17 CLI + 1 server
-  hand-rolled `build_summary` bodies collapse to thin adapters over
-  it. **Output byte-identical** (same arithmetic — zero
-  golden/conformance diff; preflight green). Foundational seam
-  ("Increment A") for the streaming issue pipeline that will replace
-  the resident `Vec<DqIssue>` (the only remaining lever after the
-  M0.18–0.20 dhat findings); independently valuable as de-dup. No
-  behaviour/model/store change.
+  de-duplicated (Milestone 0.21; Increment A of the streaming issue
+  pipeline).** New `opendqi_core::IssueAggregator` computes
+  `ScanSummary` (severity/dimension counts, total, `quality_score`)
+  from a *stream* of issues without retaining them;
+  `scoring::quality_score` now delegates to a shared
+  `quality_score_from_counts` so the score is reproducible from
+  counts alone. The 17 CLI + 1 server hand-rolled `build_summary`
+  bodies collapse to thin adapters over it. Output byte-identical
+  (same arithmetic — zero golden/conformance diff; preflight green).
+  Foundational seam for the streaming pipeline that replaced the
+  resident `Vec<DqIssue>` (M0.22–0.27 above); independently valuable
+  as de-dup.
 
 - **`collect_finalize` is now a single-buffer issue sink
   (Milestone 0.20; refuted memory hypothesis, kept as a refactor).**
@@ -116,11 +242,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   collect/append lever is **exhausted** — only the out-of-scope
   external-sort / no-retain rearchitecture can move the EMIR peak
   (see [`docs/performance.md`](docs/performance.md)). Kept solely
-  for the structural cleanliness: **output byte-identical** (zero
+  for the structural cleanliness: output byte-identical (zero
   golden/conformance diff — append order irrelevant,
   `finalize_issues` unchanged; M0.19 unit tests pass as-is),
   preflight green. Not a perf win — stated plainly
-  (M0.14/M0.17/M0.19 discipline).
+  (M0.14/M0.17/M0.19 discipline). *Now realised by M0.21–0.27 above.*
 
 - **`run_all*` consolidated into one `collect_finalize` helper
   (Milestone 0.19; refuted memory hypothesis, kept as a refactor).**
@@ -133,11 +259,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   EMIR 1M RSS unchanged at ~3.9 GiB). Proven structural conclusion
   (in [`docs/performance.md`](docs/performance.md)): the EMIR peak
   needs the *bounded-memory / issue-streaming* rearchitecture — no
-  collect tweak moves it. Kept solely for the de-duplication:
-  **output byte-identical** (zero golden/conformance diff — the
-  collect is order-preserving, `finalize_issues` unchanged),
-  preflight green. Not a perf win — stated plainly (M0.14/M0.17
-  discipline).
+  collect tweak moves it. Kept solely for the de-duplication: output
+  byte-identical (zero golden/conformance diff — the collect is
+  order-preserving, `finalize_issues` unchanged), preflight green.
+  Not a perf win — stated plainly (M0.14/M0.17 discipline). *Now
+  realised by M0.21–0.27 above.*
 
 - **In-place issue sort — eliminates the `finalize_issues`
   stable-sort allocation (Milestone 0.17; honest result).** First
@@ -151,14 +277,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   *persistent post-finalize footprint drops 3819 → 1530 MiB
   (−2.3 GiB)* — but **total peak RSS is unchanged (~4 GiB)**: the
   binding peak relocated to a previously-masked **report-write
-  transient** (next increment's target). Shipped as a correct,
-  necessary structural fix — **not** a peak win (it isn't one yet);
+  transient** (subsequently the M0.21–0.27 target). Shipped as a
+  correct, necessary structural fix — **not** a peak win on its own;
   SFTR unaffected. **Behaviour:** `issues.csv` tie-order is now
   content-deterministic (was the parallel-insertion artifact); a
   single golden (`sftr-reconcile.issues.csv`) regenerated — a proven
   pure permutation (identical row set, zero rows added/removed/
   modified, `*.summary.json` byte-unchanged). `EvidenceItem` gains a
   derived `PartialOrd, Ord` (additive, not serialised).
+
+### Fixed
+
+- **`scripts/bench-scale.sh` — `set -u` empty-array crash when
+  `--mem-trace` not passed (tooling).** The script blew up on macOS
+  Bash 3.2 with `MT_ENV: unbound variable` whenever `--mem-trace`
+  was omitted, because `"${MT_ENV[@]}"` is not safe under
+  `set -u` for an empty array. Switched to the canonical
+  `${MT_ENV[@]+"${MT_ENV[@]}"}` empty-safe expansion. Tooling-only
+  fix.
 
 ### Removed
 
@@ -683,7 +819,8 @@ sends back, and turns them into reproducible HTML / JSON / CSV
 - No SWIFT-licensed XSDs or real client data are committed; all
   fixtures are synthetic.
 
-[Unreleased]: https://github.com/PauFou/OpenDQI/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/PauFou/OpenDQI/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/PauFou/OpenDQI/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/PauFou/OpenDQI/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/PauFou/OpenDQI/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/PauFou/OpenDQI/compare/v0.6.0...v0.7.0
