@@ -92,8 +92,13 @@ batch :
 ```bash
 opendqi emir feedback \
   examples/quickstart-emir/auth092-feedback.xml \
+  --store ./history.db \
   --out ./feedback/
 ```
+
+(`--store` is required — feedback rows are persisted into the local
+SQLite history store so the operational `feedback list / resolve /
+stale` workflow can track them through to closure.)
 
 On the shipped 2-record fixture: **2 critical issues, quality
 score 75.0** — both `EMIR.FBK.TR_REJECTED_UTI`, with the full list

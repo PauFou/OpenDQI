@@ -34,9 +34,13 @@ open ./report/tr_state_report.html         # macOS
 ### Rejection intelligence
 
 ```bash
-opendqi emir feedback auth092-feedback.xml --out ./feedback/
+opendqi emir feedback auth092-feedback.xml --store ./history.db --out ./feedback/
 open ./feedback/report.html
 ```
+
+(`--store` is required — feedback rows are persisted to a SQLite
+history store so the operational `feedback list / resolve / stale`
+workflow can track them.)
 
 ### Combined audit (all three layers + 3 cross-layer coherence checks)
 
