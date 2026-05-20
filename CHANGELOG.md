@@ -13,6 +13,155 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+## [0.12.0] - 2026-05-20
+
+Python / Arrow bindings preview — OpenDQI becomes embeddable.
+
+The v0.11.0 adoption pack made the product approachable from the
+README; v0.12.0 makes it **embeddable** from a Python process.
+A new optional Rust crate `crates/opendqi-py/` (PyO3 + maturin)
+ships `import opendqi` with three entry points per regime
+(`scan_parquet`, `scan_table`, `parse_xml`), returning the
+familiar `summary` dict, a `pyarrow.Table` of issues against the
+**v1.0 stable 11-column schema**, and an optional canonical-model
+`pyarrow.Table` (`normalize=True`). The engine itself is not
+reimplemented — every parser, every check, the streaming sink
+and the canonical record model are reused as-is from the
+existing Rust crates.
+
+The bindings are an additive parallel surface: **zero Rust
+business logic was modified** (the only edits beyond `opendqi-py`
+itself are 4 visibility bumps on `parquet_out` helpers, the
+version bumps, and the new `python-release.yml` CI). Workspace
+**216 checks remain 216** (151 EMIR + 65 SFTR), **762/0 workspace
+tests**, **19/19 goldens byte-identical** with `UPDATE_GOLDEN`
+unset. The Arrow schema for issues matches the existing
+`issues.csv` byte-for-byte (verified by `test_issues_schema.py
+::test_arrow_schema_matches_csv_golden`) — that's the v1.0
+contract.
+
+### Added
+
+- **`crates/opendqi-py/` — new Python / Arrow bindings crate
+  (P1 → P5 of the chantier described in
+  [`docs/python-roadmap.md`](docs/python-roadmap.md)).**
+  PyO3 0.22 + maturin 1.x + `arrow = "53"` (with the `pyarrow`
+  feature — the dedicated `arrow-pyarrow` crate only exists from
+  55.x), pinned to match the workspace `arrow-array = "53"`.
+  abi3-py39 means one wheel per target covers Python 3.9+
+  unchanged (forward-compatible to 3.14 — verified locally on
+  3.14.5 via `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1`). The crate
+  is deliberately **NOT** in `[workspace] members` of the root
+  `Cargo.toml` (uses an empty `[workspace]` opt-out at the top
+  of its own manifest) — `cargo test --workspace` never touches
+  it, so the existing Rust CI matrix (Ubuntu + macOS, no Python
+  venv) is unaffected. Maturin compiles `opendqi-py` independently
+  via its own `Cargo.lock`.
+
+- **`opendqi.{emir,sftr}.scan_parquet(path, *, normalize=False)
+  -> PyScanResult`** — reads the canonical EMIR/SFTR Parquet via
+  `opendqi_io::read_emir_parquet` / `read_sftr_parquet`, runs the
+  standard single-batch DQ check suite (`default_checks()` for
+  EMIR, `default_sftr_checks()` for SFTR) through the same
+  `SortedIssueSink` streaming pipeline the CLI uses (M0.22+,
+  `STREAM_SPILL_MAX_ISSUES = 65_536` ⇒ every shipped fixture
+  stays in the no-spill path), and returns a `PyScanResult`
+  exposing `summary` (dict, 9 fields mirroring `summary.json`),
+  `issues` (pyarrow.Table, v1.0 schema), and `normalized`
+  (optional pyarrow.Table, canonical model — populated when
+  `normalize=True`).
+
+- **`opendqi.{emir,sftr}.scan_table(arrow_tbl, mapping, *,
+  normalize=False) -> PyScanResult`** — Arrow-in surface: accepts
+  a `pyarrow.Table` or `pyarrow.RecordBatch` and a mapping dict
+  of `canonical_field_name → user_column_name` (same direction as
+  the existing CSV mapping pattern in
+  `crates/opendqi-io/src/csv_in.rs:35-45`). Strict type
+  contract: mapped columns MUST have the canonical Arrow type
+  (`Utf8`, `Decimal128(38,10)`, `Date32`, `Timestamp(μs,UTC)`,
+  `Boolean`) — users with string-only tables cast in Python
+  first (`pa.compute.cast(col, pa.date32())`). Unmapped
+  canonical fields are emitted as `None` on every record;
+  downstream `EMIR.COMP.*` / `SFTR.COMP.*` checks surface the
+  missingness naturally. A mapping that points at a non-existent
+  user column raises a loud, actionable error (no silent
+  all-None records).
+
+- **`opendqi.{emir,sftr}.parse_xml(path) -> pyarrow.Table`** —
+  parses any EMIR firm-submission XML (`auth.030.001.03` or
+  `.04`) or SFTR (`auth.052.001.02`) into the canonical Arrow
+  Table — same schema `opendqi {emir,sftr} normalize` produces.
+  Enables the zero-Parquet `parse_xml → scan_table` pipeline.
+
+- **`opendqi.PyScanResult` — the result object exposed to
+  Python.** `#[pyclass(frozen)]`, exposes `.summary` (dict),
+  `.issues` (pyarrow.Table | None), `.normalized` (pyarrow.Table
+  | None), and an informative `__repr__`. The pyarrow Table is
+  always single-chunk (constructed via `pa.Table.from_batches([
+  recordbatch])`); users who need multi-batch should call
+  `.combine_chunks().to_batches()`.
+
+- **`opendqi.<regime>.scan_*` `normalize=True` keyword** —
+  populates `result.normalized` with the canonical EMIR/SFTR
+  Arrow Table (the same `RecordBatch` the Parquet writer
+  produces, post-P0 exposed primitives). Default `False` keeps
+  the result zero-overhead for callers who only want issues.
+
+- **v1.0 stable Arrow schema for `DqIssue` exports** — 11
+  columns (`check_id`, `regime`, `severity`, `dimension`,
+  `record_id`, `uti`, `field`, `value`, `message`,
+  `source_file`, `evidence_json`), all `Utf8`, nullability
+  mirroring the `Option<T>` shape on the Rust struct. Column
+  names + order match
+  `crates/opendqi-report/src/csv_out.rs::write_issues_csv`
+  byte-for-byte — verified by a parity test that loads the
+  existing CLI golden (`emir-scan-csv.issues.csv`) via
+  `pyarrow.csv.read_csv` and asserts schema equality on
+  column-name list. **Any future change to this schema is a
+  BREAKING change.**
+
+- **`.github/workflows/python-release.yml` — wheel build + GitHub
+  Release upload via `PyO3/maturin-action@v1`.** Triggered by the
+  same `v*` tag push as `release.yml` (cargo-dist); wheels are
+  added as additional assets to the GitHub Release the
+  cargo-dist workflow creates — same tag, same release. 4
+  targets matching cargo-dist exactly: Linux x86_64
+  (manylinux2014) + Linux ARM64 (manylinux_2_28) + macOS
+  x86_64 (macos-13 runner) + macOS ARM64 (macos-14 runner).
+  abi3-py39 ⇒ 1 wheel per target covers Python 3.9+
+  unchanged. **No `maturin publish` to PyPI** in this workflow
+  — gated on a separate explicit user-ask.
+
+### Changed
+
+- **4 helpers in `crates/opendqi-io/src/parquet_out.rs`
+  promoted to `pub`** (`fn` → `pub fn`): `emir_schema`,
+  `build_emir_batch`, `sftr_schema`, `build_sftr_batch`. Their
+  bodies are unchanged — they are the single source of truth for
+  the EMIR/SFTR Arrow projection (Decimal128(38,10) / Date32 /
+  Timestamp(μs,UTC) / Utf8) and the bindings now reuse them
+  directly to construct the `result.normalized` Arrow Table and
+  the `parse_xml` output. The bump is additive (none of the
+  prior callers change); re-exported from
+  `crates/opendqi-io/src/lib.rs` alongside the existing
+  `write_emir_parquet` / `write_sftr_parquet`. Zero golden
+  diff, zero behavioural change.
+
+- **`README.md` Install section** — adds a 4-line **Python**
+  block alongside the existing CLI install line: `pip install
+  <wheel URL>` + `import opendqi; result = opendqi.emir.scan_
+  parquet("tsr.parquet")` + a sentence pointing at
+  `docs/python-roadmap.md` for the full architecture spec.
+  Same engine, same checks, embedded in your Python pipeline.
+
+- **`docs/python-roadmap.md` status header** — bumped from
+  "design" to "**IMPLEMENTED in v0.12.0**" with the chain of
+  P0-P5 commit references for the historical record. The body
+  of the spec is preserved as-is (it became the authoritative
+  architecture description).
+
+### Removed
+
 ## [0.11.0] - 2026-05-20
 
 Adoption pack + Python/Arrow bindings architecture spec. The
@@ -945,7 +1094,8 @@ sends back, and turns them into reproducible HTML / JSON / CSV
 - No SWIFT-licensed XSDs or real client data are committed; all
   fixtures are synthetic.
 
-[Unreleased]: https://github.com/PauFou/OpenDQI/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/PauFou/OpenDQI/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/PauFou/OpenDQI/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/PauFou/OpenDQI/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/PauFou/OpenDQI/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/PauFou/OpenDQI/compare/v0.8.0...v0.9.0
