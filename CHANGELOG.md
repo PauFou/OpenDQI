@@ -13,6 +13,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+## [0.12.2] - 2026-05-20
+
+CI hotfix — drop `x86_64-apple-darwin` (macOS Intel) from the
+Python wheel matrix. v0.12.0 and v0.12.1 `Python Release`
+workflows both hung indefinitely on the `macos-13` runner
+(the only GitHub-hosted free-tier path to Intel macOS) — the
+runner pool is severely over-subscribed since the deprecation
+announcement late 2025, and our jobs queued 1h+ without ever
+starting. The other 3 wheels (Linux x86_64 + ARM64 + macOS
+ARM64 / Apple Silicon) build in ~5min each, but the
+`Python Release` workflow as a whole can't proceed to the
+`release` / `publish` jobs until the matrix completes.
+
+This patch drops the Intel-macOS row entirely so the workflow
+ships in ~10 min end-to-end, including the PyPI publish.
+
+**No Rust code change. No Python API change.** The 216 checks
+remain 216. The v1.0 stable Arrow contract for `result.issues`
+is unchanged. 19/19 goldens byte-identical, 762/0 workspace
+tests, 30/30 pytest.
+
+Intel-Mac users (free-tier hardware is rare in 2026 — Apple
+Silicon has been the default since late 2020) can install via:
+- `cargo install --git https://github.com/PauFou/OpenDQI --tag
+  v0.12.2 opendqi-cli` for the CLI binary (the cargo-dist
+  `release.yml` workflow still ships an Intel-macOS binary —
+  it uses a different runner path that isn't oversubscribed)
+- the Linux x86_64 wheel under Rosetta 2 for the Python
+  bindings (`pip install opendqi --platform manylinux2014_x86_64
+  --only-binary opendqi --target ./vendor` workaround if
+  needed, though plain `pip install opendqi` will still pick
+  the Linux wheel if `pyarrow` is already installed for the
+  right ABI).
+
+### Changed
+
+- **`.github/workflows/python-release.yml` matrix**: 4 targets
+  → 3 targets. Dropped row: `{ os: macos-13, target:
+  x86_64-apple-darwin, manylinux: "off" }`. Inline comment on
+  the matrix documents the rationale + the install workarounds
+  for Intel-Mac users. Header comment updated (4 → 3 targets).
+- **`docs/python.md` Install** section: "Four wheels per
+  release" → "Three wheels per release", with a paragraph
+  explaining the Intel-macOS drop and the two install
+  workarounds.
+- **`examples/python/README.md`**: same install-block update +
+  reference to v0.12.2 as the first PyPI-published version.
+
+### Removed
+
+- **macOS x86_64 (Intel) abi3 wheel** from
+  `python-release.yml`. Re-add when GitHub provides a non-
+  deprecated x86_64 macOS runner with a usable free-tier
+  queue, or when we move to a paid `macos-13-large` plan.
+
 ## [0.12.1] - 2026-05-20
 
 Python packaging polish + PyPI publish + adoption kit.
@@ -1178,7 +1233,8 @@ sends back, and turns them into reproducible HTML / JSON / CSV
 - No SWIFT-licensed XSDs or real client data are committed; all
   fixtures are synthetic.
 
-[Unreleased]: https://github.com/PauFou/OpenDQI/compare/v0.12.1...HEAD
+[Unreleased]: https://github.com/PauFou/OpenDQI/compare/v0.12.2...HEAD
+[0.12.2]: https://github.com/PauFou/OpenDQI/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/PauFou/OpenDQI/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/PauFou/OpenDQI/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/PauFou/OpenDQI/compare/v0.10.0...v0.11.0

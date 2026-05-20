@@ -16,9 +16,17 @@
 pip install opendqi
 ```
 
-Four wheels per release: Linux x86_64 + ARM64, macOS x86_64 + ARM64.
-**abi3-py39** ⇒ a single wheel per target covers Python 3.9+
-unchanged (forward-compatible to 3.14+). No Windows wheels —
+**Three wheels per release** : Linux x86_64 + ARM64, macOS ARM64
+(Apple Silicon). **abi3-py39** ⇒ a single wheel per target covers
+Python 3.9+ unchanged (forward-compatible to 3.14+).
+
+**No macOS x86_64 (Intel) wheel** since v0.12.2 — the GitHub
+`macos-13` runner is deprecated and free-tier jobs queue
+indefinitely (we observed v0.12.0/v0.12.1 publishes hang 1h+
+without starting). Intel-Mac users can either install via
+`cargo install --git https://github.com/PauFou/OpenDQI --tag
+v0.12.x opendqi-cli` for the CLI, or run the Linux wheel under
+Rosetta 2 for the Python bindings. **No Windows wheels** —
 consistent with the existing CI matrix.
 
 For local development against an unreleased branch:

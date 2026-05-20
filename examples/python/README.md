@@ -12,9 +12,11 @@ slice of the `issues` Arrow table.
 pip install opendqi
 ```
 
-Available from v0.12.1. Wheels for Linux x86_64 + ARM64 and macOS
-x86_64 + ARM64 (abi3-py39 → one wheel covers Python 3.9+
-unchanged). No Windows wheels.
+Available from v0.12.2 on PyPI. Wheels for Linux x86_64 + ARM64
+and macOS ARM64 (Apple Silicon) — abi3-py39 → one wheel covers
+Python 3.9+ unchanged. No macOS x86_64 (Intel) wheel since v0.12.2
+(deprecated `macos-13` runner); install via `cargo install --git`
+or the Linux wheel under Rosetta 2. No Windows wheels.
 
 For local development against an unreleased branch:
 

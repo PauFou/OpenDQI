@@ -15,9 +15,14 @@
 #              must be configured one-shot on pypi.org for
 #              PauFou/OpenDQI/python-release.yml/environment=pypi)
 #
-# Build matrix matches cargo-dist exactly (4 targets, no Windows —
-# consistent with the existing CI matrix Ubuntu + macOS in
-# `.github/workflows/ci.yml`).
+# Build matrix: 3 targets — Linux x86_64 + ARM64, macOS ARM64
+# (Apple Silicon). x86_64-apple-darwin (Intel) was dropped in
+# v0.12.2 because the `macos-13` GitHub-hosted runner is now
+# deprecated and free-tier jobs queue indefinitely. See the
+# inline comment on the matrix below. CLI release (cargo-dist)
+# still ships an Intel-macOS binary via a different runner path.
+# No Windows wheels (consistent with the existing CI matrix
+# Ubuntu + macOS in `.github/workflows/ci.yml`).
 
 name: Python Release
 
@@ -43,12 +48,22 @@ jobs:
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             manylinux: "2_28"
-          - os: macos-13
-            target: x86_64-apple-darwin
-            manylinux: "off"
           - os: macos-14
             target: aarch64-apple-darwin
             manylinux: "off"
+          # NOTE: `x86_64-apple-darwin` (Intel) is intentionally
+          # NOT in this matrix. The `macos-13` runner GitHub
+          # provides for it is deprecated as of late 2025 / early
+          # 2026, and the free-tier pool is so over-subscribed
+          # that jobs queue indefinitely (we saw v0.12.0 + v0.12.1
+          # runs queue 1h+ without ever starting). Users on Intel
+          # Macs can either: (a) install via `cargo install --git
+          # https://github.com/PauFou/OpenDQI --tag v0.12.x
+          # opendqi-cli` for the CLI, or (b) run the
+          # `x86_64-unknown-linux-gnu` Linux wheel under Rosetta
+          # 2 if they're on the Python side. The `aarch64-apple-
+          # darwin` wheel covers every Apple Silicon Mac (M1/M2/
+          # M3/M4+, ~all macOS hardware shipped since late 2020).
     steps:
       - uses: actions/checkout@v4
 
