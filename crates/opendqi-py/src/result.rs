@@ -14,27 +14,33 @@ use opendqi_core::ScanSummary;
 /// Result of an OpenDQI scan, exposed to Python.
 ///
 /// Fields populated incrementally:
-/// - `summary`    — P2 onward (always present).
-/// - `issues`     — P3 onward — `pyarrow.Table` with the v1.0
-///                  stable 11-column schema (see
-///                  `crate::issues::issues_schema`). `None` only if
-///                  the caller did not request issues (not yet
-///                  reachable in P3 — every `scan_*` populates it).
-/// - `normalized` — P5 onward (Arrow `pyarrow.Table` mirroring
-///                  the canonical record model; `None` here).
+/// - `summary`    — always present (M0.21 IssueAggregator contract).
+/// - `issues`     — `pyarrow.Table` with the v1.0 stable 11-column
+///                  schema (see `crate::issues::issues_schema`).
+///                  Always present on the standard `scan_parquet` /
+///                  `scan_table` paths.
+/// - `normalized` — `pyarrow.Table` mirroring the canonical record
+///                  model (`opendqi_io::emir_schema()` /
+///                  `sftr_schema()`). Present only when the caller
+///                  passed `normalize=True` (default `False`);
+///                  `None` otherwise.
 #[pyclass(module = "opendqi", frozen)]
 pub struct PyScanResult {
     pub(crate) summary: ScanSummary,
     pub(crate) issues_batch: Option<RecordBatch>,
-    pub(crate) normalized_placeholder: (),
+    pub(crate) normalized_batch: Option<RecordBatch>,
 }
 
 impl PyScanResult {
-    pub(crate) fn new(summary: ScanSummary, issues_batch: Option<RecordBatch>) -> Self {
+    pub(crate) fn new(
+        summary: ScanSummary,
+        issues_batch: Option<RecordBatch>,
+        normalized_batch: Option<RecordBatch>,
+    ) -> Self {
         Self {
             summary,
             issues_batch,
-            normalized_placeholder: (),
+            normalized_batch,
         }
     }
 }
@@ -71,11 +77,23 @@ impl PyScanResult {
         }
     }
 
-    /// P5-pending. Returns `None` until v0.12.0-P5.
+    /// The canonical-model records as a `pyarrow.Table`, present
+    /// when the caller passed `normalize=True` (otherwise `None`).
+    /// Schema matches `opendqi_io::{emir_schema, sftr_schema}` —
+    /// the same as the on-disk Parquet output of
+    /// `opendqi {emir,sftr} normalize`.
     #[getter]
-    fn normalized<'py>(&self, py: Python<'py>) -> Bound<'py, PyAny> {
-        let _ = self.normalized_placeholder; // silence dead-code lint until P5
-        py.None().into_bound(py)
+    fn normalized<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        match &self.normalized_batch {
+            None => Ok(py.None().into_bound(py)),
+            Some(batch) => {
+                let rb_py = batch.to_pyarrow(py)?;
+                let pa = py.import_bound("pyarrow")?;
+                let batches = PyList::new_bound(py, [rb_py]);
+                let table = pa.getattr("Table")?.call_method1("from_batches", (batches,))?;
+                Ok(table)
+            }
+        }
     }
 
     fn __repr__(&self) -> String {

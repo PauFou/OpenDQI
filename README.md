@@ -50,11 +50,28 @@ Runs all three workflows above against the synthetic kit at [`examples/quickstar
 
 ## Install
 
+**CLI** :
+
 ```bash
-cargo install --git https://github.com/PauFou/OpenDQI --tag v0.10.0 opendqi-cli
+cargo install --git https://github.com/PauFou/OpenDQI --tag v0.11.0 opendqi-cli
 ```
 
-A `cargo-dist`-generated GitHub Release with pre-built binaries (Linux x86_64 + ARM64, macOS x86_64 + ARM64) ships from v0.11.0 — `curl -sSL .../installer.sh | sh` will appear on the [Releases](https://github.com/PauFou/OpenDQI/releases) page.
+A `cargo-dist`-generated GitHub Release with pre-built binaries (Linux x86_64 + ARM64, macOS x86_64 + ARM64) ships from v0.11.0 — `curl -sSL .../installer.sh | sh` from the [Releases](https://github.com/PauFou/OpenDQI/releases) page.
+
+**Python / Arrow bindings** (v0.12.0+) :
+
+```bash
+pip install <wheel URL from the v0.12.0 GitHub Release page>
+```
+
+```python
+import opendqi
+result = opendqi.emir.scan_parquet("tsr.parquet")
+result.summary       # dict — same shape as summary.json
+result.issues        # pyarrow.Table — v1.0 stable 11-column schema
+```
+
+Same engine, same checks, embedded in your Python pipeline. See [`docs/python-roadmap.md`](docs/python-roadmap.md) for the full API + architecture spec.
 
 ## Coverage at a glance
 

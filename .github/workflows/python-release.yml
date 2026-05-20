@@ -1,0 +1,98 @@
+# Python / Arrow bindings — wheel build + GitHub Release upload.
+#
+# Triggered by the same `v*` tag push that triggers the cargo-dist
+# `release.yml` workflow (which builds the CLI binaries). The two
+# workflows run in parallel and upload to the SAME GitHub Release
+# created by cargo-dist — wheels are added as extra assets.
+#
+# NO PyPI publish in this workflow — `maturin publish` is gated on
+# an explicit user ask (CLAUDE.md release hygiene). v0.12.0
+# installation is `pip install <wheel URL from the release page>`.
+#
+# Build matrix matches cargo-dist exactly (4 targets, no Windows —
+# consistent with the existing CI matrix Ubuntu + macOS in
+# `.github/workflows/ci.yml`).
+
+name: Python Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write   # required to upload wheels to the release
+
+jobs:
+  build:
+    name: Build wheel (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            manylinux: "2014"
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            manylinux: "2_28"
+          - os: macos-13
+            target: x86_64-apple-darwin
+            manylinux: "off"
+          - os: macos-14
+            target: aarch64-apple-darwin
+            manylinux: "off"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build wheel via maturin
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: crates/opendqi-py
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          # abi3-py39 ⇒ a single wheel per target covers Python
+          # 3.9+ unchanged (forward-compatible to 3.14 — verified
+          # locally on 3.14.5 with PYO3_USE_ABI3_FORWARD_
+          # COMPATIBILITY=1; abi3 wheels don't need that flag at
+          # build time when --interpreter is pinned to 3.9).
+          args: --release --strip --out dist --interpreter python3.9
+          rust-toolchain: stable
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: opendqi-py-${{ matrix.target }}
+          path: crates/opendqi-py/dist/*.whl
+          if-no-files-found: error
+
+  release:
+    name: Attach wheels to GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all wheels
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List wheels (for the action log)
+        run: ls -la dist/
+
+      - name: Attach wheels to existing GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          # Same tag as cargo-dist's `release.yml` — wheels are
+          # added to that release as additional assets, not a
+          # separate release.
+          tag_name: ${{ github.ref_name }}
+          files: dist/*.whl
+          fail_on_unmatched_files: true

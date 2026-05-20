@@ -1,8 +1,15 @@
 # OpenDQI Python / Arrow bindings — architecture spec for v0.12
 
-> **Status: design.** No Python code has been written yet. This
-> document is the blueprint for the v0.12.0 milestone, executable
-> as-is once the v0.11.0 release (this CHANGELOG entry) is cut.
+> **Status: IMPLEMENTED in v0.12.0.** P0 → P5 of this spec all
+> landed on `main` in the v0.12.0 chantier (commits `835b064`,
+> `26f5fc3`, `31812a8`, `54bbf52`, `2d0a0d4`, P5 commit). The
+> crate `crates/opendqi-py/` is live, builds via maturin, ships
+> abi3-py39 wheels via `.github/workflows/python-release.yml`,
+> and exposes the API documented below verbatim.
+>
+> This document is preserved as-is for historical reference and
+> as the authoritative architecture description. See
+> `CHANGELOG.md` for the as-shipped notes.
 
 ## Why
 

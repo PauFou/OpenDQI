@@ -19,7 +19,7 @@ use crate::result::PyScanResult;
 
 const STREAM_SPILL_MAX_ISSUES: usize = 65_536;
 
-fn scan_sftr_records(records: Vec<SftrRecord>, files: u32) -> PyResult<PyScanResult> {
+fn scan_sftr_records(records: Vec<SftrRecord>, files: u32, normalize: bool) -> PyResult<PyScanResult> {
     let started_at = Utc::now();
     let ctx = CheckContext::now_with_defaults();
     let checks = default_sftr_checks();
@@ -32,33 +32,41 @@ fn scan_sftr_records(records: Vec<SftrRecord>, files: u32) -> PyResult<PyScanRes
     stream_checks_into(&checks, &sink, |c| c.run(&records, &ctx));
     let finished_at = Utc::now();
     let n = records.len() as u32;
+    let normalized_batch = if normalize {
+        let schema = opendqi_io::sftr_schema();
+        Some(opendqi_io::build_sftr_batch(&schema, &records).map_err(to_py_err)?)
+    } else {
+        None
+    };
     let (summary, sorted_issues) = sink
         .into_inner()
         .expect("sink mutex not poisoned")
         .finish(Regime::Sftr, files, n, started_at, finished_at);
     let batch = issues_to_record_batch(sorted_issues).map_err(to_py_err)?;
-    Ok(PyScanResult::new(summary, Some(batch)))
+    Ok(PyScanResult::new(summary, Some(batch), normalized_batch))
 }
 
 /// `opendqi.sftr.scan_parquet(path: str) -> PyScanResult`.
 #[pyfunction]
-pub fn scan_parquet(path: &str) -> PyResult<PyScanResult> {
+#[pyo3(signature = (path, *, normalize = false))]
+pub fn scan_parquet(path: &str, normalize: bool) -> PyResult<PyScanResult> {
     let records = opendqi_io::read_sftr_parquet(Path::new(path)).map_err(to_py_err)?;
-    scan_sftr_records(records, 1)
+    scan_sftr_records(records, 1, normalize)
 }
 
 /// `opendqi.sftr.scan_table(table, mapping={...}) -> PyScanResult`.
 /// Same contract as `opendqi.emir.scan_table` (see that function's
 /// docstring for the mapping direction and type strictness).
 #[pyfunction]
-#[pyo3(signature = (table, mapping))]
+#[pyo3(signature = (table, mapping, *, normalize = false))]
 pub fn scan_table<'py>(
     table: &Bound<'py, PyAny>,
     mapping: HashMap<String, String>,
+    normalize: bool,
 ) -> PyResult<PyScanResult> {
     let batch = pyarrow_to_record_batch(table)?;
     let records = batch_to_sftr_records(&batch, &mapping as &Mapping).map_err(to_py_err)?;
-    scan_sftr_records(records, 1)
+    scan_sftr_records(records, 1, normalize)
 }
 
 /// `opendqi.sftr.parse_xml(path: str) -> pyarrow.Table`.

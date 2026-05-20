@@ -40,8 +40,11 @@ const STREAM_SPILL_MAX_ISSUES: usize = 65_536;
 /// Run the EMIR check suite against `records` and assemble the
 /// `PyScanResult`. Shared by every EMIR entry point so the
 /// behaviour stays identical across `scan_parquet`, `scan_table`,
-/// and any future `scan_*` adder.
-fn scan_emir_records(records: Vec<EmirRecord>, files: u32) -> PyResult<PyScanResult> {
+/// and any future `scan_*` adder. If `normalize` is set, the
+/// records are also projected back into the canonical Arrow
+/// batch and exposed via `result.normalized` — same `RecordBatch`
+/// the Parquet writer would produce.
+fn scan_emir_records(records: Vec<EmirRecord>, files: u32, normalize: bool) -> PyResult<PyScanResult> {
     let started_at = Utc::now();
     let ctx = CheckContext::now_with_defaults();
     let checks = default_checks();
@@ -50,12 +53,23 @@ fn scan_emir_records(records: Vec<EmirRecord>, files: u32) -> PyResult<PyScanRes
     stream_emir_checks_into(&checks, &records, &ctx, &sink);
     let finished_at = Utc::now();
     let n = records.len() as u32;
+
+    // Optional `normalized` projection BEFORE the records are
+    // moved into `finish`-side state — uses the public
+    // `opendqi_io::{emir_schema, build_emir_batch}` exposed in P0.
+    let normalized_batch = if normalize {
+        let schema = opendqi_io::emir_schema();
+        Some(opendqi_io::build_emir_batch(&schema, &records).map_err(to_py_err)?)
+    } else {
+        None
+    };
+
     let (summary, sorted_issues) = sink
         .into_inner()
         .expect("sink mutex not poisoned")
         .finish(Regime::Emir, files, n, started_at, finished_at);
     let batch = issues_to_record_batch(sorted_issues).map_err(to_py_err)?;
-    Ok(PyScanResult::new(summary, Some(batch)))
+    Ok(PyScanResult::new(summary, Some(batch), normalized_batch))
 }
 
 /// `opendqi.emir.scan_parquet(path: str) -> PyScanResult`.
@@ -66,9 +80,10 @@ fn scan_emir_records(records: Vec<EmirRecord>, files: u32) -> PyResult<PyScanRes
 /// `PyScanResult` matching the on-disk `summary.json` shape +
 /// the v1.0 stable Arrow schema for issues.
 #[pyfunction]
-pub fn scan_parquet(path: &str) -> PyResult<PyScanResult> {
+#[pyo3(signature = (path, *, normalize = false))]
+pub fn scan_parquet(path: &str, normalize: bool) -> PyResult<PyScanResult> {
     let records = opendqi_io::read_emir_parquet(Path::new(path)).map_err(to_py_err)?;
-    scan_emir_records(records, 1)
+    scan_emir_records(records, 1, normalize)
 }
 
 /// `opendqi.emir.scan_table(table, mapping={...}) -> PyScanResult`.
@@ -87,14 +102,15 @@ pub fn scan_parquet(path: &str) -> PyResult<PyScanResult> {
 /// Unmapped canonical fields are emitted as `None` on every
 /// record — downstream `EMIR.COMP.*` checks surface them.
 #[pyfunction]
-#[pyo3(signature = (table, mapping))]
+#[pyo3(signature = (table, mapping, *, normalize = false))]
 pub fn scan_table<'py>(
     table: &Bound<'py, PyAny>,
     mapping: HashMap<String, String>,
+    normalize: bool,
 ) -> PyResult<PyScanResult> {
     let batch = pyarrow_to_record_batch(table)?;
     let records = batch_to_emir_records(&batch, &mapping as &Mapping).map_err(to_py_err)?;
-    scan_emir_records(records, 1)
+    scan_emir_records(records, 1, normalize)
 }
 
 /// `opendqi.emir.parse_xml(path: str) -> pyarrow.Table`.
