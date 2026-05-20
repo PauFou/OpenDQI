@@ -38,12 +38,13 @@ pub fn scan_parquet(path: &str) -> PyResult<PyScanResult> {
 
     let finished_at = Utc::now();
     let n = records.len() as u32;
-    let (summary, _sorted_issues) = sink
+    let (summary, sorted_issues) = sink
         .into_inner()
         .expect("sink mutex not poisoned")
         .finish(Regime::Sftr, 1, n, started_at, finished_at);
 
-    Ok(PyScanResult::new(summary))
+    let batch = crate::issues::issues_to_record_batch(sorted_issues).map_err(to_py_err)?;
+    Ok(PyScanResult::new(summary, Some(batch)))
 }
 
 /// Register the `opendqi.sftr` submodule on the parent

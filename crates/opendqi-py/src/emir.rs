@@ -45,14 +45,17 @@ pub fn scan_parquet(path: &str) -> PyResult<PyScanResult> {
 
     let finished_at = Utc::now();
     let n = records.len() as u32;
-    let (summary, _sorted_issues) = sink
+    let (summary, sorted_issues) = sink
         .into_inner()
         .expect("sink mutex not poisoned")
         .finish(Regime::Emir, 1, n, started_at, finished_at);
 
-    // _sorted_issues is dropped here — P3 will hold and convert it
-    // into a pyarrow.Table assigned to `result.issues`.
-    Ok(PyScanResult::new(summary))
+    // P3: drain the sorted iterator into the v1.0 Arrow schema and
+    // hand off to the result object. The iterator emits issues in
+    // exact `issue_cmp` order (M0.17 content-deterministic), so
+    // the resulting batch matches `issues.csv` row-for-row.
+    let batch = crate::issues::issues_to_record_batch(sorted_issues).map_err(to_py_err)?;
+    Ok(PyScanResult::new(summary, Some(batch)))
 }
 
 /// Register the `opendqi.emir` submodule on the parent

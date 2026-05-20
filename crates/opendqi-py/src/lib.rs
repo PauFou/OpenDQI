@@ -16,6 +16,7 @@ use pyo3::prelude::*;
 
 mod emir;
 mod errors;
+mod issues;
 mod result;
 mod sftr;
 

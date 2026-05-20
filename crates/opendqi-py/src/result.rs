@@ -1,36 +1,39 @@
 //! `PyScanResult` — the Python-facing result object returned by
 //! every `opendqi.{emir,sftr}.scan_*` function.
 //!
-//! P2: only the `summary` field is populated; `issues` and
-//! `normalized` are added in P3 / P5 (they stay `None` here).
+//! P3: `issues` is now a real Arrow `pyarrow.Table` (the v1.0
+//! contract). `normalized` is still `None` until P5.
 
+use arrow::array::RecordBatch;
+use arrow::pyarrow::ToPyArrow;
 use pyo3::prelude::*;
-use pyo3::types::{PyAny, PyDict};
+use pyo3::types::{PyAny, PyDict, PyList};
 
 use opendqi_core::ScanSummary;
 
 /// Result of an OpenDQI scan, exposed to Python.
 ///
-/// Fields are populated incrementally across the v0.12 chantier :
+/// Fields populated incrementally:
 /// - `summary`    — P2 onward (always present).
-/// - `issues`     — P3 onward (Arrow `pyarrow.Table` with the
-///                  v1.0 schema; `None` here in P2).
+/// - `issues`     — P3 onward — `pyarrow.Table` with the v1.0
+///                  stable 11-column schema (see
+///                  `crate::issues::issues_schema`). `None` only if
+///                  the caller did not request issues (not yet
+///                  reachable in P3 — every `scan_*` populates it).
 /// - `normalized` — P5 onward (Arrow `pyarrow.Table` mirroring
 ///                  the canonical record model; `None` here).
 #[pyclass(module = "opendqi", frozen)]
 pub struct PyScanResult {
     pub(crate) summary: ScanSummary,
-    // P3 will replace this with `Option<RecordBatch>` (or its
-    // Python proxy). Kept as a placeholder for now.
-    pub(crate) issues_placeholder: (),
+    pub(crate) issues_batch: Option<RecordBatch>,
     pub(crate) normalized_placeholder: (),
 }
 
 impl PyScanResult {
-    pub(crate) fn new(summary: ScanSummary) -> Self {
+    pub(crate) fn new(summary: ScanSummary, issues_batch: Option<RecordBatch>) -> Self {
         Self {
             summary,
-            issues_placeholder: (),
+            issues_batch,
             normalized_placeholder: (),
         }
     }
@@ -45,25 +48,44 @@ impl PyScanResult {
         summary_to_dict(py, &self.summary)
     }
 
-    /// P3-pending. Returns `None` in v0.12.0-P2.
+    /// Issues as a `pyarrow.Table` matching the v1.0 stable schema
+    /// in `opendqi-py::issues::issues_schema`. Returns `None` only
+    /// when the scan produced no `RecordBatch` (always present in
+    /// the standard `scan_parquet` / `scan_table` paths).
     #[getter]
-    fn issues<'py>(&self, py: Python<'py>) -> Bound<'py, PyAny> {
-        py.None().into_bound(py)
+    fn issues<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        match &self.issues_batch {
+            None => Ok(py.None().into_bound(py)),
+            Some(batch) => {
+                // Convert `RecordBatch` → `pyarrow.RecordBatch` via
+                // the Arrow C Data Interface. Then wrap into a
+                // `pyarrow.Table` (single-chunk) so the public API
+                // contract is `pyarrow.Table` as documented in
+                // `docs/python-roadmap.md`.
+                let rb_py = batch.to_pyarrow(py)?;
+                let pa = py.import_bound("pyarrow")?;
+                let batches = PyList::new_bound(py, [rb_py]);
+                let table = pa.getattr("Table")?.call_method1("from_batches", (batches,))?;
+                Ok(table)
+            }
+        }
     }
 
-    /// P5-pending. Returns `None` in v0.12.0-P2.
+    /// P5-pending. Returns `None` until v0.12.0-P5.
     #[getter]
     fn normalized<'py>(&self, py: Python<'py>) -> Bound<'py, PyAny> {
+        let _ = self.normalized_placeholder; // silence dead-code lint until P5
         py.None().into_bound(py)
     }
 
     fn __repr__(&self) -> String {
+        let issues_n = self.issues_batch.as_ref().map(|b| b.num_rows()).unwrap_or(0);
         format!(
             "PyScanResult(regime={:?}, files={}, records={}, issues={}, score={:.2})",
             self.summary.regime,
             self.summary.files_processed,
             self.summary.records_processed,
-            self.summary.issues_total,
+            issues_n,
             self.summary.quality_score,
         )
     }

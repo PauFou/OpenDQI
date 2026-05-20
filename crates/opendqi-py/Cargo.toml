@@ -48,10 +48,13 @@ pyo3 = { version = "0.22", features = ["extension-module", "abi3-py39"] }
 
 # Arrow PyArrow bindings live as a feature of the `arrow` umbrella
 # crate at 53.x (the dedicated `arrow-pyarrow` crate only exists
-# from 55.x onward). Must match the workspace `arrow-array = "53"`
-# pinning exactly — sharing a single Arrow version across the
-# Rust → Python boundary is the precondition for zero-copy
-# RecordBatch handoff via Arrow C Data Interface.
+# from 55.x onward). The umbrella re-exports `arrow::array` (=
+# arrow-array), `arrow::datatypes` (= arrow-schema), and exposes
+# the `pyarrow` module under the `pyarrow` feature. Sharing a
+# single Arrow major version across the Rust → Python boundary
+# is the precondition for zero-copy RecordBatch handoff via the
+# Arrow C Data Interface — must match the workspace
+# `arrow-array = "53"` pinning exactly.
 arrow = { version = "53", features = ["pyarrow"] }
 
 # Workspace-consistent versions of these utility crates — avoid

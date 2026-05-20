@@ -106,11 +106,13 @@ def test_scan_parquet_emir_summary_shape(emir_parquet: Path) -> None:
     assert 25.0 < s["quality_score"] < 26.0
 
 
-def test_scan_parquet_emir_issues_still_none_in_p2(emir_parquet: Path) -> None:
-    """P3 wires `result.issues` to a pyarrow.Table; P2 returns None."""
+def test_scan_parquet_emir_normalized_still_none_in_p3(emir_parquet: Path) -> None:
+    """P5 wires `result.normalized` to a pyarrow.Table; through P3 it stays None.
+    (`result.issues` is no longer None — it's wired up in P3, see
+    `test_issues_schema.py` for the full Arrow contract.)
+    """
     import opendqi
     result = opendqi.emir.scan_parquet(str(emir_parquet))
-    assert result.issues is None
     assert result.normalized is None
 
 
