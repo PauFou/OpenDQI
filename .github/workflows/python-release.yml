@@ -1,13 +1,19 @@
-# Python / Arrow bindings — wheel build + GitHub Release upload.
+# Python / Arrow bindings — wheel build + GitHub Release upload
+# + PyPI publish via OIDC trusted publishing (v0.12.1+).
 #
 # Triggered by the same `v*` tag push that triggers the cargo-dist
 # `release.yml` workflow (which builds the CLI binaries). The two
 # workflows run in parallel and upload to the SAME GitHub Release
 # created by cargo-dist — wheels are added as extra assets.
 #
-# NO PyPI publish in this workflow — `maturin publish` is gated on
-# an explicit user ask (CLAUDE.md release hygiene). v0.12.0
-# installation is `pip install <wheel URL from the release page>`.
+# Three jobs:
+#   build    — produce 4 abi3-py39 wheels via maturin-action
+#   release  — attach wheels to the GitHub Release (same tag as
+#              cargo-dist)
+#   publish  — push wheels to PyPI via OIDC trusted publishing
+#              (no API token in GH secrets; PyPI pending publisher
+#              must be configured one-shot on pypi.org for
+#              PauFou/OpenDQI/python-release.yml/environment=pypi)
 #
 # Build matrix matches cargo-dist exactly (4 targets, no Windows —
 # consistent with the existing CI matrix Ubuntu + macOS in
@@ -96,3 +102,40 @@ jobs:
           tag_name: ${{ github.ref_name }}
           files: dist/*.whl
           fail_on_unmatched_files: true
+
+  publish:
+    name: Publish wheels to PyPI (OIDC)
+    needs: build
+    runs-on: ubuntu-latest
+    # `id-token: write` is the OIDC permission that lets PyPI's
+    # trusted-publisher endpoint verify this workflow's identity
+    # without an API token. No `PYPI_API_TOKEN` GH secret needed.
+    permissions:
+      id-token: write
+    # `environment.name = pypi` lets you set GitHub Environment
+    # protection rules (manual approval, branch restriction, etc.)
+    # on `repo → Settings → Environments`. It must match the
+    # `environment` field configured for the trusted publisher on
+    # pypi.org. Both must be `pypi` or both must be removed.
+    environment:
+      name: pypi
+      url: https://pypi.org/p/opendqi
+    steps:
+      - name: Download all wheels
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List wheels (for the action log)
+        run: ls -la dist/
+
+      - name: Publish to PyPI via OIDC trusted publishing
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # `skip-existing: true` makes the publish idempotent — a
+          # re-trigger (e.g. retag after a CI hiccup) won't 400 on
+          # the wheels that were already pushed.
+          skip-existing: true
+          # No `password:` / `user:` fields — the action negotiates
+          # an OIDC ID token with PyPI automatically.
