@@ -23,4 +23,11 @@ from ._opendqi import *  # noqa: F401,F403
 from ._opendqi import __version__, __doc__  # noqa: F401
 from ._opendqi import emir, sftr  # noqa: F401  — explicit submodule re-export
 
-__all__ = ["__version__", "emir", "sftr"]
+# v0.13.0 — pure-Python experimental Spark interop. Imported
+# lazily-friendly (the module itself is just function definitions;
+# `pyarrow` and `pyspark` are imported INSIDE the helper, not at
+# module-load time, so plain `import opendqi.spark` is cheap even
+# without PySpark installed).
+from . import spark  # noqa: F401
+
+__all__ = ["__version__", "emir", "sftr", "spark"]
