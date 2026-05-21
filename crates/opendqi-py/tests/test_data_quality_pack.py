@@ -76,9 +76,10 @@ def test_pack_returns_dqi_pack_result() -> None:
     assert "score=" in r
 
 
-def test_indicators_table_is_10_rows() -> None:
-    """v0.15 ships exactly 10 indicators ; downstream consumers
-    rely on a fixed indicator set."""
+def test_indicators_table_is_14_rows() -> None:
+    """v0.16 B1 ships 14 EMIR indicators (10 v0.15 + 4 v0.16
+    cross-CP from auth.091) ; downstream consumers rely on a
+    fixed indicator set per release."""
     if not _all_fixtures_present():
         pytest.skip("quickstart fixtures missing")
     import opendqi
@@ -89,7 +90,7 @@ def test_indicators_table_is_10_rows() -> None:
         feedback=str(FBK_FIXTURE),
         as_of="2026-05-21",
     )
-    assert result.indicators.num_rows == 10
+    assert result.indicators.num_rows == 14
 
 
 def test_indicators_alphabetical_by_indicator_id() -> None:
@@ -111,10 +112,14 @@ def test_indicators_alphabetical_by_indicator_id() -> None:
         "DQI_COL_MISSING_STATE",
         "DQI_COL_STALE_STATE",
         "DQI_CONF_MISSING",
+        "DQI_FIELD_MISMATCH_RATE",
+        "DQI_PAIRING_RATE",
+        "DQI_RECONCILIATION_RATE",
         "DQI_REC_STATUS_UNPAIRED",
         "DQI_REJ_RATE",
         "DQI_REJ_REPEAT_UTI",
         "DQI_TIM_REPORTING_LATE",
+        "DQI_UNPAIRED_TRADES_RATE",
         "DQI_VAL_MISSING",
         "DQI_VAL_STALE",
     ]

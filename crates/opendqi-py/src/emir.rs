@@ -640,6 +640,13 @@ pub fn data_quality_pack<'py>(
         msr: msr.map(|_| msr_records.as_slice()),
         mar: mar.map(|_| mar_records.as_slice()),
         feedback: feedback.map(|_| feedback_records.as_slice()),
+        // v0.16 B1 — recon_stats + reconciliation are not yet
+        // exposed in the Python signature ; the new cross-CP
+        // DQIs self-report NotApplicable until a follow-up
+        // commit threads --recon-stats / --reconciliation
+        // through both the CLI and the Python binding.
+        recon_stats: None,
+        reconciliation: None,
     };
 
     let pack = compute_emir_dqi_pack(inputs, mapping_presence, &thresholds, as_of_date);

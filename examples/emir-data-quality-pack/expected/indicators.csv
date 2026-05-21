@@ -3,9 +3,13 @@ DQI_COL_ALL_ZERO,emir,accuracy,MSR,1,4,0.250000,0.020000,0.100000,red,MSR record
 DQI_COL_MISSING_STATE,emir,completeness,TSR+MSR,1,1,1.000000,0.010000,0.050000,red,"Outstanding, collateralised TSR records whose UTI has no companion MSR row — likely margining-state reporting gap."
 DQI_COL_STALE_STATE,emir,timeliness,MSR,1,4,0.250000,0.050000,0.200000,red,MSR records whose state_as_of is older than the configured collateral_max_age_days (TARGET2 business days since v0.16) vs the as_of reference date.
 DQI_CONF_MISSING,emir,completeness,TAR,0,0,,0.050000,0.200000,not_applicable,confirmation_timestamp not mapped or never observed — DQI_CONF_MISSING skipped
+DQI_FIELD_MISMATCH_RATE,emir,completeness,n/a,0,0,,,,not_applicable,auth.091 per-tx reconciliation records not provided
+DQI_PAIRING_RATE,emir,completeness,n/a,0,0,,,,not_applicable,auth.091 recon_stats not provided
+DQI_RECONCILIATION_RATE,emir,completeness,n/a,0,0,,,,not_applicable,auth.091 recon_stats not provided
 DQI_REC_STATUS_UNPAIRED,emir,consistency,TAR,0,0,,0.050000,0.200000,not_applicable,reconciliation_status not mapped or never observed — DQI_REC_STATUS_UNPAIRED skipped
 DQI_REJ_RATE,emir,accuracy,Feedback,2,2,1.000000,0.010000,0.050000,red,Share of feedback records that are TR rejections. Denominator is total feedback rows (proxy for total submissions).
 DQI_REJ_REPEAT_UTI,emir,accuracy,Feedback,0,2,0.000000,0.005000,0.020000,green,Distinct UTIs rejected by the TR ≥ 2 times within the feedback batch — chronic rejection candidates.
 DQI_TIM_REPORTING_LATE,emir,timeliness,TAR,0,0,,0.050000,0.200000,not_applicable,TAR records whose reporting_timestamp lags execution_timestamp by more than the configured max_reporting_delay_hours.
+DQI_UNPAIRED_TRADES_RATE,emir,completeness,n/a,0,0,,,,not_applicable,auth.091 per-tx reconciliation records not provided
 DQI_VAL_MISSING,emir,completeness,TSR,1,7,0.142857,0.005000,0.020000,red,"Outstanding TSR records with no valuation amount (or a zero valuation, treated as not reported)."
 DQI_VAL_STALE,emir,timeliness,TSR,7,7,1.000000,0.010000,0.050000,red,"TSR records whose valuation timestamp is older than the configured threshold (TARGET2 business days since v0.16, was calendar-day proxy in v0.15)."

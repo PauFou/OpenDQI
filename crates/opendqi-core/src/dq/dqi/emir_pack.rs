@@ -1,12 +1,14 @@
 //! EMIR Data Quality Pack orchestrator.
 //!
-//! [`compute_emir_dqi_pack`] takes the five EMIR TR layers
-//! (TSR / TAR / MSR / MAR / Feedback) — each `Option<&[...]>` —
-//! and returns a [`DqiPackResult`] bundling:
+//! [`compute_emir_dqi_pack`] takes the EMIR TR layers (TSR /
+//! TAR / MSR / MAR / Feedback / recon_stats / reconciliation)
+//! — each `Option<&[...]>` — and returns a [`DqiPackResult`]
+//! bundling:
 //!
-//! - **10 [`DqiIndicator`]s** (one row per shipped DQI, even
+//! - **14 [`DqiIndicator`]s in v0.16 B1** (10 v0.15 + 4 v0.16
+//!   B1 cross-CP from auth.091). One row per shipped DQI, even
 //!   when the input layer is absent — the indicator just
-//!   carries [`DqiStatus::NotApplicable`]). Stable ordering by
+//!   carries [`DqiStatus::NotApplicable`]. Stable ordering by
 //!   [`DqiIndicator::indicator_id`] for deterministic output.
 //! - **Top-N [`DqiEvidence`]** per indicator (≤ 20 each).
 //! - **Granular issues** from running the existing 216-check
@@ -16,17 +18,19 @@
 //! - A standard [`ScanSummary`] over the granular issues
 //!   (via [`IssueAggregator`]).
 //!
-//! v0.15 ships EMIR only; the SFTR mirror is scheduled for
-//! v0.16.
+//! v0.16 grows the EMIR pack from 10 → 14+ indicators
+//! incrementally across phases B1-B4. SFTR has its own
+//! `compute_sftr_dqi_pack` (v0.16 C1+).
 
 use chrono::{DateTime, NaiveDate, Utc};
 
 use crate::dq::aggregate::IssueAggregator;
 use crate::dq::dqi::compute::{
     compute_dqi_col_all_zero, compute_dqi_col_missing_state, compute_dqi_col_stale_state,
-    compute_dqi_conf_missing, compute_dqi_rec_status_unpaired, compute_dqi_rej_rate,
-    compute_dqi_rej_repeat_uti, compute_dqi_tim_reporting_late, compute_dqi_val_missing,
-    compute_dqi_val_stale,
+    compute_dqi_conf_missing, compute_dqi_field_mismatch_rate, compute_dqi_pairing_rate,
+    compute_dqi_rec_status_unpaired, compute_dqi_reconciliation_rate, compute_dqi_rej_rate,
+    compute_dqi_rej_repeat_uti, compute_dqi_tim_reporting_late, compute_dqi_unpaired_trades_rate,
+    compute_dqi_val_missing, compute_dqi_val_stale,
 };
 use crate::dq::dqi::{DqiEvidence, DqiIndicator, DqiPackResult, MappingPresence};
 use crate::dq::{
@@ -58,6 +62,15 @@ pub struct EmirDqiInputs<'a> {
     pub mar: Option<&'a [MarginActivityRecord]>,
     /// Trade-Report Validation Feedback (`auth.092`).
     pub feedback: Option<&'a [FeedbackRecord]>,
+    /// Reconciliation Statistics (`auth.091`) per-counterparty
+    /// rates. v0.16+. Feeds `DQI_PAIRING_RATE` and
+    /// `DQI_RECONCILIATION_RATE`.
+    pub recon_stats: Option<&'a [crate::ReconStatsRecord]>,
+    /// Per-transaction reconciliation records (also derived from
+    /// `auth.091` per-tx detail). v0.16+. Feeds
+    /// `DQI_UNPAIRED_TRADES_RATE`, `DQI_FIELD_MISMATCH_RATE`, and
+    /// the v0.16 margin/notional consistency DQIs.
+    pub reconciliation: Option<&'a [crate::ReconciliationRecord]>,
 }
 
 /// Run the full EMIR Data Quality Pack.
@@ -68,8 +81,9 @@ pub struct EmirDqiInputs<'a> {
 /// the conventional default — the CLI / Python layer defaults
 /// to today.
 ///
-/// Returns a [`DqiPackResult`] with all 10 indicators (in
-/// stable `indicator_id` order), their evidence rows, the
+/// Returns a [`DqiPackResult`] with all 14 EMIR indicators
+/// (10 v0.15 + 4 v0.16 B1 cross-CP from auth.091), in
+/// stable `indicator_id` order, their evidence rows, the
 /// granular issues from running the 216-check registries on
 /// every provided layer, and a [`ScanSummary`] over those
 /// issues.
@@ -86,7 +100,9 @@ pub fn compute_emir_dqi_pack(
     let started_at = Utc::now();
 
     // ---------- DQI layer ----------
-    let mut indicators: Vec<DqiIndicator> = Vec::with_capacity(10);
+    // v0.15 shipped 10 EMIR DQIs ; v0.16 grows to 14 with B1
+    // (auth.091 cross-CP) ; B3+B4 will add more.
+    let mut indicators: Vec<DqiIndicator> = Vec::with_capacity(14);
     let mut evidence: Vec<DqiEvidence> = Vec::new();
 
     let mut push = |ind: DqiIndicator, mut ev: Vec<DqiEvidence>| {
@@ -181,6 +197,49 @@ pub fn compute_emir_dqi_pack(
         );
         push(
             not_applicable("DQI_REC_STATUS_UNPAIRED", "TAR not provided"),
+            Vec::new(),
+        );
+    }
+
+    // v0.16 B1 — auth.091-derived cross-CP indicators (4).
+    // recon_stats (counterparty rates) feeds 2 ; reconciliation
+    // (per-trade detail) feeds 2.
+    if let Some(rs) = inputs.recon_stats {
+        let (ind, ev) = compute_dqi_pairing_rate(rs, thresholds, mapping_presence);
+        push(ind, ev);
+        let (ind, ev) = compute_dqi_reconciliation_rate(rs, thresholds, mapping_presence);
+        push(ind, ev);
+    } else {
+        push(
+            not_applicable("DQI_PAIRING_RATE", "auth.091 recon_stats not provided"),
+            Vec::new(),
+        );
+        push(
+            not_applicable(
+                "DQI_RECONCILIATION_RATE",
+                "auth.091 recon_stats not provided",
+            ),
+            Vec::new(),
+        );
+    }
+    if let Some(rr) = inputs.reconciliation {
+        let (ind, ev) = compute_dqi_unpaired_trades_rate(rr, thresholds, mapping_presence);
+        push(ind, ev);
+        let (ind, ev) = compute_dqi_field_mismatch_rate(rr, thresholds, mapping_presence);
+        push(ind, ev);
+    } else {
+        push(
+            not_applicable(
+                "DQI_UNPAIRED_TRADES_RATE",
+                "auth.091 per-tx reconciliation records not provided",
+            ),
+            Vec::new(),
+        );
+        push(
+            not_applicable(
+                "DQI_FIELD_MISMATCH_RATE",
+                "auth.091 per-tx reconciliation records not provided",
+            ),
             Vec::new(),
         );
     }
@@ -357,7 +416,11 @@ mod tests {
             &Thresholds::default(),
             as_of(),
         );
-        assert_eq!(result.indicators.len(), 10, "always exactly 10 indicators");
+        assert_eq!(
+            result.indicators.len(),
+            14,
+            "always exactly 14 indicators in v0.16 B1 (10 v0.15 + 4 auth.091 cross-CP)"
+        );
         for ind in &result.indicators {
             assert_eq!(
                 ind.status,
@@ -389,7 +452,7 @@ mod tests {
         let mut sorted = ids.clone();
         sorted.sort();
         assert_eq!(ids, sorted);
-        // And confirm we have all the v0.15 IDs.
+        // And confirm we have all the v0.16 B1 IDs.
         assert_eq!(
             ids,
             vec![
@@ -397,10 +460,14 @@ mod tests {
                 "DQI_COL_MISSING_STATE",
                 "DQI_COL_STALE_STATE",
                 "DQI_CONF_MISSING",
+                "DQI_FIELD_MISMATCH_RATE",
+                "DQI_PAIRING_RATE",
+                "DQI_RECONCILIATION_RATE",
                 "DQI_REC_STATUS_UNPAIRED",
                 "DQI_REJ_RATE",
                 "DQI_REJ_REPEAT_UTI",
                 "DQI_TIM_REPORTING_LATE",
+                "DQI_UNPAIRED_TRADES_RATE",
                 "DQI_VAL_MISSING",
                 "DQI_VAL_STALE",
             ]
@@ -426,7 +493,7 @@ mod tests {
         // 10 indicators always; 3 of them computed (VAL_MISSING,
         // VAL_STALE, COL_MISSING_STATE -> still NA because no
         // collateral portfolio code → denominator zero).
-        assert_eq!(result.indicators.len(), 10);
+        assert_eq!(result.indicators.len(), 14);
         let val_missing = result
             .indicators
             .iter()
@@ -459,6 +526,7 @@ mod tests {
             msr: Some(&msr),
             mar: Some(&mar),
             feedback: Some(&feedback),
+            ..Default::default()
         };
         let result = compute_emir_dqi_pack(
             inputs,
@@ -466,7 +534,7 @@ mod tests {
             &Thresholds::default(),
             as_of(),
         );
-        assert_eq!(result.indicators.len(), 10);
+        assert_eq!(result.indicators.len(), 14);
         // Feedback indicators must be computed now.
         let rej_rate = result
             .indicators

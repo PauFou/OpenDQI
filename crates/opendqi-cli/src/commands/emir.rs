@@ -2597,6 +2597,12 @@ fn run_data_quality_pack(
         } else {
             None
         },
+        // v0.16 B1 — recon_stats + reconciliation inputs are not
+        // yet exposed as CLI flags ; the new cross-CP DQIs will
+        // self-report NotApplicable until a follow-up commit
+        // wires --recon-stats / --reconciliation through.
+        recon_stats: None,
+        reconciliation: None,
     };
 
     let pack = compute_emir_dqi_pack(inputs, mapping_presence, &thresholds, as_of);

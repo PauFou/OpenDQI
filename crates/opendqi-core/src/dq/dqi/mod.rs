@@ -18,9 +18,10 @@ pub mod compute;
 
 pub use compute::{
     compute_dqi_col_all_zero, compute_dqi_col_missing_state, compute_dqi_col_stale_state,
-    compute_dqi_conf_missing, compute_dqi_rec_status_unpaired, compute_dqi_rej_rate,
-    compute_dqi_rej_repeat_uti, compute_dqi_tim_reporting_late, compute_dqi_val_missing,
-    compute_dqi_val_stale,
+    compute_dqi_conf_missing, compute_dqi_field_mismatch_rate, compute_dqi_pairing_rate,
+    compute_dqi_rec_status_unpaired, compute_dqi_reconciliation_rate, compute_dqi_rej_rate,
+    compute_dqi_rej_repeat_uti, compute_dqi_tim_reporting_late, compute_dqi_unpaired_trades_rate,
+    compute_dqi_val_missing, compute_dqi_val_stale,
 };
 pub use emir_pack::{compute_emir_dqi_pack, EmirDqiInputs};
 pub use model::{DqiEvidence, DqiIndicator, DqiPackResult, DqiStatus, MappingPresence};
