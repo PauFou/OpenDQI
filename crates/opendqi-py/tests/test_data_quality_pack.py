@@ -76,7 +76,7 @@ def test_pack_returns_dqi_pack_result() -> None:
     assert "score=" in r
 
 
-def test_indicators_table_is_17_rows() -> None:
+def test_indicators_table_is_21_rows() -> None:
     """v0.16 B1 ships 14 EMIR indicators (10 v0.15 + 4 v0.16
     cross-CP from auth.091) ; downstream consumers rely on a
     fixed indicator set per release."""
@@ -90,7 +90,7 @@ def test_indicators_table_is_17_rows() -> None:
         feedback=str(FBK_FIXTURE),
         as_of="2026-05-21",
     )
-    assert result.indicators.num_rows == 17
+    assert result.indicators.num_rows == 21
 
 
 def test_indicators_alphabetical_by_indicator_id() -> None:
@@ -112,15 +112,19 @@ def test_indicators_alphabetical_by_indicator_id() -> None:
         "DQI_COL_MISSING_STATE",
         "DQI_COL_STALE_STATE",
         "DQI_CONF_MISSING",
+        "DQI_ERR_MISSING",
         "DQI_FIELD_MISMATCH_RATE",
+        "DQI_LEI_MISSING",
         "DQI_MARGIN_INCONSISTENT_POST_HAIRCUT",
         "DQI_MARGIN_INCONSISTENT_PRE_HAIRCUT",
+        "DQI_NATURE_MISSING",
         "DQI_NOTIONAL_INCONSISTENT",
         "DQI_PAIRING_RATE",
         "DQI_RECONCILIATION_RATE",
         "DQI_REC_STATUS_UNPAIRED",
         "DQI_REJ_RATE",
         "DQI_REJ_REPEAT_UTI",
+        "DQI_SECTOR_MISSING",
         "DQI_TIM_REPORTING_LATE",
         "DQI_UNPAIRED_TRADES_RATE",
         "DQI_VAL_MISSING",

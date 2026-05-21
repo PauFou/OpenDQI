@@ -3,15 +3,19 @@ DQI_COL_ALL_ZERO,emir,accuracy,MSR,1,4,0.250000,0.020000,0.100000,red,MSR record
 DQI_COL_MISSING_STATE,emir,completeness,TSR+MSR,1,1,1.000000,0.010000,0.050000,red,"Outstanding, collateralised TSR records whose UTI has no companion MSR row — likely margining-state reporting gap."
 DQI_COL_STALE_STATE,emir,timeliness,MSR,1,4,0.250000,0.050000,0.200000,red,MSR records whose state_as_of is older than the configured collateral_max_age_days (TARGET2 business days since v0.16) vs the as_of reference date.
 DQI_CONF_MISSING,emir,completeness,TAR,0,0,,0.050000,0.200000,not_applicable,confirmation_timestamp not mapped or never observed — DQI_CONF_MISSING skipped
+DQI_ERR_MISSING,emir,completeness,TAR,20,20,1.000000,0.050000,0.200000,red,Share of TAR records with no entity_responsible_for_reporting (ERR) LEI.
 DQI_FIELD_MISMATCH_RATE,emir,completeness,n/a,0,0,,,,not_applicable,auth.091 per-tx reconciliation records not provided
+DQI_LEI_MISSING,emir,completeness,TSR,0,8,0.000000,0.050000,0.200000,green,Share of TSR records with at least one missing/empty counterparty LEI (reporting or other). Format validation (ISO 17442 check digit) remains in the EMIR.VLD.LEI_FORMAT_* granular checks.
 DQI_MARGIN_INCONSISTENT_POST_HAIRCUT,emir,completeness,n/a,0,0,,,,not_applicable,auth.091 per-tx reconciliation records not provided
 DQI_MARGIN_INCONSISTENT_PRE_HAIRCUT,emir,completeness,n/a,0,0,,,,not_applicable,auth.091 per-tx reconciliation records not provided
+DQI_NATURE_MISSING,emir,completeness,TAR,20,20,1.000000,0.050000,0.200000,red,Share of TAR records with no counterparty nature (FC/NFC/NFC+) classifier. Without it the firm cannot apply the right Art.11 clearing threshold / IM cadence / confirmation deadlines.
 DQI_NOTIONAL_INCONSISTENT,emir,completeness,n/a,0,0,,,,not_applicable,auth.091 per-tx reconciliation records not provided
 DQI_PAIRING_RATE,emir,completeness,n/a,0,0,,,,not_applicable,auth.091 recon_stats not provided
 DQI_RECONCILIATION_RATE,emir,completeness,n/a,0,0,,,,not_applicable,auth.091 recon_stats not provided
 DQI_REC_STATUS_UNPAIRED,emir,consistency,TAR,0,0,,0.050000,0.200000,not_applicable,reconciliation_status not mapped or never observed — DQI_REC_STATUS_UNPAIRED skipped
 DQI_REJ_RATE,emir,accuracy,Feedback,2,2,1.000000,0.010000,0.050000,red,Share of feedback records that are TR rejections. Denominator is total feedback rows (proxy for total submissions).
 DQI_REJ_REPEAT_UTI,emir,accuracy,Feedback,0,2,0.000000,0.005000,0.020000,green,Distinct UTIs rejected by the TR ≥ 2 times within the feedback batch — chronic rejection candidates.
+DQI_SECTOR_MISSING,emir,completeness,TAR,20,20,1.000000,0.050000,0.200000,red,Share of TAR records with no corporate_sector classifier.
 DQI_TIM_REPORTING_LATE,emir,timeliness,TAR,0,0,,0.050000,0.200000,not_applicable,TAR records whose reporting_timestamp lags execution_timestamp by more than the configured max_reporting_delay_hours.
 DQI_UNPAIRED_TRADES_RATE,emir,completeness,n/a,0,0,,,,not_applicable,auth.091 per-tx reconciliation records not provided
 DQI_VAL_MISSING,emir,completeness,TSR,1,7,0.142857,0.005000,0.020000,red,"Outstanding TSR records with no valuation amount (or a zero valuation, treated as not reported)."

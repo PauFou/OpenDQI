@@ -20,9 +20,10 @@ pub mod scoring;
 
 pub use config::Thresholds;
 pub use dq::dqi::{
-    compute_dqi_field_mismatch_rate, compute_dqi_margin_inconsistent_post_haircut,
-    compute_dqi_margin_inconsistent_pre_haircut, compute_dqi_notional_inconsistent,
-    compute_dqi_pairing_rate, compute_dqi_reconciliation_rate, compute_dqi_unpaired_trades_rate,
+    compute_dqi_err_missing, compute_dqi_field_mismatch_rate, compute_dqi_lei_missing,
+    compute_dqi_margin_inconsistent_post_haircut, compute_dqi_margin_inconsistent_pre_haircut,
+    compute_dqi_nature_missing, compute_dqi_notional_inconsistent, compute_dqi_pairing_rate,
+    compute_dqi_reconciliation_rate, compute_dqi_sector_missing, compute_dqi_unpaired_trades_rate,
     compute_emir_dqi_pack, compute_status, default_dqi_thresholds, DqiEvidence, DqiIndicator,
     DqiPackResult, DqiStatus, DqiThresholdPair, EmirDqiInputs, MappingPresence,
 };

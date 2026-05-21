@@ -1,6 +1,66 @@
 indicator_id,uti,counterparty,asset_class,source_file,observed_value,explanation
+DQI_ERR_MISSING,U-CORR-001,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,entity_responsible_for_reporting LEI missing or empty
+DQI_ERR_MISSING,U-CORR-001,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,entity_responsible_for_reporting LEI missing or empty
+DQI_ERR_MISSING,U-CORR-001,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,entity_responsible_for_reporting LEI missing or empty
+DQI_ERR_MISSING,U-DUP-NEWT,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,entity_responsible_for_reporting LEI missing or empty
+DQI_ERR_MISSING,U-DUP-NEWT,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,entity_responsible_for_reporting LEI missing or empty
+DQI_ERR_MISSING,U-ETRM-001,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,entity_responsible_for_reporting LEI missing or empty
+DQI_ERR_MISSING,U-ETRM-002,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,entity_responsible_for_reporting LEI missing or empty
+DQI_ERR_MISSING,U-ETRM-003,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,entity_responsible_for_reporting LEI missing or empty
+DQI_ERR_MISSING,U-ETRM-004,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,entity_responsible_for_reporting LEI missing or empty
+DQI_ERR_MISSING,U-ETRM-005,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,entity_responsible_for_reporting LEI missing or empty
+DQI_ERR_MISSING,U-ETRM-006,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,entity_responsible_for_reporting LEI missing or empty
+DQI_ERR_MISSING,U-MODI-001,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,entity_responsible_for_reporting LEI missing or empty
+DQI_ERR_MISSING,U-MODI-002,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,entity_responsible_for_reporting LEI missing or empty
+DQI_ERR_MISSING,U-MODI-003,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,entity_responsible_for_reporting LEI missing or empty
+DQI_ERR_MISSING,U-MODI-004,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,entity_responsible_for_reporting LEI missing or empty
+DQI_ERR_MISSING,U-MODI-005,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,entity_responsible_for_reporting LEI missing or empty
+DQI_ERR_MISSING,U-MODI-006,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,entity_responsible_for_reporting LEI missing or empty
+DQI_ERR_MISSING,U-MODI-007,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,entity_responsible_for_reporting LEI missing or empty
+DQI_ERR_MISSING,U-MODI-008,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,entity_responsible_for_reporting LEI missing or empty
+DQI_ERR_MISSING,U-MODI-009,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,entity_responsible_for_reporting LEI missing or empty
+DQI_NATURE_MISSING,U-CORR-001,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,counterparty nature (FC/NFC/NFC+) missing
+DQI_NATURE_MISSING,U-CORR-001,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,counterparty nature (FC/NFC/NFC+) missing
+DQI_NATURE_MISSING,U-CORR-001,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,counterparty nature (FC/NFC/NFC+) missing
+DQI_NATURE_MISSING,U-DUP-NEWT,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,counterparty nature (FC/NFC/NFC+) missing
+DQI_NATURE_MISSING,U-DUP-NEWT,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,counterparty nature (FC/NFC/NFC+) missing
+DQI_NATURE_MISSING,U-ETRM-001,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,counterparty nature (FC/NFC/NFC+) missing
+DQI_NATURE_MISSING,U-ETRM-002,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,counterparty nature (FC/NFC/NFC+) missing
+DQI_NATURE_MISSING,U-ETRM-003,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,counterparty nature (FC/NFC/NFC+) missing
+DQI_NATURE_MISSING,U-ETRM-004,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,counterparty nature (FC/NFC/NFC+) missing
+DQI_NATURE_MISSING,U-ETRM-005,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,counterparty nature (FC/NFC/NFC+) missing
+DQI_NATURE_MISSING,U-ETRM-006,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,counterparty nature (FC/NFC/NFC+) missing
+DQI_NATURE_MISSING,U-MODI-001,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,counterparty nature (FC/NFC/NFC+) missing
+DQI_NATURE_MISSING,U-MODI-002,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,counterparty nature (FC/NFC/NFC+) missing
+DQI_NATURE_MISSING,U-MODI-003,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,counterparty nature (FC/NFC/NFC+) missing
+DQI_NATURE_MISSING,U-MODI-004,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,counterparty nature (FC/NFC/NFC+) missing
+DQI_NATURE_MISSING,U-MODI-005,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,counterparty nature (FC/NFC/NFC+) missing
+DQI_NATURE_MISSING,U-MODI-006,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,counterparty nature (FC/NFC/NFC+) missing
+DQI_NATURE_MISSING,U-MODI-007,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,counterparty nature (FC/NFC/NFC+) missing
+DQI_NATURE_MISSING,U-MODI-008,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,counterparty nature (FC/NFC/NFC+) missing
+DQI_NATURE_MISSING,U-MODI-009,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,counterparty nature (FC/NFC/NFC+) missing
 DQI_REJ_RATE,OPENDQI-FBK-INCF-0002,,,<WS>/examples/quickstart-emir/auth092-feedback.xml,VR-0100,TR rejected this submission
 DQI_REJ_RATE,OPENDQI-FBK-RJCT-0001,,,<WS>/examples/quickstart-emir/auth092-feedback.xml,VR-0001,Notional amount missing
+DQI_SECTOR_MISSING,U-CORR-001,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,corporate_sector classifier missing
+DQI_SECTOR_MISSING,U-CORR-001,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,corporate_sector classifier missing
+DQI_SECTOR_MISSING,U-CORR-001,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,corporate_sector classifier missing
+DQI_SECTOR_MISSING,U-DUP-NEWT,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,corporate_sector classifier missing
+DQI_SECTOR_MISSING,U-DUP-NEWT,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,corporate_sector classifier missing
+DQI_SECTOR_MISSING,U-ETRM-001,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,corporate_sector classifier missing
+DQI_SECTOR_MISSING,U-ETRM-002,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,corporate_sector classifier missing
+DQI_SECTOR_MISSING,U-ETRM-003,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,corporate_sector classifier missing
+DQI_SECTOR_MISSING,U-ETRM-004,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,corporate_sector classifier missing
+DQI_SECTOR_MISSING,U-ETRM-005,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,corporate_sector classifier missing
+DQI_SECTOR_MISSING,U-ETRM-006,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,corporate_sector classifier missing
+DQI_SECTOR_MISSING,U-MODI-001,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,corporate_sector classifier missing
+DQI_SECTOR_MISSING,U-MODI-002,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,corporate_sector classifier missing
+DQI_SECTOR_MISSING,U-MODI-003,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,corporate_sector classifier missing
+DQI_SECTOR_MISSING,U-MODI-004,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,corporate_sector classifier missing
+DQI_SECTOR_MISSING,U-MODI-005,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,corporate_sector classifier missing
+DQI_SECTOR_MISSING,U-MODI-006,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,corporate_sector classifier missing
+DQI_SECTOR_MISSING,U-MODI-007,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,corporate_sector classifier missing
+DQI_SECTOR_MISSING,U-MODI-008,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,corporate_sector classifier missing
+DQI_SECTOR_MISSING,U-MODI-009,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,corporate_sector classifier missing
 DQI_VAL_MISSING,OPENDQI-TSR-NOVAL-0003,12345678901234567890,,<WS>/examples/quickstart-emir/auth107-tsr.xml,,valuation_amount is missing or zero on an outstanding trade
 DQI_VAL_STALE,OPENDQI-TSR-CLEAN-0001,12345678901234567890,,<WS>/examples/quickstart-emir/auth107-tsr.xml,2026-05-13T07:00:00+00:00,valuation_timestamp older than 1 TARGET2 business day(s) vs as_of 2026-05-21
 DQI_VAL_STALE,OPENDQI-TSR-DUP-0006,12345678901234567890,,<WS>/examples/quickstart-emir/auth107-tsr.xml,2026-05-12T15:00:00+00:00,valuation_timestamp older than 1 TARGET2 business day(s) vs as_of 2026-05-21

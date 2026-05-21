@@ -27,12 +27,13 @@ use chrono::{DateTime, NaiveDate, Utc};
 use crate::dq::aggregate::IssueAggregator;
 use crate::dq::dqi::compute::{
     compute_dqi_col_all_zero, compute_dqi_col_missing_state, compute_dqi_col_stale_state,
-    compute_dqi_conf_missing, compute_dqi_field_mismatch_rate,
-    compute_dqi_margin_inconsistent_post_haircut, compute_dqi_margin_inconsistent_pre_haircut,
+    compute_dqi_conf_missing, compute_dqi_err_missing, compute_dqi_field_mismatch_rate,
+    compute_dqi_lei_missing, compute_dqi_margin_inconsistent_post_haircut,
+    compute_dqi_margin_inconsistent_pre_haircut, compute_dqi_nature_missing,
     compute_dqi_notional_inconsistent, compute_dqi_pairing_rate, compute_dqi_rec_status_unpaired,
     compute_dqi_reconciliation_rate, compute_dqi_rej_rate, compute_dqi_rej_repeat_uti,
-    compute_dqi_tim_reporting_late, compute_dqi_unpaired_trades_rate, compute_dqi_val_missing,
-    compute_dqi_val_stale,
+    compute_dqi_sector_missing, compute_dqi_tim_reporting_late, compute_dqi_unpaired_trades_rate,
+    compute_dqi_val_missing, compute_dqi_val_stale,
 };
 use crate::dq::dqi::{DqiEvidence, DqiIndicator, DqiPackResult, MappingPresence};
 use crate::dq::{
@@ -112,12 +113,14 @@ pub fn compute_emir_dqi_pack(
         evidence.append(&mut ev);
     };
 
-    // TSR-only indicators (3): VAL_MISSING, VAL_STALE,
-    // and contributes to COL_MISSING_STATE.
+    // TSR-only indicators (3 v0.15 + 1 v0.16 B3): VAL_MISSING,
+    // VAL_STALE, LEI_MISSING ; contributes to COL_MISSING_STATE.
     if let Some(tsr) = inputs.tsr {
         let (ind, ev) = compute_dqi_val_missing(tsr, thresholds, mapping_presence);
         push(ind, ev);
         let (ind, ev) = compute_dqi_val_stale(tsr, thresholds, as_of, mapping_presence);
+        push(ind, ev);
+        let (ind, ev) = compute_dqi_lei_missing(tsr, thresholds, mapping_presence);
         push(ind, ev);
     } else {
         push(
@@ -126,6 +129,10 @@ pub fn compute_emir_dqi_pack(
         );
         push(
             not_applicable("DQI_VAL_STALE", "TSR not provided"),
+            Vec::new(),
+        );
+        push(
+            not_applicable("DQI_LEI_MISSING", "TSR not provided"),
             Vec::new(),
         );
     }
@@ -179,14 +186,22 @@ pub fn compute_emir_dqi_pack(
         );
     }
 
-    // TAR-only indicators (3): TIM_REPORTING_LATE, CONF_MISSING
-    // (gated), REC_STATUS_UNPAIRED (gated).
+    // TAR-only indicators (3 v0.15 + 3 v0.16 B3 presence):
+    // TIM_REPORTING_LATE, CONF_MISSING (gated),
+    // REC_STATUS_UNPAIRED (gated), ERR_MISSING, NATURE_MISSING,
+    // SECTOR_MISSING.
     if let Some(tar) = inputs.tar {
         let (ind, ev) = compute_dqi_tim_reporting_late(tar, thresholds, mapping_presence);
         push(ind, ev);
         let (ind, ev) = compute_dqi_conf_missing(tar, thresholds, mapping_presence);
         push(ind, ev);
         let (ind, ev) = compute_dqi_rec_status_unpaired(tar, thresholds, mapping_presence);
+        push(ind, ev);
+        let (ind, ev) = compute_dqi_err_missing(tar, thresholds, mapping_presence);
+        push(ind, ev);
+        let (ind, ev) = compute_dqi_nature_missing(tar, thresholds, mapping_presence);
+        push(ind, ev);
+        let (ind, ev) = compute_dqi_sector_missing(tar, thresholds, mapping_presence);
         push(ind, ev);
     } else {
         push(
@@ -199,6 +214,18 @@ pub fn compute_emir_dqi_pack(
         );
         push(
             not_applicable("DQI_REC_STATUS_UNPAIRED", "TAR not provided"),
+            Vec::new(),
+        );
+        push(
+            not_applicable("DQI_ERR_MISSING", "TAR not provided"),
+            Vec::new(),
+        );
+        push(
+            not_applicable("DQI_NATURE_MISSING", "TAR not provided"),
+            Vec::new(),
+        );
+        push(
+            not_applicable("DQI_SECTOR_MISSING", "TAR not provided"),
             Vec::new(),
         );
     }
@@ -441,7 +468,7 @@ mod tests {
     }
 
     #[test]
-    fn empty_inputs_yield_10_not_applicable_indicators() {
+    fn empty_inputs_yield_all_not_applicable_indicators() {
         let result = compute_emir_dqi_pack(
             EmirDqiInputs::default(),
             MappingPresence::default(),
@@ -450,8 +477,8 @@ mod tests {
         );
         assert_eq!(
             result.indicators.len(),
-            17,
-            "always exactly 17 indicators in v0.16 B2 (10 v0.15 + 4 B1 + 3 B2 per-criterion)"
+            21,
+            "always exactly 21 indicators in v0.16 B3 (10 v0.15 + 4 B1 + 3 B2 + 4 B3 presence)"
         );
         for ind in &result.indicators {
             assert_eq!(
@@ -492,15 +519,19 @@ mod tests {
                 "DQI_COL_MISSING_STATE",
                 "DQI_COL_STALE_STATE",
                 "DQI_CONF_MISSING",
+                "DQI_ERR_MISSING",
                 "DQI_FIELD_MISMATCH_RATE",
+                "DQI_LEI_MISSING",
                 "DQI_MARGIN_INCONSISTENT_POST_HAIRCUT",
                 "DQI_MARGIN_INCONSISTENT_PRE_HAIRCUT",
+                "DQI_NATURE_MISSING",
                 "DQI_NOTIONAL_INCONSISTENT",
                 "DQI_PAIRING_RATE",
                 "DQI_RECONCILIATION_RATE",
                 "DQI_REC_STATUS_UNPAIRED",
                 "DQI_REJ_RATE",
                 "DQI_REJ_REPEAT_UTI",
+                "DQI_SECTOR_MISSING",
                 "DQI_TIM_REPORTING_LATE",
                 "DQI_UNPAIRED_TRADES_RATE",
                 "DQI_VAL_MISSING",
@@ -528,7 +559,7 @@ mod tests {
         // 10 indicators always; 3 of them computed (VAL_MISSING,
         // VAL_STALE, COL_MISSING_STATE -> still NA because no
         // collateral portfolio code → denominator zero).
-        assert_eq!(result.indicators.len(), 17);
+        assert_eq!(result.indicators.len(), 21);
         let val_missing = result
             .indicators
             .iter()
@@ -569,7 +600,7 @@ mod tests {
             &Thresholds::default(),
             as_of(),
         );
-        assert_eq!(result.indicators.len(), 17);
+        assert_eq!(result.indicators.len(), 21);
         // Feedback indicators must be computed now.
         let rej_rate = result
             .indicators

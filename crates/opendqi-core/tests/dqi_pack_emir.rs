@@ -24,7 +24,7 @@ fn empty_inputs_yield_10_indicators_all_not_applicable() {
         &Thresholds::default(),
         as_of(),
     );
-    assert_eq!(result.indicators.len(), 17);
+    assert_eq!(result.indicators.len(), 21);
     assert!(result
         .indicators
         .iter()
