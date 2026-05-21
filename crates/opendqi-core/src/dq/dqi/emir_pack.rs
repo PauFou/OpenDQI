@@ -26,14 +26,15 @@ use chrono::{DateTime, NaiveDate, Utc};
 
 use crate::dq::aggregate::IssueAggregator;
 use crate::dq::dqi::compute::{
-    compute_dqi_col_all_zero, compute_dqi_col_missing_state, compute_dqi_col_stale_state,
-    compute_dqi_conf_missing, compute_dqi_err_missing, compute_dqi_field_mismatch_rate,
-    compute_dqi_lei_missing, compute_dqi_margin_inconsistent_post_haircut,
-    compute_dqi_margin_inconsistent_pre_haircut, compute_dqi_nature_missing,
-    compute_dqi_notional_inconsistent, compute_dqi_pairing_rate, compute_dqi_rec_status_unpaired,
-    compute_dqi_reconciliation_rate, compute_dqi_rej_rate, compute_dqi_rej_repeat_uti,
-    compute_dqi_sector_missing, compute_dqi_tim_reporting_late, compute_dqi_unpaired_trades_rate,
-    compute_dqi_val_missing, compute_dqi_val_stale,
+    compute_dqi_anomaly_rate, compute_dqi_col_all_zero, compute_dqi_col_missing_state,
+    compute_dqi_col_stale_state, compute_dqi_conf_missing, compute_dqi_duplicate_reports,
+    compute_dqi_err_missing, compute_dqi_field_mismatch_rate, compute_dqi_lei_missing,
+    compute_dqi_margin_inconsistent_post_haircut, compute_dqi_margin_inconsistent_pre_haircut,
+    compute_dqi_nature_missing, compute_dqi_notional_inconsistent, compute_dqi_pairing_rate,
+    compute_dqi_rec_status_unpaired, compute_dqi_reconciliation_rate, compute_dqi_rej_rate,
+    compute_dqi_rej_repeat_uti, compute_dqi_sector_missing, compute_dqi_tim_reporting_late,
+    compute_dqi_unpaired_trades_rate, compute_dqi_val_missing, compute_dqi_val_stale,
+    compute_dqi_vm_missing_for_cleared,
 };
 use crate::dq::dqi::{DqiEvidence, DqiIndicator, DqiPackResult, MappingPresence};
 use crate::dq::{
@@ -113,14 +114,19 @@ pub fn compute_emir_dqi_pack(
         evidence.append(&mut ev);
     };
 
-    // TSR-only indicators (3 v0.15 + 1 v0.16 B3): VAL_MISSING,
-    // VAL_STALE, LEI_MISSING ; contributes to COL_MISSING_STATE.
+    // TSR-only indicators (3 v0.15 + 1 v0.16 B3 + 2 v0.16 B4):
+    // VAL_MISSING, VAL_STALE, LEI_MISSING, ANOMALY_RATE,
+    // DUPLICATE_REPORTS ; contributes to COL_MISSING_STATE.
     if let Some(tsr) = inputs.tsr {
         let (ind, ev) = compute_dqi_val_missing(tsr, thresholds, mapping_presence);
         push(ind, ev);
         let (ind, ev) = compute_dqi_val_stale(tsr, thresholds, as_of, mapping_presence);
         push(ind, ev);
         let (ind, ev) = compute_dqi_lei_missing(tsr, thresholds, mapping_presence);
+        push(ind, ev);
+        let (ind, ev) = compute_dqi_anomaly_rate(tsr, thresholds, mapping_presence);
+        push(ind, ev);
+        let (ind, ev) = compute_dqi_duplicate_reports(tsr, thresholds, mapping_presence);
         push(ind, ev);
     } else {
         push(
@@ -135,13 +141,24 @@ pub fn compute_emir_dqi_pack(
             not_applicable("DQI_LEI_MISSING", "TSR not provided"),
             Vec::new(),
         );
+        push(
+            not_applicable("DQI_ANOMALY_RATE", "TSR not provided"),
+            Vec::new(),
+        );
+        push(
+            not_applicable("DQI_DUPLICATE_REPORTS", "TSR not provided"),
+            Vec::new(),
+        );
     }
 
-    // MSR-only indicators (2): COL_ALL_ZERO, COL_STALE_STATE.
+    // MSR-only indicators (2 v0.15 + 1 v0.16 B4): COL_ALL_ZERO,
+    // COL_STALE_STATE, VM_MISSING_FOR_CLEARED.
     if let Some(msr) = inputs.msr {
         let (ind, ev) = compute_dqi_col_all_zero(msr, thresholds, mapping_presence);
         push(ind, ev);
         let (ind, ev) = compute_dqi_col_stale_state(msr, thresholds, as_of, mapping_presence);
+        push(ind, ev);
+        let (ind, ev) = compute_dqi_vm_missing_for_cleared(msr, thresholds, mapping_presence);
         push(ind, ev);
     } else {
         push(
@@ -150,6 +167,10 @@ pub fn compute_emir_dqi_pack(
         );
         push(
             not_applicable("DQI_COL_STALE_STATE", "MSR not provided"),
+            Vec::new(),
+        );
+        push(
+            not_applicable("DQI_VM_MISSING_FOR_CLEARED", "MSR not provided"),
             Vec::new(),
         );
     }
@@ -477,8 +498,8 @@ mod tests {
         );
         assert_eq!(
             result.indicators.len(),
-            21,
-            "always exactly 21 indicators in v0.16 B3 (10 v0.15 + 4 B1 + 3 B2 + 4 B3 presence)"
+            24,
+            "always exactly 24 indicators in v0.16 B4 (10 v0.15 + 4 B1 + 3 B2 + 4 B3 + 3 B4 final)"
         );
         for ind in &result.indicators {
             assert_eq!(
@@ -515,10 +536,12 @@ mod tests {
         assert_eq!(
             ids,
             vec![
+                "DQI_ANOMALY_RATE",
                 "DQI_COL_ALL_ZERO",
                 "DQI_COL_MISSING_STATE",
                 "DQI_COL_STALE_STATE",
                 "DQI_CONF_MISSING",
+                "DQI_DUPLICATE_REPORTS",
                 "DQI_ERR_MISSING",
                 "DQI_FIELD_MISMATCH_RATE",
                 "DQI_LEI_MISSING",
@@ -536,6 +559,7 @@ mod tests {
                 "DQI_UNPAIRED_TRADES_RATE",
                 "DQI_VAL_MISSING",
                 "DQI_VAL_STALE",
+                "DQI_VM_MISSING_FOR_CLEARED",
             ]
         );
     }
@@ -559,7 +583,7 @@ mod tests {
         // 10 indicators always; 3 of them computed (VAL_MISSING,
         // VAL_STALE, COL_MISSING_STATE -> still NA because no
         // collateral portfolio code → denominator zero).
-        assert_eq!(result.indicators.len(), 21);
+        assert_eq!(result.indicators.len(), 24);
         let val_missing = result
             .indicators
             .iter()
@@ -600,7 +624,7 @@ mod tests {
             &Thresholds::default(),
             as_of(),
         );
-        assert_eq!(result.indicators.len(), 21);
+        assert_eq!(result.indicators.len(), 24);
         // Feedback indicators must be computed now.
         let rej_rate = result
             .indicators

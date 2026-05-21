@@ -14,11 +14,13 @@
 
 pub(crate) const EVIDENCE_TOP_N: usize = 20;
 
+pub mod anomaly_rate;
 pub mod col_all_zero;
 pub mod col_missing_state;
 pub mod col_stale_state;
 pub mod conf_missing;
 pub(crate) mod criterion_mismatch_rate;
+pub mod duplicate_reports;
 pub mod err_missing;
 pub mod field_mismatch_rate;
 pub mod lei_missing;
@@ -36,11 +38,14 @@ pub mod tim_reporting_late;
 pub mod unpaired_trades_rate;
 pub mod val_missing;
 pub mod val_stale;
+pub mod vm_missing_for_cleared;
 
+pub use anomaly_rate::compute_dqi_anomaly_rate;
 pub use col_all_zero::compute_dqi_col_all_zero;
 pub use col_missing_state::compute_dqi_col_missing_state;
 pub use col_stale_state::compute_dqi_col_stale_state;
 pub use conf_missing::compute_dqi_conf_missing;
+pub use duplicate_reports::compute_dqi_duplicate_reports;
 pub use err_missing::compute_dqi_err_missing;
 pub use field_mismatch_rate::compute_dqi_field_mismatch_rate;
 pub use lei_missing::compute_dqi_lei_missing;
@@ -58,6 +63,7 @@ pub use tim_reporting_late::compute_dqi_tim_reporting_late;
 pub use unpaired_trades_rate::compute_dqi_unpaired_trades_rate;
 pub use val_missing::compute_dqi_val_missing;
 pub use val_stale::compute_dqi_val_stale;
+pub use vm_missing_for_cleared::compute_dqi_vm_missing_for_cleared;
 
 /// Internal helper: pick the [`crate::dq::dqi::DqiThresholdPair`]
 /// for a given indicator ID from the user's [`crate::Thresholds`],

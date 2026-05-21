@@ -1,8 +1,10 @@
 indicator_id,regime,dimension,table_scope,numerator,denominator,rate,threshold_amber,threshold_red,status,description
+DQI_ANOMALY_RATE,emir,accuracy,TSR,1,8,0.125000,0.050000,0.200000,amber,"Share of TSR records exhibiting at least one accuracy anomaly (negative notional, zero notional, negative valuation, placeholder maturity). Multi-field rollup of EMIR.ACC.* granular checks."
 DQI_COL_ALL_ZERO,emir,accuracy,MSR,1,4,0.250000,0.020000,0.100000,red,MSR records whose four margin amounts (IM/VM × posted/collected) are all zero or NULL — likely UCOL trade incorrectly reported or margining gap.
 DQI_COL_MISSING_STATE,emir,completeness,TSR+MSR,1,1,1.000000,0.010000,0.050000,red,"Outstanding, collateralised TSR records whose UTI has no companion MSR row — likely margining-state reporting gap."
 DQI_COL_STALE_STATE,emir,timeliness,MSR,1,4,0.250000,0.050000,0.200000,red,MSR records whose state_as_of is older than the configured collateral_max_age_days (TARGET2 business days since v0.16) vs the as_of reference date.
 DQI_CONF_MISSING,emir,completeness,TAR,0,0,,0.050000,0.200000,not_applicable,confirmation_timestamp not mapped or never observed — DQI_CONF_MISSING skipped
+DQI_DUPLICATE_REPORTS,emir,uniqueness,TSR,2,8,0.250000,0.050000,0.200000,red,Share of TSR records whose UTI appears in more than one row in the snapshot. Indicator-level rollup of EMIR.UNI.DUPLICATE_UTI + EMIR.TST.DUPLICATE_ACTIVE_UTI granular checks.
 DQI_ERR_MISSING,emir,completeness,TAR,20,20,1.000000,0.050000,0.200000,red,Share of TAR records with no entity_responsible_for_reporting (ERR) LEI.
 DQI_FIELD_MISMATCH_RATE,emir,completeness,n/a,0,0,,,,not_applicable,auth.091 per-tx reconciliation records not provided
 DQI_LEI_MISSING,emir,completeness,TSR,0,8,0.000000,0.050000,0.200000,green,Share of TSR records with at least one missing/empty counterparty LEI (reporting or other). Format validation (ISO 17442 check digit) remains in the EMIR.VLD.LEI_FORMAT_* granular checks.
@@ -20,3 +22,4 @@ DQI_TIM_REPORTING_LATE,emir,timeliness,TAR,0,0,,0.050000,0.200000,not_applicable
 DQI_UNPAIRED_TRADES_RATE,emir,completeness,n/a,0,0,,,,not_applicable,auth.091 per-tx reconciliation records not provided
 DQI_VAL_MISSING,emir,completeness,TSR,1,7,0.142857,0.005000,0.020000,red,"Outstanding TSR records with no valuation amount (or a zero valuation, treated as not reported)."
 DQI_VAL_STALE,emir,timeliness,TSR,7,7,1.000000,0.010000,0.050000,red,"TSR records whose valuation timestamp is older than the configured threshold (TARGET2 business days since v0.16, was calendar-day proxy in v0.15)."
+DQI_VM_MISSING_FOR_CLEARED,emir,completeness,MSR,0,0,,0.050000,0.200000,not_applicable,Share of fully-collateralised (FCOL) MSR records reporting no variation margin (posted + collected both absent or zero). Cleared/fully-collateralised trades MUST exchange VM per EMIR Art.11 / RTS 2016/2251.

@@ -1,4 +1,7 @@
 indicator_id,uti,counterparty,asset_class,source_file,observed_value,explanation
+DQI_ANOMALY_RATE,OPENDQI-TSR-PLACEMAT-0005,12345678901234567890,,<WS>/examples/quickstart-emir/auth107-tsr.xml,PLACEHOLDER_MATURITY,1 anomaly class(es): PLACEHOLDER_MATURITY
+DQI_DUPLICATE_REPORTS,OPENDQI-TSR-DUP-0006,12345678901234567890,,<WS>/examples/quickstart-emir/auth107-tsr.xml,2,UTI appears 2 times in the TSR snapshot
+DQI_DUPLICATE_REPORTS,OPENDQI-TSR-DUP-0006,12345678901234567890,,<WS>/examples/quickstart-emir/auth107-tsr.xml,2,UTI appears 2 times in the TSR snapshot
 DQI_ERR_MISSING,U-CORR-001,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,entity_responsible_for_reporting LEI missing or empty
 DQI_ERR_MISSING,U-CORR-001,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,entity_responsible_for_reporting LEI missing or empty
 DQI_ERR_MISSING,U-CORR-001,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,entity_responsible_for_reporting LEI missing or empty
