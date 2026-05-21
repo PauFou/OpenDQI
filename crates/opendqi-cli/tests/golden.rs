@@ -511,6 +511,69 @@ golden_test!(
         &ex("examples/sftr/book_reconcile/book_mapping.yml")
     ])
 );
+// Dedicated test for `opendqi sftr data-quality-pack` (mirror of
+// `emir_data_quality_pack` above). Snapshots all four artefacts
+// because the standard `run_case` helper only handles one issues
+// CSV per command.
+//
+// `--as-of` is pinned so that the SFTR stale-loan-value indicator
+// cutoff is stable across calendar days.
+#[test]
+fn sftr_data_quality_pack() {
+    let bin = env!("CARGO_BIN_EXE_opendqi");
+    let out = unique_dir("sftr-data-quality-pack-out");
+    let ws = ws_root().to_string_lossy().into_owned();
+    let tmp = std::env::temp_dir()
+        .canonicalize()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+
+    let args: Vec<String> = a(&[
+        "sftr",
+        "data-quality-pack",
+        "--tsr",
+        &ex("examples/sftr/tr_state/auth079-sample.xml"),
+        "--tar",
+        &ex("examples/sftr/tr_activity/auth052-tar-sample.xml"),
+        "--as-of",
+        "2026-05-21",
+    ])
+    .into_iter()
+    .chain(["--out".to_string(), out.to_string_lossy().into_owned()])
+    .collect();
+
+    let output = Command::new(bin)
+        .args(&args)
+        .output()
+        .expect("spawn opendqi");
+
+    assert!(
+        out.join("summary.json").exists(),
+        "no summary.json produced.\nargs: {args:?}\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    for (rel, ext, is_summary) in [
+        ("summary.json", "summary.json", true),
+        ("issues.csv", "issues.csv", false),
+        ("indicators.csv", "indicators.csv", false),
+        ("evidence.csv", "evidence.csv", false),
+    ] {
+        let path = out.join(rel);
+        assert!(path.exists(), "missing {rel} in SFTR DQI pack output");
+        let txt = std::fs::read_to_string(&path).unwrap();
+        check_or_update(
+            "sftr-data-quality-pack",
+            ext,
+            &normalize(&txt, &ws, &tmp, is_summary),
+        );
+    }
+
+    let _ = std::fs::remove_dir_all(&out);
+}
+
 #[test]
 fn sftr_reconcile() {
     let store = unique_dir("sftr-reconcile-store").join("h.db");
