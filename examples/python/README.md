@@ -53,6 +53,9 @@ python examples/python/03_custom_mapping.py
 
 # 4. v0.13.0 — cross-message tr_audit: 3 files, 3 EMIR.AUD.* checks
 python examples/python/04_tr_audit.py
+
+# 7. v0.15.0 — EMIR Data Quality Pack: 10 aggregated indicators
+python examples/python/07_data_quality_pack.py
 ```
 
 | Script | What it shows | Best for |
@@ -64,6 +67,7 @@ python examples/python/04_tr_audit.py
 | **`04_tr_audit.py`** *(v0.13)* | `tr_audit(tar=…, tsr=…, feedback=…)` — 3 files, 3 layers, 3 cross-layer `EMIR.AUD.*` checks | Post-TR consolidated audits ; the highest-value cross-message workflow |
 | **`05_polars_lazyframe.py`** *(v0.14)* | `opendqi.polars.scan_lazyframe(lf, mapping)` — push-down column selection, then zero-copy Arrow handoff | Polars pipelines where you only need a handful of columns out of many |
 | **`06_spark_mapInPandas.py`** *(v0.14)* | `opendqi.spark.scan_spark_dataframe(df, regime, mapping)` — native partition-friendly UDF | PySpark batch jobs ; stays distributed, no full collect to driver |
+| **`07_data_quality_pack.py`** *(v0.15)* | `opendqi.emir.data_quality_pack(tsr=…, tar=…, feedback=…, as_of=…)` — 10 regulator-style indicators + ≤ 20 evidence rows per indicator, granular issues co-produced | The "committee-readable" view ; supervisory dashboards ; weekly DQ reviews |
 
 ## What you get back
 

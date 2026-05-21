@@ -1,22 +1,28 @@
 # OpenDQI from Python
 
-> **Status: preview (v0.14.x).**
-> **Stable**: the v1.0 Arrow output contract for `result.issues`
-> (11 cols, names + types frozen, byte-identical to the existing
-> `issues.csv` produced by the CLI — locked in v0.12.0 P3 and
-> tested by `crates/opendqi-py/tests/test_issues_schema.py::
-> test_arrow_schema_matches_csv_golden`).
-> **v0.14.0 shipped (additive)**: native Spark `mapInPandas`
-> UDF in `opendqi.spark` (promoted from v0.13 experimental,
-> drops `FutureWarning`), new `opendqi.polars.scan_lazyframe`
-> zero-copy fast path with column push-down,
-> `book_reconcile` gains `date_format`/`datetime_format`
-> kwargs, and optional install extras `opendqi[spark]` /
-> `opendqi[polars]` / `opendqi[all]`. All 13 functions from
-> v0.12+v0.13 unchanged.
-> **Evolving (v0.15+)**: store-backed lifecycle wrapping
-> (Python access to the SQLite feedback / lifecycle workflow,
-> currently CLI-only). Additive, no breaking changes planned.
+> **Status: preview (v0.15.x).**
+> **Stable**: the v1.0 Arrow output contracts —
+> `result.issues` 11 cols (locked v0.12.0 P3),
+> `result.indicators` 11 cols + `result.evidence` 7 cols
+> (locked v0.15.0, tested by
+> `tests/test_data_quality_pack.py::
+> test_indicators_arrow_columns_match_csv_golden` and the
+> evidence counterpart). All three contracts are
+> byte-identical to the CLI's CSV equivalents.
+> **v0.15.0 shipped (additive)**: new
+> `opendqi.emir.data_quality_pack(*, tsr, tar, msr, mar,
+> feedback, mappings, as_of)` → 10 regulator-style
+> indicators + ≤ 20 evidence rows per indicator + granular
+> issues co-produced. Dual input on 4 layers (str path OR
+> `pyarrow.Table`). EXPERIMENTAL Spark wrapper at
+> `opendqi.spark.emir.data_quality_pack` (collect-then-call).
+> The 14th entry point. See [`docs/data-quality-pack.md`](data-quality-pack.md) for the full DQI spec.
+> **Evolving (v0.16+)**: SFTR mirror of the DQI pack, native
+> partition-aware Spark (TSR ↔ MSR joins on the Spark side),
+> DQI history / trend tracking via SQLite, MAR Arrow input,
+> store-backed lifecycle wrapping (Python access to the
+> SQLite feedback / lifecycle workflow, currently CLI-only).
+> All additive ; no breaking changes planned.
 
 ## Install
 
@@ -393,6 +399,100 @@ spark_df.write.mode("overwrite").parquet("/tmp/opendqi/input")
 # back in PySpark:
 issues = spark.read.csv("/tmp/opendqi/report/issues.csv", header=True)
 ```
+
+## Data Quality Pack — `opendqi.emir.data_quality_pack` (v0.15.0)
+
+The v0.15 headline. Above the 216 granular checks sits a new
+**aggregated layer** with 10 regulator-style indicators
+(numerator / denominator / rate / threshold / status) plus
+≤ 20 drill-down evidence rows per indicator. The granular
+issue stream is co-produced — `result.issues` is the same
+v1.0 11-column contract.
+
+Same scan, two views — committee-readable on top, forensic
+underneath.
+
+```python
+import opendqi
+
+result = opendqi.emir.data_quality_pack(
+    tsr="auth107-tsr.xml",
+    tar="auth030-tar.xml",
+    feedback="auth092.xml",
+    as_of="2026-05-21",
+)
+
+result.indicators   # pyarrow.Table — 10 rows × 11 cols, v1.0 schema
+result.evidence     # pyarrow.Table — ≤ 200 rows × 7 cols, v1.0 schema
+result.issues       # pyarrow.Table — granular (same as v0.12+)
+result.summary      # dict — same shape as summary.json
+result.report("./pack/")  # writes 5 files (report.html + 4 CSV/JSON)
+```
+
+Output of `print(result.indicators.to_pandas())` on the
+shipped quickstart fixtures :
+
+```
+              indicator_id          status  numerator  denominator      rate
+0         DQI_COL_ALL_ZERO  not_applicable          0            0       NaN
+1    DQI_COL_MISSING_STATE  not_applicable          0            0       NaN
+2      DQI_COL_STALE_STATE  not_applicable          0            0       NaN
+3         DQI_CONF_MISSING  not_applicable          0            0       NaN
+4  DQI_REC_STATUS_UNPAIRED  not_applicable          0            0       NaN
+5             DQI_REJ_RATE             red          2            2  1.000000
+6       DQI_REJ_REPEAT_UTI           green          0            2  0.000000
+7   DQI_TIM_REPORTING_LATE  not_applicable          0            0       NaN
+8          DQI_VAL_MISSING             red          1            7  0.142857
+9            DQI_VAL_STALE             red          7            7  1.000000
+```
+
+Inputs accept **either** a file path **or** a
+`pyarrow.Table` on 4 of the 5 layers (MAR stays paths-only
+in v0.15 — Arrow MAR = v0.16). When you pass an Arrow
+Table, declare the canonical-field → column-name map via
+the `mappings` kwarg :
+
+```python
+import pyarrow as pa
+tsr_table = pa.table({...})  # from your data warehouse / Spark / Polars / DuckDB
+
+result = opendqi.emir.data_quality_pack(
+    tsr=tsr_table,
+    feedback="auth092.xml",   # paths and Arrow can be mixed
+    mappings={
+        "tsr": {"uti": "TradeId", "status": "Status", "valuation_amount": "Val"},
+    },
+    as_of="2026-05-21",
+)
+```
+
+Status mapping is universal:
+`rate ≤ amber → green` · `amber < rate ≤ red → amber` ·
+`rate > red → red` · denominator zero / layer absent /
+gated field unmapped → `not_applicable`.
+
+Override per-indicator thresholds via the CLI's
+`--config thresholds.yml`'s new `dqi:` block. Programmatic
+Python threshold passthrough = v0.16.
+
+### Spark wrapper — `opendqi.spark.emir.data_quality_pack` (EXPERIMENTAL)
+
+```python
+import opendqi.spark.emir
+
+result = opendqi.spark.emir.data_quality_pack(
+    tsr=spark_df_tsr,            # collected at the driver
+    feedback="auth092.xml",      # mix-and-match
+    mappings={"tsr": {"uti": "TradeId", "status": "Status"}},
+    as_of="2026-05-21",
+)
+# Same PyDqiPackResult; emits FutureWarning.
+```
+
+**Honest** : driver-side collect-then-call, does not scale
+beyond driver-RAM. Native partition-aware Spark = v0.16.
+
+Full DQI spec in [`docs/data-quality-pack.md`](data-quality-pack.md).
 
 ## Status & limitations
 

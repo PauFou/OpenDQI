@@ -13,6 +13,203 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+## [0.15.0] - 2026-05-21
+
+**EMIR Data Quality Pack v1** — a new layer above the 216
+granular checks that produces 10 regulator-style indicators
+(numerator / denominator / rate / threshold / status) plus
+≤ 20 drill-down evidence rows per indicator. Aimed at the
+"committee / supervisor" reading the report in 30 seconds.
+
+The granular check stream is **co-produced** (not replaced):
+`issues.csv` still carries per-row defects, the new
+`indicators.csv` + `evidence.csv` carry the aggregated
+metrics. Same scan, two views.
+
+**216 granular checks unchanged. v1.0 Arrow contract for
+`result.issues` unchanged. 19/19 pre-v0.15 goldens
+byte-identical. 762/0 Rust core tests still pass. 67/67
+pre-v0.15 pytest cases still pass. ZERO regression.**
+
+### Added
+
+- **10 new Data Quality Indicators** (3 dimensions × 5 layers) :
+  - `DQI_VAL_MISSING` — TSR : outstanding records with no
+    valuation (completeness).
+  - `DQI_VAL_STALE` — TSR : valuation timestamp older than
+    `Thresholds.timeliness.max_valuation_age_business_days`
+    vs `as_of` (timeliness).
+  - `DQI_COL_MISSING_STATE` — TSR ↔ MSR : outstanding,
+    collateralised TSR records with no companion MSR row
+    (completeness).
+  - `DQI_COL_ALL_ZERO` — MSR : rows where all 4 margin
+    fields (IM/VM × posted/collected) are zero or NULL
+    (accuracy).
+  - `DQI_COL_STALE_STATE` — MSR : `state_as_of` older than
+    `emir_rmt.collateral_max_age_days` (timeliness).
+  - `DQI_REJ_RATE` — Feedback : share of rejected vs total
+    feedback rows (accuracy ; honest proxy for "rejections
+    over submissions" since `auth.092` alone doesn't carry
+    the submission count — documented).
+  - `DQI_REJ_REPEAT_UTI` — Feedback : distinct UTIs rejected
+    ≥ 2 times (chronic rejection canaries).
+  - `DQI_TIM_REPORTING_LATE` — TAR : reporting timestamp lag
+    beyond `max_reporting_delay_hours` (timeliness).
+  - `DQI_CONF_MISSING` — TAR : confirmation_timestamp missing.
+    **Gated** — `status: not_applicable` when the field is
+    not mapped or never observed.
+  - `DQI_REC_STATUS_UNPAIRED` — TAR : reconciliation_status
+    indicating unpaired / unreconciled. Also gated.
+
+- **`opendqi emir data-quality-pack` CLI subcommand** —
+  ```
+  opendqi emir data-quality-pack \
+    [--tsr <path>] [--tar <path>] [--msr <path>] [--mar <path>] \
+    [--feedback <path>] [--config <path>] [--as-of YYYY-MM-DD] \
+    --out <dir> [--email-config <path>]
+  ```
+  At least one input required ; missing layers report
+  `not_applicable`. Writes 5 artefacts: `report.html` +
+  `summary.json` + `issues.csv` (existing v1.0 11-col contract)
+  + `indicators.csv` (NEW v1.0 11-col) + `evidence.csv`
+  (NEW v1.0 7-col).
+
+- **`opendqi.emir.data_quality_pack` Python entry point** —
+  dual-input on 4 layers (file path **OR** `pyarrow.Table`),
+  MAR paths-only in v0.15 (Arrow MAR support = v0.16). New
+  `PyDqiPackResult` class with 4 Arrow `.indicators` /
+  `.evidence` / `.issues` getters + `.summary` dict +
+  `.report(out_dir)` method that writes the same 5 artefacts
+  as the CLI.
+
+- **`opendqi.spark.emir.data_quality_pack` Python wrapper**
+  (**EXPERIMENTAL**) — accepts `pyspark.sql.DataFrame` on 4
+  layers via duck-typed `.toPandas()` collect-then-call.
+  Emits `FutureWarning` on every call. Driver-side collect ;
+  native partition-aware joins = v0.16. PySpark is not a
+  declared dependency (`pip install opendqi[spark]`).
+
+- **Two new v1.0 stable Arrow schemas** in `opendqi-py` —
+  - `indicators_schema()` (11 cols, indicator_id / regime /
+    dimension / table_scope / numerator UInt64 / denominator
+    UInt64 / rate Float64 / threshold_amber Float64 /
+    threshold_red Float64 / status / description).
+  - `evidence_schema()` (7 cols, indicator_id / uti /
+    counterparty / asset_class / source_file /
+    observed_value / explanation).
+
+  Both gated by parity tests against the corresponding CSV
+  goldens (same lockdown pattern as
+  `test_arrow_schema_matches_csv_golden` from v0.12.0).
+
+- **"Data Quality Pack" HTML section** in `report.html`
+  (opt-in via the new `write_report_html_with_dqi`
+  function) — coloured `green` / `amber` / `red` /
+  `not_applicable` status pills. The existing
+  `write_report_html` is now a thin wrapper that passes
+  `None` for indicators → byte-identical output for every
+  pre-v0.15 report (no regression).
+
+- **3 new `batch_to_*_records` converters** in
+  `opendqi_py::convert` — `tr_state` / `margin_state` /
+  `feedback`. Mirror the existing
+  `batch_to_{emir,sftr}_records` pattern.
+
+- **Per-DQI threshold defaults** shipped in
+  `opendqi_core::default_dqi_thresholds()` — tighter on
+  completeness (0.5 % amber / 2 % red), looser on
+  timeliness (5 % / 20 %). Overridable per-indicator via
+  the new `dqi:` block of the YAML thresholds config.
+
+- **New `Thresholds.dqi: BTreeMap<String, DqiThresholdPair>`
+  field** — backward-compatible via `#[serde(default)]`,
+  existing YAML configs load unchanged.
+
+- **New types in `opendqi-core`** — `DqiIndicator`,
+  `DqiStatus` (Green/Amber/Red/NotApplicable), `DqiEvidence`,
+  `DqiPackResult`, `MappingPresence`, `EmirDqiInputs`,
+  `DqiThresholdPair`. Re-exported from the crate root.
+
+- **`compute_emir_dqi_pack` orchestrator** in
+  `opendqi_core::dq::dqi` — pure function, no I/O ; takes
+  the 5 `Option<&[...]>` typed slices + `MappingPresence` +
+  `Thresholds` + `NaiveDate`. Co-produces the granular
+  issue stream via the existing `default_*_checks()` +
+  `IssueAggregator` path. Honoured by both the CLI and the
+  Python binding.
+
+- **`opendqi.spark` package migration** — was a flat
+  `python/opendqi/spark.py`, is now
+  `python/opendqi/spark/__init__.py` + `spark/emir.py`.
+  Backward-compatible : `from opendqi.spark import
+  scan_spark_dataframe` continues to import (verified in
+  `test_backward_compat_flat_imports_still_work`).
+
+- **+69 Rust tests + +21 pytest cases** — see
+  test counts below.
+
+### Changed
+
+- `opendqi-cli`: imports `compute_emir_dqi_pack` +
+  `EmirDqiInputs` + `MappingPresence` from `opendqi_core`,
+  + new `write_indicators_csv` / `write_evidence_csv` /
+  `write_report_html_with_dqi` from `opendqi_report`.
+- `opendqi-report`: minijinja template gains a new opt-in
+  `{% if indicators %}...{% endif %}` Data Quality Pack
+  section before the existing "Top issues" block. The
+  pre-existing 4 sections (Executive summary, Files
+  processed, Issues by severity, Issues by dimension, Top
+  issues) are unchanged.
+- `opendqi-py` clippy crate-level allows added :
+  `useless_conversion` + `doc_lazy_continuation` +
+  `doc_overindented_list_items` (PyO3 idioms +
+  pre-existing docstring formatting unrelated to v0.15).
+
+### Performance
+
+- v0.10's streaming-issue pipeline still applies — the DQI
+  pack's granular-issue side reuses
+  `IssueAggregator::from_issues` + the 216-check
+  registries. No regression on the EMIR-1M scan peak RSS
+  (~2.7 GiB, ~50s — unchanged).
+- DQI computation itself is single-pass per indicator with
+  bounded top-N evidence (≤ 20 rows × 10 indicators = 200
+  rows hard cap). Negligible overhead vs the granular
+  pipeline.
+
+### Test counts
+
+- **Workspace Rust** : 831/0 (was 762/0 ; **+69** tests
+  across 6 commits — types/thresholds (16), 5 single-table
+  computers (22), 5 cross-table+gated computers (19),
+  orchestrator (7), report writers (2), HTML section (2),
+  Python Rust unit (1)).
+- **Pytest** : 88/0 + 3 skipped Spark/Java integration
+  (was 67 ; **+21** : 11 data_quality_pack core + 4
+  Arrow-input + 6 spark.emir).
+- **Goldens** : **20/20 byte-identical** (19 existing
+  pre-v0.15 reports + 1 new
+  `emir-data-quality-pack.{summary.json,issues.csv,
+  indicators.csv,evidence.csv}`).
+
+### Honest scope limits (v0.15)
+
+- **MAR is paths-only on the Python / Spark side** ; pass an
+  XML path or use the CLI. Arrow / Spark MAR = v0.16.
+- **SFTR mirror** of the DQI pack (DQI_VAL_*/COL_*/REC_*/
+  TIM_* adapted to auth.079/052/080/083) = v0.16.
+- **Native Spark partition-aware joins** (TSR ↔ MSR via
+  Spark, per-partition `mapInPandas` scans) = v0.16. v0.15
+  Spark wrapper is collect-then-call only.
+- **`DQI_REJ_RATE` denominator** is "total feedback rows"
+  (proxy for "total submissions") — documented inline in
+  the indicator's description string. Real submission-count
+  denominator = future enhancement once a store-backed
+  workflow is wired.
+- **No DQI history table** in the SQLite store yet —
+  indicators are computed per-snapshot. Trend tracking =
+  v0.16.
+
 ## [0.14.0] - 2026-05-21
 
 Data-platform polish on the Python side — **native Spark

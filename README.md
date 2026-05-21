@@ -64,7 +64,7 @@ pip install opendqi[all]           # + both
 ### CLI (recommended for ops / one-shot audits)
 
 ```bash
-curl -sSL https://github.com/PauFou/OpenDQI/releases/download/v0.13.0/opendqi-cli-installer.sh | sh
+curl -sSL https://github.com/PauFou/OpenDQI/releases/download/v0.14.0/opendqi-cli-installer.sh | sh
 ```
 
 Pre-built binaries for Linux x86_64 + ARM64 and macOS x86_64 + ARM64 from the [GitHub Releases](https://github.com/PauFou/OpenDQI/releases) page.
@@ -72,7 +72,7 @@ Pre-built binaries for Linux x86_64 + ARM64 and macOS x86_64 + ARM64 from the [G
 ### Rust source (build from a tag)
 
 ```bash
-cargo install --git https://github.com/PauFou/OpenDQI --tag v0.13.0 opendqi-cli
+cargo install --git https://github.com/PauFou/OpenDQI --tag v0.14.0 opendqi-cli
 ```
 
 ### Then 5 lines that work after either install
@@ -101,7 +101,17 @@ issues_sdf = opendqi.spark.scan_spark_dataframe(
 )   # returns a pyspark.sql.DataFrame of issues
 ```
 
-The full Python surface (v0.12→v0.14) adds 13 entry points: `scan_parquet`/`scan_table`/`parse_xml` × 2 régimes + multi-file `scan_directory`/`scan_files` + cross-message `tr_audit`/`collateral_audit`/`book_reconcile`/`missing_collateral` + native data-platform `opendqi.spark.scan_spark_dataframe` + `opendqi.polars.scan_lazyframe`. More on the Python side: minimal demo in [`examples/python/quickstart.py`](examples/python/quickstart.py) · 6 progressively-realistic patterns in [`examples/python/`](examples/python/) · executable Jupyter notebook in [`examples/python/quickstart.ipynb`](examples/python/quickstart.ipynb) · full quickstart guide in [`docs/python.md`](docs/python.md) · architecture spec in [`docs/python-roadmap.md`](docs/python-roadmap.md).
+Or **v0.15 Data Quality Pack** — 10 regulator-style indicators (numerator / denominator / rate / threshold / status) with drill-down evidence, granular issues co-produced :
+
+```python
+result = opendqi.emir.data_quality_pack(
+    tsr="auth107.xml", tar="auth030.xml", feedback="auth092.xml",
+)
+print(result.indicators.to_pandas())   # 10 rows, v1.0 stable Arrow schema
+result.report("./pack/")                # report.html + 4 CSV / JSON files
+```
+
+The full Python surface (v0.12→v0.15) adds **14 entry points**: `scan_parquet`/`scan_table`/`parse_xml` × 2 régimes + multi-file `scan_directory`/`scan_files` + cross-message `tr_audit`/`collateral_audit`/`book_reconcile`/`missing_collateral` + native data-platform `opendqi.spark.scan_spark_dataframe` + `opendqi.polars.scan_lazyframe` + **v0.15 `opendqi.emir.data_quality_pack`** (+ its EXPERIMENTAL `opendqi.spark.emir.data_quality_pack` wrapper). More on the Python side: minimal demo in [`examples/python/quickstart.py`](examples/python/quickstart.py) · 7 progressively-realistic patterns in [`examples/python/`](examples/python/) · executable Jupyter notebook in [`examples/python/quickstart.ipynb`](examples/python/quickstart.ipynb) · full quickstart guide in [`docs/python.md`](docs/python.md) · DQI spec in [`docs/data-quality-pack.md`](docs/data-quality-pack.md) · architecture spec in [`docs/python-roadmap.md`](docs/python-roadmap.md).
 
 ## Coverage at a glance
 
@@ -115,7 +125,8 @@ The full Python surface (v0.12→v0.14) adds 13 entry points: `scan_parquet`/`sc
 
 ## Documentation
 
-- **Get started** : [`docs/use-cases.md`](docs/use-cases.md) (operator scenarios) · [`examples/quickstart-emir/`](examples/quickstart-emir/) (3-file kit) · [`scripts/demo.sh`](scripts/demo.sh) (one-shot) · [`docs/python.md`](docs/python.md) (Python quickstart) · [`examples/python/`](examples/python/) (3 scripts + Jupyter notebook).
+- **Get started** : [`docs/use-cases.md`](docs/use-cases.md) (operator scenarios) · [`examples/quickstart-emir/`](examples/quickstart-emir/) (3-file kit) · [`scripts/demo.sh`](scripts/demo.sh) (one-shot) · [`docs/python.md`](docs/python.md) (Python quickstart) · [`examples/python/`](examples/python/) (7 scripts + Jupyter notebook).
+- **Data Quality Pack (v0.15)** : [`docs/data-quality-pack.md`](docs/data-quality-pack.md) — 10 regulator-style indicators above the 216 granular checks ; the "committee-readable" view.
 - **Positioning** : [`docs/positioning.md`](docs/positioning.md) (3-layer mental model).
 - **Per-workflow** : [`docs/tr-state-checks.md`](docs/tr-state-checks.md) · [`docs/tr-activity-checks.md`](docs/tr-activity-checks.md) · [`docs/tr-audit.md`](docs/tr-audit.md) · [`docs/tr-feedback.md`](docs/tr-feedback.md) · [`docs/rejection-analytics.md`](docs/rejection-analytics.md) · [`docs/pre-submission-checks.md`](docs/pre-submission-checks.md) · [`docs/book-reconcile.md`](docs/book-reconcile.md) · [`docs/collateral-audit.md`](docs/collateral-audit.md) · [`docs/emir-mar-msr.md`](docs/emir-mar-msr.md) · [`docs/emir-recon-stats.md`](docs/emir-recon-stats.md) · [`docs/emir-warnings.md`](docs/emir-warnings.md) · [`docs/sftr-missing-collateral.md`](docs/sftr-missing-collateral.md).
 - **Engineering** : [`docs/auth-messages.md`](docs/auth-messages.md) · [`docs/iso20022-emir.md`](docs/iso20022-emir.md) · [`docs/iso20022-sftr.md`](docs/iso20022-sftr.md) · [`docs/xml-format.md`](docs/xml-format.md) · [`docs/xsd-validation.md`](docs/xsd-validation.md) · [`docs/parquet-normalize.md`](docs/parquet-normalize.md) · [`docs/history-store.md`](docs/history-store.md) · [`docs/lifecycle-cross-batch.md`](docs/lifecycle-cross-batch.md) · [`docs/desktop-web-ui.md`](docs/desktop-web-ui.md) · [`docs/email-notifications.md`](docs/email-notifications.md).
@@ -130,12 +141,14 @@ CSV (with YAML mapping), ISO 20022 XML (12 supported messages — see above), di
 
 | Version | Theme |
 |---|---|
-| **v0.10.0** (current) | Streaming-issue pipeline end-to-end (~32 % EMIR-1M peak RSS reduction, honest measurement on 3 views) + EMIR Article 11 collateral cross-reference (`COL.*`) + compression-event quality check |
-| **v0.11.0** (this release) | Adoption pack — README refonte, `examples/quickstart-emir/`, `scripts/demo.sh`, `docs/use-cases.md`, Python/Arrow architecture spec, `cargo-dist` release workflow with 4-target binaries |
-| **v0.12.0** | **Python/Arrow bindings preview** — `opendqi.emir.scan_parquet` + `scan_table(arrow_tbl, mapping)`, issues as `pyarrow.Table`. Strict scope: no Spark, no SaaS, no magic DataFrame integration. Architecture spec in [`docs/python-roadmap.md`](docs/python-roadmap.md). |
+| **v0.15.0** (current) | **EMIR Data Quality Pack v1** — 10 regulator-style indicators above the 216 checks ; `opendqi emir data-quality-pack` CLI + `opendqi.emir.data_quality_pack` Python ; v1.0 stable Arrow schemas for indicators + evidence. See [`docs/data-quality-pack.md`](docs/data-quality-pack.md). |
+| **v0.14.0** | Native Spark `mapInPandas` UDF + Polars LazyFrame fast path + `pip install opendqi[spark,polars,all]` |
+| **v0.13.0** | Python feature expansion — 10 new entry points (multi-file + cross-message + Spark experimental) |
+| **v0.12.0** | **Python/Arrow bindings preview** — `opendqi.emir.scan_parquet` + `scan_table(arrow_tbl, mapping)`, issues as `pyarrow.Table` |
+| **v0.10.0** | Streaming-issue pipeline end-to-end (~32 % EMIR-1M peak RSS reduction, honest measurement on 3 views) + EMIR Article 11 collateral cross-reference (`COL.*`) |
 | **v1.0.0** | Stable CLI / output / Arrow contract. Locked schemas. |
 
-**MSRV** Rust 1.87.0 (verified in CI). **CI** `cargo fmt --check`, `cargo clippy -D warnings`, build, **762 tests** + **19/19 goldens** byte-identical, `cargo-deny` daily — all on Ubuntu + macOS. **Local preflight** : `./scripts/preflight.sh` (one-shot setup `cargo install cargo-deny --locked`). **Auto-run on push** : `./scripts/install-hooks.sh`.
+**MSRV** Rust 1.87.0 (verified in CI). **CI** `cargo fmt --check`, `cargo clippy -D warnings`, build, **831 tests** + **20/20 goldens** byte-identical, `cargo-deny` daily — all on Ubuntu + macOS. **Local preflight** : `./scripts/preflight.sh` (one-shot setup `cargo install cargo-deny --locked`). **Auto-run on push** : `./scripts/install-hooks.sh`.
 
 Full release history in [`CHANGELOG.md`](CHANGELOG.md).
 
