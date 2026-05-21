@@ -8,7 +8,10 @@ use chrono::Utc;
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 
-use opendqi_core::dq::{default_sftr_checks, stream_checks_into, CheckContext};
+use opendqi_core::dq::{
+    compute_tr_audit_sftr_issues, default_sftr_checks, default_sftr_tr_state_checks,
+    stream_checks_into, CheckContext,
+};
 use opendqi_core::{Regime, SftrRecord, SortedIssueSink, Thresholds};
 
 use crate::convert::{batch_to_sftr_records, Mapping};
@@ -155,6 +158,71 @@ fn scan_sftr_paths(paths: &[std::path::PathBuf], normalize: bool) -> PyResult<Py
 }
 
 // =================================================================
+// v0.13.0 — cross-message workflow: tr_audit (2-layer SFTR)
+// =================================================================
+
+/// `opendqi.sftr.tr_audit(*, tar, tsr) -> PyScanResult`.
+///
+/// 2-layer SFTR audit (SFTR has no rejection-feedback message —
+/// the synthetic `SFTR.FBK.*` family was retired in M0.4 of the
+/// Rust core; `auth.080` is a reconciliation status advice, not
+/// feedback). Parses the TAR (`auth.052`) + TSR (`auth.079`),
+/// runs each layer's check pack, then the 2 `SFTR.AUD.*`
+/// cross-layer coherence checks (`NEWT_IN_TAR_NOT_IN_TSR`,
+/// `OUTSTANDING_IN_TSR_NOT_IN_TAR`).
+///
+/// Mirror of `opendqi.emir.tr_audit` modulo the missing feedback
+/// layer.
+#[pyfunction]
+#[pyo3(signature = (*, tar, tsr))]
+pub fn tr_audit(tar: &str, tsr: &str) -> PyResult<PyScanResult> {
+    let started_at = Utc::now();
+    let ctx = CheckContext::now_with_defaults();
+    let thresholds = Thresholds::default();
+
+    let tar_records = opendqi_xml::read_sftr_xml(Path::new(tar))
+        .map_err(to_py_err)?
+        .records;
+    let tsr_records = opendqi_xml::read_sftr_tr_state_xml(Path::new(tsr))
+        .map_err(to_py_err)?
+        .records;
+
+    let sink = Mutex::new(SortedIssueSink::new(&thresholds, STREAM_SPILL_MAX_ISSUES));
+
+    // Layer 1 — TAR records ⊗ default_sftr_checks.
+    let tar_checks = default_sftr_checks();
+    stream_checks_into(&tar_checks, &sink, |c| c.run(&tar_records, &ctx));
+
+    // Layer 2 — TSR records ⊗ default_sftr_tr_state_checks.
+    // The `prior` arg is history-store-loaded SftrRecord set —
+    // Python doesn't touch the store in v0.13, so we pass an
+    // empty slice (lifecycle-flavored checks that need history
+    // simply produce no issues).
+    let tsr_checks = default_sftr_tr_state_checks();
+    let prior_sftr: &[SftrRecord] = &[];
+    stream_checks_into(&tsr_checks, &sink, |c| {
+        c.run(&tsr_records, prior_sftr, &ctx)
+    });
+
+    // Cross-layer — the 2 SFTR.AUD.* checks.
+    let cross = compute_tr_audit_sftr_issues(&tar_records, &tsr_records, tsr);
+    if !cross.is_empty() {
+        sink.lock()
+            .expect("sink mutex not poisoned")
+            .push_batch(cross);
+    }
+
+    let finished_at = Utc::now();
+    let records_total = (tar_records.len() + tsr_records.len()) as u32;
+    let (summary, sorted_issues) = sink
+        .into_inner()
+        .expect("sink mutex not poisoned")
+        .finish(Regime::Sftr, 2, records_total, started_at, finished_at);
+    let batch = issues_to_record_batch(sorted_issues).map_err(to_py_err)?;
+    Ok(PyScanResult::new(summary, Some(batch), None))
+}
+
+// =================================================================
 // Module registration
 // =================================================================
 
@@ -171,6 +239,8 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     // Multi-file entry points (v0.13.0).
     m.add_function(wrap_pyfunction!(scan_directory, &m)?)?;
     m.add_function(wrap_pyfunction!(scan_files, &m)?)?;
+    // Cross-message workflow entry points (v0.13.0).
+    m.add_function(wrap_pyfunction!(tr_audit, &m)?)?;
     parent.add_submodule(&m)?;
     Ok(())
 }

@@ -25,7 +25,10 @@ use chrono::Utc;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyList};
 
-use opendqi_core::dq::{default_checks, stream_emir_checks_into, CheckContext};
+use opendqi_core::dq::{
+    compute_tr_audit_emir_issues, default_checks, default_feedback_checks,
+    default_tr_state_checks, stream_checks_into, stream_emir_checks_into, CheckContext,
+};
 use opendqi_core::{EmirRecord, Regime, SortedIssueSink, Thresholds};
 
 use crate::convert::{batch_to_emir_records, Mapping};
@@ -229,6 +232,96 @@ fn scan_emir_paths(paths: &[std::path::PathBuf], normalize: bool) -> PyResult<Py
 }
 
 // =================================================================
+// v0.13.0 — cross-message workflow: tr_audit
+// =================================================================
+
+/// `opendqi.emir.tr_audit(*, tar, tsr, feedback) -> PyScanResult`.
+///
+/// Consolidates a 3-layer TR audit in a single call : parses the
+/// TAR (`auth.030`), TSR (`auth.107`) and feedback (`auth.092`)
+/// XML files, runs each layer's check pack on its records, then
+/// runs the 3 `EMIR.AUD.*` cross-layer coherence checks
+/// (`REJECTED_BUT_OUTSTANDING_IN_TSR`,
+/// `NEWT_IN_TAR_NOT_IN_TSR`, `OUTSTANDING_IN_TSR_NOT_IN_TAR`).
+///
+/// All resulting issues are merged into a single `PyScanResult`
+/// whose `summary.files_processed = 3` and whose `issues` Arrow
+/// table contains the union (with `check_id` prefixes
+/// distinguishing the layer : `EMIR.{COMP,VLD,ACC,...}` for TAR,
+/// `EMIR.TST.*` for TSR, `EMIR.FBK.*` for feedback, and the 3
+/// `EMIR.AUD.*` for the cross-layer audit).
+///
+/// **Store-backed lifecycle is NOT included** in v0.13.0 — for
+/// `--store` cross-batch lifecycle checks use the CLI
+/// (`opendqi emir tr-audit --store path.db ...`). Python wrapper
+/// for the SQLite store is deferred to v0.14+.
+#[pyfunction]
+#[pyo3(signature = (*, tar, tsr, feedback))]
+pub fn tr_audit(tar: &str, tsr: &str, feedback: &str) -> PyResult<PyScanResult> {
+    let started_at = Utc::now();
+    let ctx = CheckContext::now_with_defaults();
+    let thresholds = Thresholds::default();
+
+    // Parse the three layers (format-level issues from each
+    // parser are dropped here — consistent with scan_directory /
+    // scan_files. A future v0.14 may add `include_format_issues`).
+    let tar_records = opendqi_xml::read_emir_xml(Path::new(tar))
+        .map_err(to_py_err)?
+        .records;
+    let tsr_records = opendqi_xml::read_emir_tr_state_xml(Path::new(tsr))
+        .map_err(to_py_err)?
+        .records;
+    let fbk_records = opendqi_xml::read_emir_feedback_xml(Path::new(feedback))
+        .map_err(to_py_err)?
+        .records;
+
+    let sink = Mutex::new(SortedIssueSink::new(&thresholds, STREAM_SPILL_MAX_ISSUES));
+
+    // Layer 1 — TAR records ⊗ default_checks (single-batch EMIR DQ).
+    let tar_checks = default_checks();
+    stream_emir_checks_into(&tar_checks, &tar_records, &ctx, &sink);
+
+    // Layer 2 — TSR records ⊗ default_tr_state_checks. Uses the
+    // generic `stream_checks_into` because TrStateCheck is a
+    // distinct trait from the `Check` (EmirRecord) one. The
+    // `prior` arg is the history-store-loaded EmirRecord set —
+    // Python doesn't touch the store in v0.13, so we pass an
+    // empty slice (lifecycle-flavored checks that need history
+    // simply produce no issues).
+    let tsr_checks = default_tr_state_checks();
+    let prior_emir: &[EmirRecord] = &[];
+    stream_checks_into(&tsr_checks, &sink, |c| {
+        c.run(&tsr_records, prior_emir, &ctx)
+    });
+
+    // Layer 3 — feedback records ⊗ default_feedback_checks (also
+    // takes empty prior; see TSR comment).
+    let fbk_checks = default_feedback_checks();
+    stream_checks_into(&fbk_checks, &sink, |c| {
+        c.run(&fbk_records, prior_emir, &ctx)
+    });
+
+    // Cross-layer — the 3 EMIR.AUD.* checks that only this
+    // command can run (each needs records from at least 2 of the
+    // 3 layers).
+    let cross = compute_tr_audit_emir_issues(&tar_records, &tsr_records, &fbk_records, tsr, feedback);
+    if !cross.is_empty() {
+        sink.lock()
+            .expect("sink mutex not poisoned")
+            .push_batch(cross);
+    }
+
+    let finished_at = Utc::now();
+    let records_total = (tar_records.len() + tsr_records.len() + fbk_records.len()) as u32;
+    let (summary, sorted_issues) = sink
+        .into_inner()
+        .expect("sink mutex not poisoned")
+        .finish(Regime::Emir, 3, records_total, started_at, finished_at);
+    let batch = issues_to_record_batch(sorted_issues).map_err(to_py_err)?;
+    Ok(PyScanResult::new(summary, Some(batch), None))
+}
+
+// =================================================================
 // Module registration
 // =================================================================
 
@@ -245,6 +338,8 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     // Multi-file entry points (v0.13.0).
     m.add_function(wrap_pyfunction!(scan_directory, &m)?)?;
     m.add_function(wrap_pyfunction!(scan_files, &m)?)?;
+    // Cross-message workflow entry points (v0.13.0).
+    m.add_function(wrap_pyfunction!(tr_audit, &m)?)?;
     parent.add_submodule(&m)?;
     Ok(())
 }
