@@ -28,9 +28,16 @@ publish      = false
 # membership.
 
 [lib]
-# `import opendqi` from Python looks up a shared library called
-# `opendqi.<arch>.so` (or `.pyd`) — `cdylib` is what PyO3 needs.
-name       = "opendqi"
+# Renamed `opendqi` → `_opendqi` in v0.13.0 to switch to
+# maturin's `python-source` layout (see pyproject.toml). The
+# compiled module now lives at `opendqi/_opendqi.<arch>.so` inside
+# the `opendqi` Python package, and `python/opendqi/__init__.py`
+# re-exports its public surface via `from ._opendqi import *`.
+# Users continue to see `opendqi.__version__`, `opendqi.emir`,
+# etc. unchanged. The rename was needed so that pure-Python
+# files (e.g. `opendqi.spark`) can ship alongside the compiled
+# extension.
+name       = "_opendqi"
 crate-type = ["cdylib"]
 
 [dependencies]

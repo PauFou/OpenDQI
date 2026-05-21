@@ -4,7 +4,15 @@
 /build/
 *.egg-info/
 __pycache__/
+/python/opendqi/__pycache__/
 *.pyc
+
+# Maturin develop installs the compiled module in-place under
+# python/opendqi/ for editable installs. The .so / .pyd / .dylib
+# is a build artifact, never committed.
+/python/opendqi/*.so
+/python/opendqi/*.pyd
+/python/opendqi/*.dylib
 
 # Local Python venv used during `maturin develop`.
 .venv/

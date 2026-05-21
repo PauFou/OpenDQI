@@ -52,3 +52,13 @@ Changelog     = "https://github.com/PauFou/OpenDQI/blob/main/CHANGELOG.md"
 features = ["pyo3/extension-module"]
 # Strip symbols on release builds — wheels stay small.
 strip = true
+# v0.13.0: switch to maturin's `python-source` layout so we can
+# ship pure-Python files (e.g. `opendqi.spark`) alongside the
+# compiled cdylib. The compiled module is renamed `_opendqi`
+# (see Cargo.toml `[lib] name`) and lives at
+# `opendqi/_opendqi.<arch>.so` inside the package;
+# `python/opendqi/__init__.py` re-exports everything via
+# `from ._opendqi import *` so `import opendqi` continues to
+# work identically to v0.12.x.
+python-source = "python"
+module-name   = "opendqi._opendqi"
