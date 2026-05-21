@@ -1,32 +1,43 @@
 # OpenDQI from Python
 
-> **Status: preview (v0.13.x).**
+> **Status: preview (v0.14.x).**
 > **Stable**: the v1.0 Arrow output contract for `result.issues`
 > (11 cols, names + types frozen, byte-identical to the existing
 > `issues.csv` produced by the CLI — locked in v0.12.0 P3 and
 > tested by `crates/opendqi-py/tests/test_issues_schema.py::
 > test_arrow_schema_matches_csv_golden`).
-> **v0.13.0 shipped (additive)**: 10 new entry points covering
-> multi-file scans (`scan_directory`, `scan_files`) and the four
-> cross-message workflows (`tr_audit`, `collateral_audit`,
-> `book_reconcile`, `missing_collateral`), plus an experimental
-> `opendqi.spark.scan_spark_dataframe` helper. Single-file
-> functions from v0.12 (`scan_parquet`, `scan_table`, `parse_xml`)
-> are unchanged.
-> **Evolving (v0.14+)**: store-backed lifecycle wrapping, native
-> Spark mapInPandas UDF, Polars LazyFrame fast path, custom
-> CsvMapping date formats — **additive**, no breaking changes
-> planned.
+> **v0.14.0 shipped (additive)**: native Spark `mapInPandas`
+> UDF in `opendqi.spark` (promoted from v0.13 experimental,
+> drops `FutureWarning`), new `opendqi.polars.scan_lazyframe`
+> zero-copy fast path with column push-down,
+> `book_reconcile` gains `date_format`/`datetime_format`
+> kwargs, and optional install extras `opendqi[spark]` /
+> `opendqi[polars]` / `opendqi[all]`. All 13 functions from
+> v0.12+v0.13 unchanged.
+> **Evolving (v0.15+)**: store-backed lifecycle wrapping
+> (Python access to the SQLite feedback / lifecycle workflow,
+> currently CLI-only). Additive, no breaking changes planned.
 
 ## Install
 
 ```bash
-pip install opendqi
+pip install opendqi                # core: just pyarrow
+pip install opendqi[spark]         # + pyspark>=3.5 (v0.14)
+pip install opendqi[polars]        # + polars>=0.20 (v0.14)
+pip install opendqi[all]           # + both
 ```
 
 **Three wheels per release** : Linux x86_64 + ARM64, macOS ARM64
 (Apple Silicon). **abi3-py39** ⇒ a single wheel per target covers
 Python 3.9+ unchanged (forward-compatible to 3.14+).
+
+The `[spark]` and `[polars]` extras pull heavy transitive deps
+(~300 MB for pyspark, ~30 MB for polars). The core
+`pip install opendqi` install is intentionally minimal (just
+pyarrow); `opendqi.spark` and `opendqi.polars` use duck-typed
+imports, so they're importable even without the extras
+installed — until you actually call into a function that needs
+them.
 
 **No macOS x86_64 (Intel) wheel** since v0.12.2 — the GitHub
 `macos-13` runner is deprecated and free-tier jobs queue
@@ -212,17 +223,18 @@ lifecycle. v0.14+ may add it.
 | **Cross-message** (v0.13.0) | | |
 | `opendqi.emir.tr_audit(*, tar, tsr, feedback)` | `PyScanResult` | 3 paths; 3 EMIR.AUD.* + per-layer |
 | `opendqi.emir.collateral_audit(*, tsr, msr)` | `PyScanResult` | auth.107 + auth.109; EMIR.COL.* |
-| `opendqi.emir.book_reconcile(book, tsr, *, mapping=None)` | `PyScanResult` | str path or pa.Table + auth.107; EMIR.BREC.* |
+| `opendqi.emir.book_reconcile(book, tsr, *, mapping=None, date_format=None, datetime_format=None)` | `PyScanResult` | str path or pa.Table + auth.107; EMIR.BREC.* |
 | `opendqi.sftr.{scan_parquet, scan_table, parse_xml, scan_directory, scan_files, tr_audit, book_reconcile, missing_collateral}(…)` | (symmetric, no `collateral_audit` — SFTR-side cross-collateral is `missing_collateral`) | |
-| **Experimental** (v0.13.0) | | |
-| `opendqi.spark.scan_spark_dataframe(df, *, regime, mapping, normalize=False)` | `pyspark.sql.DataFrame` | Spark DataFrame round-trip via pandas+Arrow; emits FutureWarning |
+| **Data-platform** (v0.14.0) | | |
+| `opendqi.spark.scan_spark_dataframe(df, *, regime, mapping, normalize=False)` | `pyspark.sql.DataFrame` | Native `mapInPandas` UDF; needs `opendqi[spark]` + JVM |
+| `opendqi.polars.scan_lazyframe(lf, *, regime, mapping, normalize=False)` | `PyScanResult` | Push-down column selection; needs `opendqi[polars]` |
 
 Plus module-level:
 
 | Attribute | Description |
 |---|---|
 | `opendqi.__version__` | semver string from Cargo.toml |
-| `opendqi.emir`, `opendqi.sftr`, `opendqi.spark` | submodules |
+| `opendqi.emir`, `opendqi.sftr`, `opendqi.spark`, `opendqi.polars` | submodules |
 
 ## Output shapes
 
@@ -297,7 +309,9 @@ duckdb.sql("""
 """).show()
 ```
 
-### Polars
+### Polars — `opendqi.polars` (v0.14.0)
+
+Quick ad-hoc analysis of `result.issues` :
 
 ```python
 import opendqi, polars as pl
@@ -306,6 +320,31 @@ result = opendqi.emir.scan_parquet("tsr.parquet")
 df = pl.from_arrow(result.issues)
 df.group_by("dimension").count().sort("count", descending=True)
 ```
+
+For scanning a Polars LazyFrame directly (with column push-down
+— only mapped cols get materialized) :
+
+```python
+import opendqi
+
+# `lf` is a polars.LazyFrame from your pipeline (could be a
+# CSV scan, a parquet scan, a join result, etc.) with 50+
+# columns. Only `trade_uti` + `mtm_ts` are mapped, so only
+# those 2 get materialized.
+result = opendqi.polars.scan_lazyframe(
+    lf,
+    regime="emir",
+    mapping={
+        "uti":                 "trade_uti",
+        "valuation_timestamp": "mtm_ts",
+    },
+)
+# `result.issues` is a pyarrow.Table — convert back to Polars
+# for downstream analysis:
+issues_df = pl.from_arrow(result.issues)
+```
+
+Requires `pip install opendqi[polars]`.
 
 ### pandas
 
@@ -317,11 +356,13 @@ df = result.issues.to_pandas()
 df["check_id"].value_counts().head(10)
 ```
 
-### Spark — `opendqi.spark` (v0.13.0 experimental)
+### Spark — `opendqi.spark` (v0.14.0 — native)
 
-v0.13.0 ships an **experimental** Python-only helper that does
-the Spark→pandas→Arrow→scan_table→pandas→Spark round-trip in
-one call :
+v0.14.0 ships a native partition-friendly Spark integration
+via `mapInPandas`. Each Spark partition is scanned independently
+inside an executor (no full collect to the driver), and the
+issues stream back as a Spark DataFrame of the v1.0 stable
+11-column issues schema :
 
 ```python
 import opendqi
@@ -329,19 +370,21 @@ import opendqi
 issues_sdf = opendqi.spark.scan_spark_dataframe(
     spark_df,
     regime="emir",
-    mapping={"uti": "trade_uti", "valuation_timestamp": "MtmTs", ...},
+    mapping={"uti": "trade_uti", "valuation_timestamp": "MtmTs"},
 )
-# issues_sdf is a Spark DataFrame with the 11-column v1.0 issues
-# schema. Emits a FutureWarning — signature may evolve in v0.14
-# once a native mapInPandas UDF ships.
+# issues_sdf is a regular pyspark.sql.DataFrame — chain
+# Spark ops on it:
+issues_sdf.groupBy("severity").count().show()
+issues_sdf.write.parquet("/tmp/issues/")
 ```
 
 PySpark is **not** declared as a dependency of the `opendqi`
-wheel (duck-typed import inside the helper) — install it
-yourself: `pip install pyspark`.
+wheel (duck-typed import inside the helper). Install via
+`pip install opendqi[spark]` to add `pyspark>=3.5` and a JVM.
 
-For large batch pipelines, the Parquet handoff via CLI is still
-the most robust pattern:
+For very large batch pipelines, the Parquet handoff via CLI is
+still a robust fallback pattern (no JVM needed in the Python
+process) :
 
 ```python
 spark_df.write.mode("overwrite").parquet("/tmp/opendqi/input")
@@ -357,27 +400,25 @@ issues = spark.read.csv("/tmp/opendqi/report/issues.csv", header=True)
   API additively. **Breaking changes to the v1.0 Arrow contract
   for `result.issues` are explicitly out of scope** (locked in
   v0.12.0 P3, parity-tested vs the CLI golden).
-- **`opendqi.spark` is EXPERIMENTAL** in v0.13. The Spark→
-  pandas→Arrow round-trip works but emits a `FutureWarning`.
-  The signature may evolve in v0.14 once a native
-  `mapInPandas` UDF ships (partition-friendly, zero-copy).
+- **`opendqi.spark` is now NATIVE** (v0.14.0) — partition-
+  friendly via `mapInPandas`. The v0.13 round-trip via
+  `df.toPandas()` is gone ; the v0.13 `FutureWarning` is gone.
+  Requires `pip install opendqi[spark]` + a JVM.
+- **`opendqi.polars.scan_lazyframe` shipped in v0.14.0** with
+  push-down column selection. Requires `pip install
+  opendqi[polars]`. Round-trip between Polars and Arrow is
+  zero-copy on most dtypes ; mixed-dtype frames may pay a
+  small materialization cost.
 - **No Python wrapping of the SQLite feedback-store / lifecycle
   workflow.** `--store` and the lifecycle / feedback
   list/resolve/stale/analytics commands stay CLI-only. The
   Python `tr_audit` runs the cross-layer audit but NOT cross-
   batch lifecycle checks (which need store-loaded prior records).
-- **`book_reconcile` accepts CSV / Parquet / pyarrow.Table** for
-  the book side, but `CsvMapping` date/datetime format strings
-  use the defaults (`%Y-%m-%d` and RFC 3339). Non-default formats
-  go through the CLI with `--mapping` YAML. Will be exposed in
-  Python in v0.14+ if asked.
+  Wrapping planned for **v0.15**.
 - **No `mar_scan` / `msr_scan` / `recon_stats` / `warnings`
   single-message Python wrappers.** These are single-message TR
   scans that don't add much over `scan_table(pa.from_…(message))`.
-  Add in v0.14+ if a user pattern emerges.
-- **No Polars `LazyFrame` zero-copy fast path** — for now,
-  `pl.from_arrow(result.issues)` materialises a regular `pl.
-  DataFrame` (cheap, single-batch). Lazy-frame fast-path v0.14+.
+  Add in v0.15+ if a user pattern emerges.
 - **No Windows wheels** — consistent with the existing
   Ubuntu+macOS CI matrix.
 

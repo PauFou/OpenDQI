@@ -62,6 +62,8 @@ python examples/python/04_tr_audit.py
 | **`02_parse_xml_then_scan.py`** | `parse_xml → scan_table` chain, no disk intermediate | One-off interactive audits + in-memory data platforms |
 | **`03_custom_mapping.py`** | `mapping={canonical: user_col}` for renamed columns | Real-world data warehouses where columns aren't named per ESMA convention |
 | **`04_tr_audit.py`** *(v0.13)* | `tr_audit(tar=…, tsr=…, feedback=…)` — 3 files, 3 layers, 3 cross-layer `EMIR.AUD.*` checks | Post-TR consolidated audits ; the highest-value cross-message workflow |
+| **`05_polars_lazyframe.py`** *(v0.14)* | `opendqi.polars.scan_lazyframe(lf, mapping)` — push-down column selection, then zero-copy Arrow handoff | Polars pipelines where you only need a handful of columns out of many |
+| **`06_spark_mapInPandas.py`** *(v0.14)* | `opendqi.spark.scan_spark_dataframe(df, regime, mapping)` — native partition-friendly UDF | PySpark batch jobs ; stays distributed, no full collect to driver |
 
 ## What you get back
 

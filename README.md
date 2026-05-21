@@ -55,13 +55,16 @@ Pick the channel that matches how you work — same engine, same 216 checks, sam
 ### Python (recommended for data teams)
 
 ```bash
-pip install opendqi
+pip install opendqi                # core: pyarrow only
+pip install opendqi[spark]         # + pyspark>=3.5 (v0.14)
+pip install opendqi[polars]        # + polars>=0.20 (v0.14)
+pip install opendqi[all]           # + both
 ```
 
 ### CLI (recommended for ops / one-shot audits)
 
 ```bash
-curl -sSL https://github.com/PauFou/OpenDQI/releases/download/v0.12.2/opendqi-cli-installer.sh | sh
+curl -sSL https://github.com/PauFou/OpenDQI/releases/download/v0.13.0/opendqi-cli-installer.sh | sh
 ```
 
 Pre-built binaries for Linux x86_64 + ARM64 and macOS x86_64 + ARM64 from the [GitHub Releases](https://github.com/PauFou/OpenDQI/releases) page.
@@ -69,7 +72,7 @@ Pre-built binaries for Linux x86_64 + ARM64 and macOS x86_64 + ARM64 from the [G
 ### Rust source (build from a tag)
 
 ```bash
-cargo install --git https://github.com/PauFou/OpenDQI --tag v0.12.2 opendqi-cli
+cargo install --git https://github.com/PauFou/OpenDQI --tag v0.13.0 opendqi-cli
 ```
 
 ### Then 5 lines that work after either install
@@ -82,7 +85,7 @@ print(result.summary)   # dict — same shape as summary.json
 print(result.issues)    # pyarrow.Table — v1.0 stable 11-column schema
 ```
 
-Or one of the new v0.13 cross-message workflows — 3 files, one call, post-TR audit including the 3 `EMIR.AUD.*` cross-layer coherence checks:
+Or one of the v0.13 cross-message workflows — 3 files, one call, post-TR audit including the 3 `EMIR.AUD.*` cross-layer coherence checks:
 
 ```python
 result = opendqi.emir.tr_audit(
@@ -90,7 +93,15 @@ result = opendqi.emir.tr_audit(
 )
 ```
 
-The full v0.13 surface adds 10 new entry points (`scan_directory`, `scan_files`, `tr_audit`, `collateral_audit`, `book_reconcile`, `missing_collateral`) plus an experimental `opendqi.spark.scan_spark_dataframe(...)` helper. More on the Python side: minimal demo in [`examples/python/quickstart.py`](examples/python/quickstart.py) · 4 progressively-realistic patterns in [`examples/python/`](examples/python/) · executable Jupyter notebook in [`examples/python/quickstart.ipynb`](examples/python/quickstart.ipynb) · full quickstart guide in [`docs/python.md`](docs/python.md) · architecture spec in [`docs/python-roadmap.md`](docs/python-roadmap.md).
+Or v0.14 native Spark — partition-friendly `mapInPandas`, stays distributed across executors :
+
+```python
+issues_sdf = opendqi.spark.scan_spark_dataframe(
+    spark_df, regime="emir", mapping={"uti": "trade_uti", ...},
+)   # returns a pyspark.sql.DataFrame of issues
+```
+
+The full Python surface (v0.12→v0.14) adds 13 entry points: `scan_parquet`/`scan_table`/`parse_xml` × 2 régimes + multi-file `scan_directory`/`scan_files` + cross-message `tr_audit`/`collateral_audit`/`book_reconcile`/`missing_collateral` + native data-platform `opendqi.spark.scan_spark_dataframe` + `opendqi.polars.scan_lazyframe`. More on the Python side: minimal demo in [`examples/python/quickstart.py`](examples/python/quickstart.py) · 6 progressively-realistic patterns in [`examples/python/`](examples/python/) · executable Jupyter notebook in [`examples/python/quickstart.ipynb`](examples/python/quickstart.ipynb) · full quickstart guide in [`docs/python.md`](docs/python.md) · architecture spec in [`docs/python-roadmap.md`](docs/python-roadmap.md).
 
 ## Coverage at a glance
 
