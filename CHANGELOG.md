@@ -13,6 +13,97 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+## [0.14.0] - 2026-05-21
+
+Data-platform polish on the Python side — **native Spark
+`mapInPandas` UDF** (partition-friendly, no full collect to
+driver), new **`opendqi.polars.scan_lazyframe`** zero-copy fast
+path with column push-down, and 2 new `book_reconcile` kwargs
+to match the CLI's CSV date-format flexibility. **`opendqi.spark`
+is no longer experimental** (the v0.13 `FutureWarning` is gone).
+
+Plus optional install extras: `pip install opendqi[spark]`,
+`opendqi[polars]`, or `opendqi[all]`. Core `pip install opendqi`
+remains minimal (pyarrow only).
+
+**ZERO Rust core change.** 216 checks remain 216 (151 EMIR +
+65 SFTR). The v1.0 stable Arrow contract for `result.issues`
+(locked v0.12.0 P3) is unchanged. 19/19 goldens byte-identical
+with `UPDATE_GOLDEN` unset. 762/0 workspace tests pass. 67
+pytest cases pass (+ 2 skip when no JVM for Spark integration
+tests on dev box).
+
+### Added
+
+- **`opendqi.polars.scan_lazyframe(lf, *, regime, mapping,
+  normalize=False)`** — new pure-Python namespace
+  (`crates/opendqi-py/python/opendqi/polars.py`, ~70 lines).
+  Pushes column selection into Polars (`lf.select(needed_cols).
+  collect()`) before zero-copy `df.to_arrow()` handoff to
+  `opendqi.{emir,sftr}.scan_table`. For wide LazyFrames where
+  only a handful of columns are mapped, this avoids
+  materialising the full frame. Polars is **not** declared as
+  a dependency — duck-typed import; users install via
+  `pip install opendqi[polars]`.
+
+- **`opendqi.{emir,sftr}.book_reconcile(..., *, date_format=
+  None, datetime_format=None)`** — 2 new kwargs passed through
+  to `opendqi_io::CsvMapping` so users can read CSV books with
+  non-standard date conventions (e.g. `date_format='%d/%m/%Y'`).
+  Defaults stay `%Y-%m-%d` and RFC 3339 respectively. Ignored
+  when `book` is a `pyarrow.Table`/`RecordBatch` (Arrow input
+  bypasses `CsvMapping`).
+
+- **`[project.optional-dependencies]`** block in
+  `crates/opendqi-py/pyproject.toml`: `spark = ["pyspark>=3.5"]`,
+  `polars = ["polars>=0.20"]`, `all = [...]` convenience extra.
+
+- **`examples/python/05_polars_lazyframe.py`** (~70 lines) —
+  parse_xml → wide pl.LazyFrame with 3 junk cols → push-down
+  scan via `opendqi.polars.scan_lazyframe`. Smoke-tested:
+  20 records, 200 issues on the shipped auth.030 fixture.
+
+- **`examples/python/06_spark_mapInPandas.py`** (~90 lines) —
+  builds a tiny EMIR-shaped Spark DataFrame → native
+  partition-friendly scan via `opendqi.spark.scan_spark_
+  dataframe` → groupBy check_id. Skip-friendly on dev machines
+  without Java/JDK installed (SparkSession startup wrapped in
+  try/except).
+
+### Changed
+
+- **`opendqi.spark.scan_spark_dataframe(df, *, regime, mapping,
+  normalize=False)`** — full rewrite. v0.13 went via
+  `df.toPandas()` which collected the entire DataFrame to the
+  driver (lost the distribution). v0.14 uses Spark's native
+  `DataFrame.mapInPandas` so each partition is scanned
+  independently and the issues stream back as a Spark
+  DataFrame of the v1.0 stable 11-column issues schema. The
+  `FutureWarning` is gone. The `EXPERIMENTAL` docstring marker
+  is gone. Return type is now a `pyspark.sql.DataFrame` (was
+  `pandas.DataFrame` — **breaking** for the v0.13 callers,
+  acceptable because v0.13 was advertised experimental).
+
+- **`docs/python.md`** — Status header bumped to v0.14.x,
+  Install section gains the 3 extras, Polars section split
+  into "ad-hoc analysis of `result.issues`" + new "scan a
+  LazyFrame directly with push-down" subsections, Spark
+  section rewritten around mapInPandas, API surface table
+  gains a Data-platform v0.14 category.
+
+- **`README.md`** — Install snippets gain the 3 extras, a 3rd
+  Python snippet showcases `opendqi.spark.scan_spark_dataframe`,
+  catalog paragraph names the 13 Python entry points (was 10),
+  install tag references bumped v0.12.2 → v0.13.0 in the
+  curl installer + `cargo install --tag` lines.
+
+### Removed
+
+- `FutureWarning` formerly emitted by
+  `opendqi.spark.scan_spark_dataframe` on every call.
+- `EXPERIMENTAL` marker from `opendqi.spark`'s module docstring
+  and from `docs/python.md` Status & limitations.
+
 ## [0.13.0] - 2026-05-21
 
 Python feature expansion — multi-file scans + cross-message
