@@ -64,6 +64,38 @@ Report: ./pack/report.html
   field unmapped → **not_applicable** (`rate = null`, no
   evidence)
 
+## Disclaimer — what a DQI is NOT
+
+The vocabulary matters here because the consumers of this
+output (committee, compliance officer, supervisor, audit
+team) read each word literally.
+
+- **A DQI is not a validation rule.** Validation rules are
+  the per-row `EMIR.*` / `SFTR.*` checks (the 216-check
+  catalogue) that flag *individual* defects. A DQI is an
+  *aggregation* of one or more such defects into a single
+  rate ; the rule is the row-level check, the indicator is
+  the rollup.
+- **A DQI is not a verdict of non-conformity.** A `red`
+  status is an internal *alert* asking the firm to
+  investigate — it is **not** a declaration that the firm
+  has breached a regulation. The rate threshold beyond
+  which a DQI turns `red` is configurable by the firm, not
+  set by a regulator.
+- **A DQI is an internal control indicator.** It exists to
+  help the firm prioritise its own remediation work and
+  produce a committee-readable view of data-quality trends
+  over time.
+- **OpenDQI computes internal data quality indicators. It
+  does not certify regulatory compliance.** Compliance with
+  EMIR / SFTR reporting obligations remains the firm's
+  responsibility ; the firm should validate every output
+  against applicable rules, internal controls, and
+  professional advice.
+
+In short: the DQI pack helps a firm *see* its data quality.
+It does **not** *certify* it.
+
 ## Indicator details
 
 ### `DQI_VAL_MISSING`

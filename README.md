@@ -175,6 +175,8 @@ See [`SECURITY.md`](SECURITY.md) for the vulnerability disclosure process. No SW
 
 OpenDQI is not a Trade Repository, ARM, reporting gateway, or regulatory certification tool. It does not submit reports. It provides local data quality analysis and validation support.
 
+**Specifically for the v0.15 Data Quality Pack**: the DQIs (`DQI_VAL_MISSING`, `DQI_REJ_RATE`, etc.) are **internal** data quality **indicators**, not regulatory verdicts. A `red` status is an internal alert asking the firm to investigate — not a declaration of non-compliance. The aggregation rates and the thresholds that drive them are firm-configurable. See [`docs/data-quality-pack.md`](docs/data-quality-pack.md#disclaimer--what-a-dqi-is-not) for the full vocabulary discipline.
+
 Users remain responsible for their regulatory reporting obligations and should validate outputs against applicable rules, internal controls, and professional advice.
 
 ## License

@@ -103,3 +103,25 @@ before any graphical layer is added.
   engine for the firm's own internal controls.
 - **Not a cloud service.** Local-first by default; no network calls,
   no telemetry, no managed backend.
+
+### What a DQI is — and what it is NOT (v0.15+)
+
+The v0.15 Data Quality Pack adds 10 aggregated indicators
+above the 216 granular checks. Each ships with a `status`
+(`green` / `amber` / `red` / `not_applicable`). The
+vocabulary discipline matters :
+
+- **A DQI is an internal data quality indicator** — a
+  numerator / denominator / rate triplet bucketed against a
+  firm-configurable amber/red threshold.
+- **A DQI is NOT a validation rule.** Validation rules are
+  the row-level `EMIR.*` / `SFTR.*` checks that flag
+  individual defects ; a DQI rolls them up.
+- **A DQI is NOT a verdict of non-conformity.** A `red`
+  status is an internal alert, not a regulatory declaration.
+- **OpenDQI computes internal data quality indicators. It
+  does not certify regulatory compliance.**
+
+See [`data-quality-pack.md`](data-quality-pack.md#disclaimer--what-a-dqi-is-not) for the full disclaimer that we
+recommend printing on any executive report cover page that
+reuses the DQI pack output.
