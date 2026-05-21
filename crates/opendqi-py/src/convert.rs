@@ -29,7 +29,9 @@ use arrow::array::{
 use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use rust_decimal::Decimal;
 
-use opendqi_core::{EmirRecord, SftrRecord};
+use opendqi_core::{
+    EmirRecord, FeedbackRecord, FeedbackType, MarginStateRecord, Regime, SftrRecord, TrStateRecord,
+};
 
 /// `canonical_field_name → user_column_name` mapping (same direction
 /// as the CSV `mapping.fields` in `csv_in.rs:35-45`).
@@ -260,6 +262,138 @@ pub fn batch_to_sftr_records(batch: &RecordBatch, mapping: &Mapping) -> Result<V
             collateral_isin: pick_str(batch, mapping, "collateral_isin", row),
             security_identifier: pick_str(batch, mapping, "security_identifier", row),
             raw_fields: Default::default(),
+        });
+    }
+    Ok(out)
+}
+
+/// Project an Arrow `RecordBatch` into `Vec<TrStateRecord>` for
+/// the v0.15 Data Quality Pack Arrow inputs. Mirrors
+/// [`batch_to_emir_records`] for the TSR (`auth.107`) layer —
+/// minimal but correct field set (enough for the DQI computers
+/// + the default_tr_state_checks granular checks ; specialised
+/// fields like raw_fields stay empty).
+pub fn batch_to_tr_state_records(
+    batch: &RecordBatch,
+    mapping: &Mapping,
+) -> Result<Vec<TrStateRecord>> {
+    validate_mapping_columns(batch, mapping)?;
+    let n = batch.num_rows();
+    let mut out = Vec::with_capacity(n);
+    for row in 0..n {
+        out.push(TrStateRecord {
+            source_file: None,
+            record_id: pick_str(batch, mapping, "record_id", row),
+            regime: Regime::Emir,
+            state_as_of: pick_timestamp(batch, mapping, "state_as_of", row),
+            uti: pick_str(batch, mapping, "uti", row),
+            reporting_counterparty: pick_str(batch, mapping, "reporting_counterparty", row),
+            other_counterparty: pick_str(batch, mapping, "other_counterparty", row),
+            status: pick_str(batch, mapping, "status", row),
+            notional_amount: pick_decimal(batch, mapping, "notional_amount", row),
+            notional_currency: pick_str(batch, mapping, "notional_currency", row),
+            valuation_amount: pick_decimal(batch, mapping, "valuation_amount", row),
+            valuation_currency: pick_str(batch, mapping, "valuation_currency", row),
+            valuation_timestamp: pick_timestamp(batch, mapping, "valuation_timestamp", row),
+            effective_date: pick_date(batch, mapping, "effective_date", row),
+            maturity_date: pick_date(batch, mapping, "maturity_date", row),
+            termination_date: pick_date(batch, mapping, "termination_date", row),
+            collateral_portfolio_code: pick_str(batch, mapping, "collateral_portfolio_code", row),
+            raw_fields: Default::default(),
+        });
+    }
+    Ok(out)
+}
+
+/// Project an Arrow `RecordBatch` into `Vec<MarginStateRecord>`
+/// for the v0.15 DQI pack — covers the MSR (`auth.109`) layer.
+pub fn batch_to_margin_state_records(
+    batch: &RecordBatch,
+    mapping: &Mapping,
+) -> Result<Vec<MarginStateRecord>> {
+    validate_mapping_columns(batch, mapping)?;
+    let n = batch.num_rows();
+    let mut out = Vec::with_capacity(n);
+    for row in 0..n {
+        out.push(MarginStateRecord {
+            source_file: None,
+            record_id: pick_str(batch, mapping, "record_id", row),
+            regime: Regime::Emir,
+            uti: pick_str(batch, mapping, "uti", row),
+            counterparty_1: pick_str(batch, mapping, "counterparty_1", row),
+            counterparty_2: pick_str(batch, mapping, "counterparty_2", row),
+            collateral_portfolio_code: pick_str(batch, mapping, "collateral_portfolio_code", row),
+            initial_margin_posted_current: pick_decimal(
+                batch,
+                mapping,
+                "initial_margin_posted_current",
+                row,
+            ),
+            initial_margin_collected_current: pick_decimal(
+                batch,
+                mapping,
+                "initial_margin_collected_current",
+                row,
+            ),
+            variation_margin_posted_current: pick_decimal(
+                batch,
+                mapping,
+                "variation_margin_posted_current",
+                row,
+            ),
+            variation_margin_collected_current: pick_decimal(
+                batch,
+                mapping,
+                "variation_margin_collected_current",
+                row,
+            ),
+            margin_currency: pick_str(batch, mapping, "margin_currency", row),
+            collateral_market_value: pick_decimal(batch, mapping, "collateral_market_value", row),
+            haircut_applied: pick_decimal(batch, mapping, "haircut_applied", row),
+            collateralization_category: pick_str(batch, mapping, "collateralization_category", row),
+            state_as_of: pick_timestamp(batch, mapping, "state_as_of", row),
+            raw_fields: Default::default(),
+        });
+    }
+    Ok(out)
+}
+
+/// Project an Arrow `RecordBatch` into `Vec<FeedbackRecord>` for
+/// the v0.15 DQI pack — covers the feedback (`auth.092`) layer.
+///
+/// `feedback_type` is a String column on the Arrow side. Values
+/// MUST be one of `rejected` / `missing` / `inaccurate` /
+/// `reconciliation_break` (case-insensitive). Unknown values fall
+/// back to `Rejected` (the default) but emit no error — DQI
+/// counters tolerate this.
+pub fn batch_to_feedback_records(
+    batch: &RecordBatch,
+    mapping: &Mapping,
+) -> Result<Vec<FeedbackRecord>> {
+    validate_mapping_columns(batch, mapping)?;
+    let n = batch.num_rows();
+    let mut out = Vec::with_capacity(n);
+    for row in 0..n {
+        let feedback_type = pick_str(batch, mapping, "feedback_type", row)
+            .map(|s| match s.trim().to_ascii_lowercase().as_str() {
+                "rejected" => FeedbackType::Rejected,
+                "missing" => FeedbackType::Missing,
+                "inaccurate" => FeedbackType::Inaccurate,
+                "reconciliation_break" => FeedbackType::ReconciliationBreak,
+                _ => FeedbackType::Rejected,
+            })
+            .unwrap_or_default();
+        out.push(FeedbackRecord {
+            source_file: None,
+            record_id: pick_str(batch, mapping, "record_id", row),
+            regime: Regime::Emir,
+            feedback_type,
+            uti: pick_str(batch, mapping, "uti", row),
+            reason_code: pick_str(batch, mapping, "reason_code", row),
+            validation_rule_codes: Vec::new(),
+            reason_description: pick_str(batch, mapping, "reason_description", row),
+            reported_field: pick_str(batch, mapping, "reported_field", row),
+            feedback_timestamp: pick_timestamp(batch, mapping, "feedback_timestamp", row),
         });
     }
     Ok(out)

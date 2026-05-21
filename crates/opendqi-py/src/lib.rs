@@ -11,6 +11,15 @@
 //! `Cargo.toml`).
 
 #![warn(missing_docs)]
+// PyO3 functions returning `PyResult<T>` and `?` chains trip
+// these clippy 1.95 lints idiomatically — silence at the crate
+// level since the alternative is decorating every pyo3-bound
+// function. Doc continuation widths in this crate's module
+// docstrings are also stylistic (aligned at description
+// columns) — keep as-is rather than reflowing.
+#![allow(clippy::useless_conversion)]
+#![allow(clippy::doc_lazy_continuation)]
+#![allow(clippy::doc_overindented_list_items)]
 
 use pyo3::prelude::*;
 

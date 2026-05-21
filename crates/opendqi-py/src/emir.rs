@@ -503,20 +503,30 @@ pub fn book_reconcile<'py>(
 // =================================================================
 
 /// `opendqi.emir.data_quality_pack(*, tsr=None, tar=None, msr=None,
-/// mar=None, feedback=None, as_of=None) -> PyDqiPackResult`.
+/// mar=None, feedback=None, mappings=None, as_of=None) ->
+/// PyDqiPackResult`.
 ///
 /// EMIR Data Quality Pack (v0.15): aggregates the 5 EMIR TR layers
 /// into 10 regulator-style indicators (numerator / denominator /
 /// rate / threshold / status) + ≤ 20 evidence rows per indicator,
 /// AND co-produces the granular issue stream from the existing
-/// 216-check registries. All paths are optional ; at least one
+/// 216-check registries. All inputs are optional ; at least one
 /// must be provided.
 ///
-/// Inputs are file paths only in v0.15 (mirrors `tr_audit` /
-/// `collateral_audit`). Arrow Table / RecordBatch dual input is
-/// scheduled for a follow-up release. Custom thresholds via
-/// programmatic YAML config are also deferred — users needing
-/// overrides use the CLI's `--config`.
+/// **Dual input** (v0.15.0): each of `tsr` / `tar` / `msr` /
+/// `feedback` accepts either:
+/// - a `str` file path (XML), OR
+/// - a `pyarrow.Table` (or `pyarrow.RecordBatch`) — requires a
+///   matching entry in `mappings` (per-layer dict
+///   `{canonical_field: arrow_column_name}`).
+///
+/// `mar` is **paths-only** in v0.15 (no Arrow input). Passing a
+/// pyarrow.Table for `mar` raises ValueError. Granular MAR
+/// checks still run when an XML path is provided. MAR Arrow
+/// input = follow-up.
+///
+/// Custom thresholds via programmatic YAML config are deferred —
+/// users needing overrides use the CLI's `--config`.
 ///
 /// `as_of` defaults to today (UTC). Format: `YYYY-MM-DD`.
 /// Pinning it keeps the stale-valuation cutoff stable across
@@ -529,14 +539,15 @@ pub fn book_reconcile<'py>(
 /// `DQI_REC_STATUS_UNPAIRED` indicator computes. Otherwise it
 /// reports `status: not_applicable` with no rate.
 #[pyfunction]
-#[pyo3(signature = (*, tsr=None, tar=None, msr=None, mar=None, feedback=None, as_of=None))]
+#[pyo3(signature = (*, tsr=None, tar=None, msr=None, mar=None, feedback=None, mappings=None, as_of=None))]
 #[allow(clippy::too_many_arguments)]
-pub fn data_quality_pack(
-    tsr: Option<&str>,
-    tar: Option<&str>,
-    msr: Option<&str>,
-    mar: Option<&str>,
-    feedback: Option<&str>,
+pub fn data_quality_pack<'py>(
+    tsr: Option<&Bound<'py, PyAny>>,
+    tar: Option<&Bound<'py, PyAny>>,
+    msr: Option<&Bound<'py, PyAny>>,
+    mar: Option<&Bound<'py, PyAny>>,
+    feedback: Option<&Bound<'py, PyAny>>,
+    mappings: Option<HashMap<String, HashMap<String, String>>>,
     as_of: Option<&str>,
 ) -> PyResult<PyDqiPackResult> {
     if tsr.is_none() && tar.is_none() && msr.is_none() && mar.is_none() && feedback.is_none() {
@@ -557,37 +568,35 @@ pub fn data_quality_pack(
         None => Utc::now().date_naive(),
     };
 
-    // Load each provided layer.
-    let tsr_records = match tsr {
-        Some(p) => opendqi_xml::read_emir_tr_state_xml(Path::new(p))
-            .map_err(to_py_err)?
-            .records,
-        None => Vec::new(),
-    };
-    let tar_records = match tar {
-        Some(p) => opendqi_xml::read_emir_xml(Path::new(p))
-            .map_err(to_py_err)?
-            .records,
-        None => Vec::new(),
-    };
-    let msr_records = match msr {
-        Some(p) => opendqi_xml::read_emir_msr_xml(Path::new(p))
-            .map_err(to_py_err)?
-            .records,
-        None => Vec::new(),
-    };
+    // MAR is paths-only in v0.15 — reject Arrow input early with a
+    // clear message rather than letting it silently degrade.
+    if let Some(obj) = mar {
+        if obj.extract::<String>().is_err() {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "data_quality_pack: `mar` accepts a str path only in v0.15 \
+                 (pyarrow.Table for MAR will be added in v0.16). Pass an \
+                 XML path or omit the argument.",
+            ));
+        }
+    }
+
+    let layer_mapping =
+        |layer: &str| -> Option<&HashMap<String, String>> { mappings.as_ref()?.get(layer) };
+
+    // Load each provided layer (dual dispatch: str path vs pyarrow.Table).
+    let tsr_records = load_tsr(tsr, layer_mapping("tsr"))?;
+    let tar_records = load_tar(tar, layer_mapping("tar"))?;
+    let msr_records = load_msr(msr, layer_mapping("msr"))?;
     let mar_records = match mar {
-        Some(p) => opendqi_xml::read_emir_mar_xml(Path::new(p))
-            .map_err(to_py_err)?
-            .records,
+        Some(obj) => {
+            let p: String = obj.extract().expect("validated above");
+            opendqi_xml::read_emir_mar_xml(Path::new(&p))
+                .map_err(to_py_err)?
+                .records
+        }
         None => Vec::new(),
     };
-    let feedback_records = match feedback {
-        Some(p) => opendqi_xml::read_emir_feedback_xml(Path::new(p))
-            .map_err(to_py_err)?
-            .records,
-        None => Vec::new(),
-    };
+    let feedback_records = load_feedback(feedback, layer_mapping("feedback"))?;
 
     // Detect raw_fields presence for the 2 gated indicators
     // (same heuristic as the CLI run_data_quality_pack).
@@ -609,15 +618,11 @@ pub fn data_quality_pack(
     };
 
     let inputs = EmirDqiInputs {
-        tsr: if tsr.is_some() { Some(&tsr_records) } else { None },
-        tar: if tar.is_some() { Some(&tar_records) } else { None },
-        msr: if msr.is_some() { Some(&msr_records) } else { None },
-        mar: if mar.is_some() { Some(&mar_records) } else { None },
-        feedback: if feedback.is_some() {
-            Some(&feedback_records)
-        } else {
-            None
-        },
+        tsr: tsr.map(|_| tsr_records.as_slice()),
+        tar: tar.map(|_| tar_records.as_slice()),
+        msr: msr.map(|_| msr_records.as_slice()),
+        mar: mar.map(|_| mar_records.as_slice()),
+        feedback: feedback.map(|_| feedback_records.as_slice()),
     };
 
     let pack = compute_emir_dqi_pack(inputs, mapping_presence, &thresholds, as_of_date);
@@ -635,6 +640,99 @@ pub fn data_quality_pack(
         evidence_batch,
         issues_batch,
     ))
+}
+
+// =================================================================
+// Dual-input helpers for `data_quality_pack` — str path or pyarrow.Table
+// =================================================================
+
+/// Common error for "Arrow input but no mapping for this layer".
+fn missing_mapping_err(layer: &str) -> PyErr {
+    pyo3::exceptions::PyValueError::new_err(format!(
+        "data_quality_pack: a pyarrow.Table was passed for `{layer}` but \
+         `mappings={{...}}` does not contain an entry for `{layer}`. \
+         Provide e.g. mappings={{\"{layer}\": {{\"uti\": \"YourUtiCol\", ...}}}}"
+    ))
+}
+
+fn load_tsr<'py>(
+    obj: Option<&Bound<'py, PyAny>>,
+    mapping: Option<&HashMap<String, String>>,
+) -> PyResult<Vec<opendqi_core::TrStateRecord>> {
+    match obj {
+        None => Ok(Vec::new()),
+        Some(o) => {
+            if let Ok(path) = o.extract::<String>() {
+                Ok(opendqi_xml::read_emir_tr_state_xml(Path::new(&path))
+                    .map_err(to_py_err)?
+                    .records)
+            } else {
+                let m = mapping.ok_or_else(|| missing_mapping_err("tsr"))?;
+                let batch = pyarrow_to_record_batch(o)?;
+                crate::convert::batch_to_tr_state_records(&batch, m).map_err(to_py_err)
+            }
+        }
+    }
+}
+
+fn load_tar<'py>(
+    obj: Option<&Bound<'py, PyAny>>,
+    mapping: Option<&HashMap<String, String>>,
+) -> PyResult<Vec<EmirRecord>> {
+    match obj {
+        None => Ok(Vec::new()),
+        Some(o) => {
+            if let Ok(path) = o.extract::<String>() {
+                Ok(opendqi_xml::read_emir_xml(Path::new(&path))
+                    .map_err(to_py_err)?
+                    .records)
+            } else {
+                let m = mapping.ok_or_else(|| missing_mapping_err("tar"))?;
+                let batch = pyarrow_to_record_batch(o)?;
+                batch_to_emir_records(&batch, m).map_err(to_py_err)
+            }
+        }
+    }
+}
+
+fn load_msr<'py>(
+    obj: Option<&Bound<'py, PyAny>>,
+    mapping: Option<&HashMap<String, String>>,
+) -> PyResult<Vec<opendqi_core::MarginStateRecord>> {
+    match obj {
+        None => Ok(Vec::new()),
+        Some(o) => {
+            if let Ok(path) = o.extract::<String>() {
+                Ok(opendqi_xml::read_emir_msr_xml(Path::new(&path))
+                    .map_err(to_py_err)?
+                    .records)
+            } else {
+                let m = mapping.ok_or_else(|| missing_mapping_err("msr"))?;
+                let batch = pyarrow_to_record_batch(o)?;
+                crate::convert::batch_to_margin_state_records(&batch, m).map_err(to_py_err)
+            }
+        }
+    }
+}
+
+fn load_feedback<'py>(
+    obj: Option<&Bound<'py, PyAny>>,
+    mapping: Option<&HashMap<String, String>>,
+) -> PyResult<Vec<opendqi_core::FeedbackRecord>> {
+    match obj {
+        None => Ok(Vec::new()),
+        Some(o) => {
+            if let Ok(path) = o.extract::<String>() {
+                Ok(opendqi_xml::read_emir_feedback_xml(Path::new(&path))
+                    .map_err(to_py_err)?
+                    .records)
+            } else {
+                let m = mapping.ok_or_else(|| missing_mapping_err("feedback"))?;
+                let batch = pyarrow_to_record_batch(o)?;
+                crate::convert::batch_to_feedback_records(&batch, m).map_err(to_py_err)
+            }
+        }
+    }
 }
 
 // =================================================================

@@ -271,6 +271,105 @@ def test_evidence_arrow_columns_match_csv_golden() -> None:
     assert result.evidence.column_names == csv_golden.column_names
 
 
+# -------------------------------------------------------------------
+# v0.15.0 — Arrow input dispatch (str path | pyarrow.Table)
+# -------------------------------------------------------------------
+
+
+def _arrow_tsr_with_3_missing_valuations():
+    import pyarrow as pa
+    import pyarrow.compute as pc
+
+    t = pa.table(
+        {
+            "TradeUti": ["U1", "U2", "U3"],
+            "Status": ["OUTSTANDING", "OUTSTANDING", "OUTSTANDING"],
+            "Val": [None, None, None],
+        }
+    )
+    # Cast the (otherwise null) `Val` column to the canonical Decimal128(38,10)
+    # type the converter expects.
+    return t.set_column(
+        2, "Val", pc.cast(t.column("Val"), pa.decimal128(38, 10))
+    )
+
+
+def test_arrow_input_tsr_only_missing_mapping_raises() -> None:
+    """Passing a pyarrow.Table for a layer without a mapping in
+    `mappings={...}` is a user error — clear ValueError."""
+    import opendqi
+
+    tsr = _arrow_tsr_with_3_missing_valuations()
+    with pytest.raises(ValueError, match="mappings"):
+        opendqi.emir.data_quality_pack(tsr=tsr, as_of="2026-05-21")
+
+
+def test_arrow_input_tsr_only_computes_dqi_val_missing() -> None:
+    """Arrow input dual-dispatch works end-to-end for TSR : a
+    3-record Table with all missing valuations rolls up to
+    DQI_VAL_MISSING numerator=3, denominator=3, rate=1.0, red."""
+    import opendqi
+
+    tsr = _arrow_tsr_with_3_missing_valuations()
+    result = opendqi.emir.data_quality_pack(
+        tsr=tsr,
+        mappings={
+            "tsr": {
+                "uti": "TradeUti",
+                "status": "Status",
+                "valuation_amount": "Val",
+            }
+        },
+        as_of="2026-05-21",
+    )
+    df = result.indicators.to_pandas()
+    row = df[df["indicator_id"] == "DQI_VAL_MISSING"].iloc[0]
+    assert row["numerator"] == 3
+    assert row["denominator"] == 3
+    assert row["status"] == "red"
+
+
+def test_arrow_input_mar_raises_explicit_error() -> None:
+    """MAR is paths-only in v0.15 ; passing a pyarrow.Table for
+    MAR raises a CLEAR ValueError pointing at the limitation."""
+    import opendqi
+    import pyarrow as pa
+
+    mar_table = pa.table({"x": [1, 2]})
+    with pytest.raises(ValueError, match="v0.15"):
+        opendqi.emir.data_quality_pack(mar=mar_table, as_of="2026-05-21")
+
+
+def test_arrow_input_mixed_with_paths() -> None:
+    """Mix-and-match: TSR as pyarrow.Table + Feedback as XML
+    path. Both layers contribute to the pack output."""
+    if not _all_fixtures_present():
+        pytest.skip("quickstart fixtures missing")
+    import opendqi
+
+    tsr = _arrow_tsr_with_3_missing_valuations()
+    result = opendqi.emir.data_quality_pack(
+        tsr=tsr,
+        feedback=str(FBK_FIXTURE),
+        mappings={
+            "tsr": {
+                "uti": "TradeUti",
+                "status": "Status",
+                "valuation_amount": "Val",
+            }
+        },
+        as_of="2026-05-21",
+    )
+    df = result.indicators.to_pandas()
+    # TSR-side
+    val_missing = df[df["indicator_id"] == "DQI_VAL_MISSING"].iloc[0]
+    assert val_missing["denominator"] == 3
+    # Feedback-side (auth.092 has 2 rejected records in quickstart fixture)
+    rej = df[df["indicator_id"] == "DQI_REJ_RATE"].iloc[0]
+    assert rej["status"] == "red"
+    assert rej["numerator"] == 2
+
+
 def test_report_writes_5_artefacts(tmp_path: Path) -> None:
     """`.report(out_dir)` mirrors the CLI subcommand outputs."""
     if not _all_fixtures_present():
