@@ -15,13 +15,23 @@
 pub(crate) const EVIDENCE_TOP_N: usize = 20;
 
 pub mod col_all_zero;
+pub mod col_missing_state;
 pub mod col_stale_state;
+pub mod conf_missing;
+pub mod rec_status_unpaired;
+pub mod rej_rate;
+pub mod rej_repeat_uti;
 pub mod tim_reporting_late;
 pub mod val_missing;
 pub mod val_stale;
 
 pub use col_all_zero::compute_dqi_col_all_zero;
+pub use col_missing_state::compute_dqi_col_missing_state;
 pub use col_stale_state::compute_dqi_col_stale_state;
+pub use conf_missing::compute_dqi_conf_missing;
+pub use rec_status_unpaired::compute_dqi_rec_status_unpaired;
+pub use rej_rate::compute_dqi_rej_rate;
+pub use rej_repeat_uti::compute_dqi_rej_repeat_uti;
 pub use tim_reporting_late::compute_dqi_tim_reporting_late;
 pub use val_missing::compute_dqi_val_missing;
 pub use val_stale::compute_dqi_val_stale;
