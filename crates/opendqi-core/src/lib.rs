@@ -12,6 +12,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod business_days;
 pub mod config;
 pub mod dq;
 pub mod model;
