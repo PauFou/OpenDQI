@@ -27,7 +27,17 @@ pip install --upgrade pip maturin pytest pyarrow
 PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 maturin develop --release
 ```
 
-## The three patterns
+## Start here
+
+```bash
+# THE 5-line "does it work?" check — 3 lines of opendqi, 2 of print.
+python examples/python/quickstart.py
+```
+
+If that prints a summary dict + a 5-row pandas head, you're set.
+Then dig into the 3 progressively-more-realistic patterns below.
+
+## The three deeper patterns
 
 ```bash
 # 1. Scan a normalized Parquet file
@@ -44,6 +54,7 @@ python examples/python/03_custom_mapping.py
 
 | Script | What it shows | Best for |
 |---|---|---|
+| **`quickstart.py`** | The 5-line minimal `parse_xml → scan_table → print` chain | Your "first run" 30-second smoke test |
 | **`01_scan_parquet.py`** | Single-call entry point on an existing canonical Parquet | Pipelines that already materialise normalized data |
 | **`02_parse_xml_then_scan.py`** | `parse_xml → scan_table` chain, no disk intermediate | One-off interactive audits + in-memory data platforms |
 | **`03_custom_mapping.py`** | `mapping={canonical: user_col}` for renamed columns | Real-world data warehouses where columns aren't named per ESMA convention |
