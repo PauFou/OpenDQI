@@ -19,8 +19,8 @@ pub mod scoring;
 
 pub use config::Thresholds;
 pub use dq::dqi::{
-    compute_status, default_dqi_thresholds, DqiEvidence, DqiIndicator, DqiPackResult, DqiStatus,
-    DqiThresholdPair, MappingPresence,
+    compute_emir_dqi_pack, compute_status, default_dqi_thresholds, DqiEvidence, DqiIndicator,
+    DqiPackResult, DqiStatus, DqiThresholdPair, EmirDqiInputs, MappingPresence,
 };
 pub use dq::{
     default_checks, default_sftr_checks, stream_checks_into, stream_emir_checks_into, Check,

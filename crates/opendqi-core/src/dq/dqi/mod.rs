@@ -10,6 +10,7 @@
 //! (completeness, timeliness, accuracy, consistency). SFTR
 //! mirror is scheduled for v0.16.
 
+mod emir_pack;
 mod model;
 mod thresholds;
 
@@ -21,5 +22,6 @@ pub use compute::{
     compute_dqi_rej_repeat_uti, compute_dqi_tim_reporting_late, compute_dqi_val_missing,
     compute_dqi_val_stale,
 };
+pub use emir_pack::{compute_emir_dqi_pack, EmirDqiInputs};
 pub use model::{DqiEvidence, DqiIndicator, DqiPackResult, DqiStatus, MappingPresence};
 pub use thresholds::{compute_status, default_dqi_thresholds, DqiThresholdPair};
