@@ -71,6 +71,11 @@
   table.ev { margin-top: 0.35rem; width: auto; border: 1px solid #e5e7eb; border-radius: 0.35rem; }
   table.ev th, table.ev td { padding: 0.3rem 0.55rem; font-size: 0.78rem; border-bottom: 1px solid #f1f5f9; }
   table.ev th { background: #f8fafc; }
+  .dqi-status { display: inline-block; padding: 0.1rem 0.55rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+  .dqi-status.green { background: #dcfce7; color: var(--good); }
+  .dqi-status.amber { background: #fef3c7; color: var(--high); }
+  .dqi-status.red { background: #fee2e2; color: var(--critical); }
+  .dqi-status.not_applicable { background: #f1f5f9; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -134,6 +139,42 @@
         {% endfor %}
       </tbody>
     </table>
+  {% endif %}
+
+  {% if indicators and indicators|length > 0 %}
+  <h2>Data Quality Pack</h2>
+  <p class="muted" style="font-size: 0.85rem;">
+    Aggregated supervisory-style indicators (numerator / denominator / rate).
+    Status threshold: <span class="dqi-status green">green</span>
+    <span class="dqi-status amber">amber</span>
+    <span class="dqi-status red">red</span>
+    <span class="dqi-status not_applicable">not&nbsp;applicable</span>
+    when the input layer is absent or a gated field is unmapped.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Indicator</th><th>Dimension</th><th>Scope</th>
+        <th>Num</th><th>Denom</th><th>Rate</th>
+        <th>Amber</th><th>Red</th><th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for ind in indicators %}
+      <tr>
+        <td><code>{{ ind.indicator_id }}</code><br><span class="muted" style="font-size: 0.75rem;">{{ ind.description }}</span></td>
+        <td>{{ ind.dimension }}</td>
+        <td>{{ ind.table_scope }}</td>
+        <td>{{ ind.numerator }}</td>
+        <td>{{ ind.denominator }}</td>
+        <td>{{ ind.rate_pct }}</td>
+        <td class="muted">{{ ind.threshold_amber_pct }}</td>
+        <td class="muted">{{ ind.threshold_red_pct }}</td>
+        <td><span class="dqi-status {{ ind.status }}">{{ ind.status }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
   {% endif %}
 
   <h2>Top issues</h2>

@@ -4,7 +4,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use minijinja::{context, Environment};
-use opendqi_core::{DqIssue, EvidenceItem, ScanSummary, Severity};
+use opendqi_core::{DqIssue, DqiIndicator, EvidenceItem, ScanSummary, Severity};
 use serde::Serialize;
 
 const TEMPLATE_SRC: &str = include_str!("templates/report.html.j2");
@@ -38,12 +38,73 @@ impl From<&DqIssue> for IssueView {
     }
 }
 
+/// Indicator view for the optional "Data Quality Pack" HTML
+/// section (v0.15 +). `rate_pct` is a pre-formatted percentage
+/// string so the template stays free of float arithmetic.
+#[derive(Serialize)]
+struct IndicatorView {
+    indicator_id: String,
+    dimension: String,
+    table_scope: String,
+    numerator: u64,
+    denominator: u64,
+    rate_pct: String,
+    threshold_amber_pct: String,
+    threshold_red_pct: String,
+    status: String,
+    description: String,
+}
+
+impl From<&DqiIndicator> for IndicatorView {
+    fn from(i: &DqiIndicator) -> Self {
+        let pct = |v: Option<f64>| match v {
+            Some(r) => format!("{:.2}%", r * 100.0),
+            None => String::new(),
+        };
+        Self {
+            indicator_id: i.indicator_id.clone(),
+            dimension: i.dimension.to_string(),
+            table_scope: i.table_scope.clone(),
+            numerator: i.numerator,
+            denominator: i.denominator,
+            rate_pct: pct(i.rate),
+            threshold_amber_pct: pct(i.threshold_amber),
+            threshold_red_pct: pct(i.threshold_red),
+            status: i.status.to_string(),
+            description: i.description.clone(),
+        }
+    }
+}
+
 /// Write the HTML report.
+///
+/// Backward-compatible wrapper around
+/// [`write_report_html_with_dqi`] that passes `None` for the
+/// Data Quality Pack indicators (the "Data Quality Pack"
+/// section is then invisible — byte-identical output for all
+/// callers that haven't opted into the pack).
 pub fn write_report_html(
     path: &Path,
     summary: &ScanSummary,
     issues: &[DqIssue],
     sources: &[String],
+) -> Result<()> {
+    write_report_html_with_dqi(path, summary, issues, sources, None)
+}
+
+/// Write the HTML report with the optional "Data Quality Pack"
+/// section (v0.15).
+///
+/// When `indicators` is `None` or empty, the section is
+/// omitted entirely so existing reports (`emir scan`, `tr-audit`,
+/// `collateral-audit`, …) render byte-identically to the
+/// pre-v0.15 template output.
+pub fn write_report_html_with_dqi(
+    path: &Path,
+    summary: &ScanSummary,
+    issues: &[DqIssue],
+    sources: &[String],
+    indicators: Option<&[DqiIndicator]>,
 ) -> Result<()> {
     let mut env = Environment::new();
     env.add_template("report", TEMPLATE_SRC)
@@ -71,6 +132,12 @@ pub fn write_report_html(
         .map(|(k, v)| (k.to_string(), *v))
         .collect();
 
+    let indicator_views: Vec<IndicatorView> = indicators
+        .unwrap_or(&[])
+        .iter()
+        .map(IndicatorView::from)
+        .collect();
+
     let rendered = tmpl
         .render(context! {
             summary => summary,
@@ -78,6 +145,7 @@ pub fn write_report_html(
             by_severity => by_severity,
             by_dimension => by_dimension,
             sources => sources,
+            indicators => indicator_views,
             generated_at => summary.finished_at.to_rfc3339(),
         })
         .context("rendering report template")?;
@@ -231,6 +299,64 @@ mod tests {
             "missing details block"
         );
         assert!(html.contains("U1-NEW"), "missing evidence `after` value");
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn dqi_section_omitted_when_indicators_none() {
+        // The default write_report_html signature passes None → the
+        // "Data Quality Pack" <h2> must NOT appear (existing
+        // reports stay visually identical).
+        let dir = std::env::temp_dir().join(format!("opendqi-dqinone-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("report.html");
+        write_report_html(&path, &summary(), &[], &["x".into()]).unwrap();
+        let html = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            !html.contains("Data Quality Pack"),
+            "DQI section should be absent for non-DQI callers"
+        );
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn dqi_section_rendered_when_indicators_supplied() {
+        use opendqi_core::{DqDimension, DqiIndicator, DqiStatus, Regime};
+        let ind = DqiIndicator {
+            indicator_id: "DQI_VAL_MISSING".into(),
+            regime: Regime::Emir,
+            dimension: DqDimension::Completeness,
+            table_scope: "TSR".into(),
+            numerator: 5,
+            denominator: 100,
+            rate: Some(0.05),
+            threshold_amber: Some(0.01),
+            threshold_red: Some(0.05),
+            status: DqiStatus::Amber,
+            description: "test indicator".into(),
+        };
+        let dir = std::env::temp_dir().join(format!("opendqi-dqiyes-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("report.html");
+        write_report_html_with_dqi(
+            &path,
+            &summary(),
+            &[],
+            &["x".into()],
+            Some(std::slice::from_ref(&ind)),
+        )
+        .unwrap();
+        let html = std::fs::read_to_string(&path).unwrap();
+        assert!(html.contains("Data Quality Pack"), "DQI section missing");
+        assert!(
+            html.contains("DQI_VAL_MISSING"),
+            "indicator_id not rendered"
+        );
+        assert!(html.contains("5.00%"), "rate not rendered as percent");
+        assert!(
+            html.contains(r#"<span class="dqi-status amber">amber</span>"#),
+            "amber status pill not rendered"
+        );
         std::fs::remove_file(&path).ok();
     }
 

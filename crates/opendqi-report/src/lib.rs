@@ -12,5 +12,5 @@ pub mod json_out;
 pub use csv_out::{write_issues_csv, write_issues_csv_from_iter};
 pub use dqi_csv::{write_evidence_csv, write_indicators_csv};
 pub use email::{send_report_email, send_smtp_test, SmtpConfig};
-pub use html_out::{write_report_html, TopIssues};
+pub use html_out::{write_report_html, write_report_html_with_dqi, TopIssues};
 pub use json_out::write_summary_json;

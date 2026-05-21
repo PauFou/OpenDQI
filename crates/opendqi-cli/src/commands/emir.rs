@@ -29,7 +29,7 @@ use opendqi_io::{
 };
 use opendqi_report::{
     write_evidence_csv, write_indicators_csv, write_issues_csv, write_issues_csv_from_iter,
-    write_report_html, write_summary_json, TopIssues,
+    write_report_html, write_report_html_with_dqi, write_summary_json, TopIssues,
 };
 use opendqi_xml::{
     check_wellformedness, read_emir_feedback_xml, read_emir_mar_xml, read_emir_msr_xml,
@@ -2623,16 +2623,12 @@ fn run_data_quality_pack(
     write_indicators_csv(&out.join("indicators.csv"), &pack.indicators)?;
     write_evidence_csv(&out.join("evidence.csv"), &pack.evidence)?;
 
-    let mut top = TopIssues::with_capacity(20);
-    for issue in &pack.issues {
-        top.offer(issue);
-    }
-    let top = top.into_sorted();
-    write_report_html(
+    write_report_html_with_dqi(
         &out.join("report.html"),
         &pack.issues_summary,
-        &top,
+        &pack.issues,
         &sources,
+        Some(&pack.indicators),
     )?;
 
     if let Some(path) = email_config_path {
