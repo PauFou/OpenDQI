@@ -3,9 +3,9 @@
 [![CI](https://github.com/PauFou/OpenDQI/actions/workflows/ci.yml/badge.svg)](https://github.com/PauFou/OpenDQI/actions/workflows/ci.yml)
 [![Security audit](https://github.com/PauFou/OpenDQI/actions/workflows/deny.yml/badge.svg)](https://github.com/PauFou/OpenDQI/actions/workflows/deny.yml)
 
-**OpenDQI turns EMIR/SFTR Trade Repository activity, state, and rejection files into actionable data quality intelligence.**
+**Turn EMIR/SFTR Trade Repository files into deterministic data quality reports and Arrow tables — locally, reproducibly, from your existing data stack.**
 
-A local-first Rust engine that ingests both the reports a firm submits to its Trade Repository and the files the TR sends back, then produces reproducible HTML, JSON, CSV, and Parquet outputs. No network calls. No cloud dependency. Embeds in your own pipeline.
+A local-first Rust engine that ingests both the reports a firm submits to its Trade Repository and the files the TR sends back, then produces reproducible HTML, JSON, CSV, Parquet, and `pyarrow.Table` outputs. Use it from your terminal (CLI), your browser (local web UI on http://127.0.0.1:7878), or your Python / PyArrow notebook. No network calls. No cloud dependency. Embeds in your own pipeline.
 
 ## The three things OpenDQI does
 
@@ -50,28 +50,39 @@ Runs all three workflows above against the synthetic kit at [`examples/quickstar
 
 ## Install
 
-**CLI** :
+Pick the channel that matches how you work — same engine, same 216 checks, same v1.0 Arrow output contract behind each.
 
-```bash
-cargo install --git https://github.com/PauFou/OpenDQI --tag v0.11.0 opendqi-cli
-```
-
-A `cargo-dist`-generated GitHub Release with pre-built binaries (Linux x86_64 + ARM64, macOS x86_64 + ARM64) ships from v0.11.0 — `curl -sSL .../installer.sh | sh` from the [Releases](https://github.com/PauFou/OpenDQI/releases) page.
-
-**Python / Arrow bindings** (v0.12.1+) :
+### Python (recommended for data teams)
 
 ```bash
 pip install opendqi
 ```
 
-```python
-import opendqi
-result = opendqi.emir.scan_parquet("tsr.parquet")
-result.summary       # dict — same shape as summary.json
-result.issues        # pyarrow.Table — v1.0 stable 11-column schema
+### CLI (recommended for ops / one-shot audits)
+
+```bash
+curl -sSL https://github.com/PauFou/OpenDQI/releases/download/v0.12.2/opendqi-cli-installer.sh | sh
 ```
 
-Same engine, same 216 checks, embedded in your Python pipeline. 3 quickstart patterns in [`docs/python.md`](docs/python.md) · runnable scripts in [`examples/python/`](examples/python/) · executable Jupyter notebook in [`examples/python/quickstart.ipynb`](examples/python/quickstart.ipynb) · architecture spec in [`docs/python-roadmap.md`](docs/python-roadmap.md).
+Pre-built binaries for Linux x86_64 + ARM64 and macOS x86_64 + ARM64 from the [GitHub Releases](https://github.com/PauFou/OpenDQI/releases) page.
+
+### Rust source (build from a tag)
+
+```bash
+cargo install --git https://github.com/PauFou/OpenDQI --tag v0.12.2 opendqi-cli
+```
+
+### Then 5 lines that work after either install
+
+```python
+import opendqi
+table = opendqi.emir.parse_xml("auth030.xml")
+result = opendqi.emir.scan_table(table, mapping={c: c for c in table.column_names})
+print(result.summary)   # dict — same shape as summary.json
+print(result.issues)    # pyarrow.Table — v1.0 stable 11-column schema
+```
+
+More on the Python side: minimal copy-paste demo in [`examples/python/quickstart.py`](examples/python/quickstart.py) · 3 progressively-realistic patterns in [`examples/python/`](examples/python/) · executable Jupyter notebook in [`examples/python/quickstart.ipynb`](examples/python/quickstart.ipynb) · full quickstart guide in [`docs/python.md`](docs/python.md) · architecture spec in [`docs/python-roadmap.md`](docs/python-roadmap.md).
 
 ## Coverage at a glance
 
