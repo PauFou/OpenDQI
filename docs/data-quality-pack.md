@@ -328,6 +328,31 @@ Both contracts are pinned by parity tests in
 the on-disk CLI goldens. Any breaking change requires a
 major version bump of the bindings.
 
+## SFTR layer mapping (v0.16+ reference)
+
+SFTR is structured around **3 logical strata** which OpenDQI
+treats as separate layers for DQI purposes, even though they
+are all carried inline within the same auth.* message (unlike
+EMIR which ships a dedicated message per stratum) :
+
+| Stratum | Content | EMIR equivalent | OpenDQI v0.16 DQI prefix |
+|---|---|---|---|
+| **T1** | Counterparty identification (RC / OC / ERR LEIs, nature, sector, …) | Embedded in `auth.107` TSR | Reused by EMIR-mirror DQIs (`DQI_LEI_MISSING_SFTR`) |
+| **T2** | Transaction state — loan value, collateral value, maturity, settlement date, status — both `auth.052` (TAR) and `auth.079` (TSR) | `auth.030` TAR + `auth.107` TSR | `DQI_LOAN_VALUE_*_SFTR`, `DQI_COLLATERAL_VALUE_MISSING_SFTR`, `DQI_TIM_REPORTING_LATE_SFTR` |
+| **T3** | Margin state — IM/VM posted/received, pre/post-haircut. **Logically separate** but **inline** in `auth.079` rather than shipped as a dedicated auth.* message | `auth.108` MAR + `auth.109` MSR | `DQI_T3_MARGIN_MISSING`, `DQI_T3_MARGIN_CONSISTENCY`, `DQI_T3_MARGIN_STALE` |
+
+This means a single `auth.079` SFTR Trade State Report
+parsed by OpenDQI provides BOTH the T2 (transaction state)
+and the T3 (margin state) input layers — they are projected
+into separate logical record sets at the parsing step. The
+SFTR DQI Pack consumes them as if they were two separate
+files (mirror EMIR's TSR + MSR design), but the CLI / Python
+caller only needs to provide the auth.079 input once.
+
+See [`docs/dqi-spark-mapping.md`](dqi-spark-mapping.md) for
+the full EMIR + SFTR DQI catalogue + the methodology used
+to derive each indicator.
+
 ## What v0.15 deliberately does NOT do
 
 - Mirror SFTR (v0.16).
