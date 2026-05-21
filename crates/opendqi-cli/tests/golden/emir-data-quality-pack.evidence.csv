@@ -2,10 +2,10 @@ indicator_id,uti,counterparty,asset_class,source_file,observed_value,explanation
 DQI_REJ_RATE,OPENDQI-FBK-INCF-0002,,,<WS>/examples/quickstart-emir/auth092-feedback.xml,VR-0100,TR rejected this submission
 DQI_REJ_RATE,OPENDQI-FBK-RJCT-0001,,,<WS>/examples/quickstart-emir/auth092-feedback.xml,VR-0001,Notional amount missing
 DQI_VAL_MISSING,OPENDQI-TSR-NOVAL-0003,12345678901234567890,,<WS>/examples/quickstart-emir/auth107-tsr.xml,,valuation_amount is missing or zero on an outstanding trade
-DQI_VAL_STALE,OPENDQI-TSR-CLEAN-0001,12345678901234567890,,<WS>/examples/quickstart-emir/auth107-tsr.xml,2026-05-13T07:00:00+00:00,valuation_timestamp older than 1 day(s) vs as_of 2026-05-21
-DQI_VAL_STALE,OPENDQI-TSR-DUP-0006,12345678901234567890,,<WS>/examples/quickstart-emir/auth107-tsr.xml,2026-05-12T15:00:00+00:00,valuation_timestamp older than 1 day(s) vs as_of 2026-05-21
-DQI_VAL_STALE,OPENDQI-TSR-DUP-0006,12345678901234567890,,<WS>/examples/quickstart-emir/auth107-tsr.xml,2026-05-12T15:00:00+00:00,valuation_timestamp older than 1 day(s) vs as_of 2026-05-21
-DQI_VAL_STALE,OPENDQI-TSR-PASTMAT-0004,12345678901234567890,,<WS>/examples/quickstart-emir/auth107-tsr.xml,2026-05-12T15:00:00+00:00,valuation_timestamp older than 1 day(s) vs as_of 2026-05-21
-DQI_VAL_STALE,OPENDQI-TSR-PLACEMAT-0005,12345678901234567890,,<WS>/examples/quickstart-emir/auth107-tsr.xml,2026-05-12T15:00:00+00:00,valuation_timestamp older than 1 day(s) vs as_of 2026-05-21
-DQI_VAL_STALE,OPENDQI-TSR-STALE-0002,12345678901234567890,,<WS>/examples/quickstart-emir/auth107-tsr.xml,2026-01-01T12:00:00+00:00,valuation_timestamp older than 1 day(s) vs as_of 2026-05-21
-DQI_VAL_STALE,OPENDQI-TSR-VATERM-0007,12345678901234567890,,<WS>/examples/quickstart-emir/auth107-tsr.xml,2026-04-15T12:00:00+00:00,valuation_timestamp older than 1 day(s) vs as_of 2026-05-21
+DQI_VAL_STALE,OPENDQI-TSR-CLEAN-0001,12345678901234567890,,<WS>/examples/quickstart-emir/auth107-tsr.xml,2026-05-13T07:00:00+00:00,valuation_timestamp older than 1 TARGET2 business day(s) vs as_of 2026-05-21
+DQI_VAL_STALE,OPENDQI-TSR-DUP-0006,12345678901234567890,,<WS>/examples/quickstart-emir/auth107-tsr.xml,2026-05-12T15:00:00+00:00,valuation_timestamp older than 1 TARGET2 business day(s) vs as_of 2026-05-21
+DQI_VAL_STALE,OPENDQI-TSR-DUP-0006,12345678901234567890,,<WS>/examples/quickstart-emir/auth107-tsr.xml,2026-05-12T15:00:00+00:00,valuation_timestamp older than 1 TARGET2 business day(s) vs as_of 2026-05-21
+DQI_VAL_STALE,OPENDQI-TSR-PASTMAT-0004,12345678901234567890,,<WS>/examples/quickstart-emir/auth107-tsr.xml,2026-05-12T15:00:00+00:00,valuation_timestamp older than 1 TARGET2 business day(s) vs as_of 2026-05-21
+DQI_VAL_STALE,OPENDQI-TSR-PLACEMAT-0005,12345678901234567890,,<WS>/examples/quickstart-emir/auth107-tsr.xml,2026-05-12T15:00:00+00:00,valuation_timestamp older than 1 TARGET2 business day(s) vs as_of 2026-05-21
+DQI_VAL_STALE,OPENDQI-TSR-STALE-0002,12345678901234567890,,<WS>/examples/quickstart-emir/auth107-tsr.xml,2026-01-01T12:00:00+00:00,valuation_timestamp older than 1 TARGET2 business day(s) vs as_of 2026-05-21
+DQI_VAL_STALE,OPENDQI-TSR-VATERM-0007,12345678901234567890,,<WS>/examples/quickstart-emir/auth107-tsr.xml,2026-04-15T12:00:00+00:00,valuation_timestamp older than 1 TARGET2 business day(s) vs as_of 2026-05-21

@@ -10,11 +10,13 @@
 //! - **Denominator:** MSR records with `state_as_of` set.
 //! - **Numerator:** records older than
 //!   [`crate::config::EmirRmtThresholds::collateral_max_age_days`]
-//!   relative to `as_of`.
+//!   relative to `as_of` (counted in **TARGET2 business days**
+//!   since v0.16, was calendar days in v0.15).
 //! - **Dimension:** timeliness.
 
-use chrono::{DateTime, Duration, NaiveDate, Utc};
+use chrono::NaiveDate;
 
+use crate::business_days::business_day_diff;
 use crate::dq::dqi::compute::{resolve_threshold, EVIDENCE_TOP_N};
 use crate::dq::dqi::{DqiEvidence, DqiIndicator, MappingPresence};
 use crate::model::{DqDimension, MarginStateRecord, Regime};
@@ -23,9 +25,14 @@ use crate::Thresholds;
 
 const INDICATOR_ID: &str = "DQI_COL_STALE_STATE";
 const DESCRIPTION: &str = "MSR records whose state_as_of is older than the configured \
-collateral_max_age_days vs the as_of reference date.";
+collateral_max_age_days (TARGET2 business days since v0.16) vs the as_of reference date.";
 
 /// Compute `DQI_COL_STALE_STATE` on an MSR snapshot.
+///
+/// The age is counted in **TARGET2 business days** : weekends
+/// and TARGET2 bank holidays (see [`crate::business_days`])
+/// are skipped, so a Friday `state_as_of` observed on Monday
+/// is **1 business day old**, not 3 calendar days.
 pub fn compute_dqi_col_stale_state(
     msr: &[MarginStateRecord],
     thresholds: &Thresholds,
@@ -33,16 +40,6 @@ pub fn compute_dqi_col_stale_state(
     _mapping_presence: MappingPresence,
 ) -> (DqiIndicator, Vec<DqiEvidence>) {
     let max_age_days = thresholds.emir_rmt.collateral_max_age_days.max(0);
-    let cutoff: DateTime<Utc> = as_of
-        .and_hms_opt(0, 0, 0)
-        .unwrap_or_else(|| {
-            NaiveDate::from_ymd_opt(1970, 1, 1)
-                .unwrap()
-                .and_hms_opt(0, 0, 0)
-                .unwrap()
-        })
-        .and_utc()
-        - Duration::days(max_age_days);
 
     let mut denominator: u64 = 0;
     let mut numerator: u64 = 0;
@@ -53,7 +50,8 @@ pub fn compute_dqi_col_stale_state(
             continue;
         };
         denominator += 1;
-        if ts >= cutoff {
+        let age_business_days = business_day_diff(ts.date_naive(), as_of);
+        if age_business_days <= max_age_days {
             continue;
         }
         numerator += 1;
@@ -65,7 +63,7 @@ pub fn compute_dqi_col_stale_state(
             source_file: r.source_file.clone(),
             observed_value: Some(ts.to_rfc3339()),
             explanation: format!(
-                "state_as_of older than {} day(s) vs as_of {}",
+                "state_as_of older than {} TARGET2 business day(s) vs as_of {}",
                 max_age_days, as_of
             ),
         });
@@ -94,7 +92,7 @@ pub fn compute_dqi_col_stale_state(
 
 #[cfg(test)]
 mod tests {
-    use chrono::TimeZone;
+    use chrono::{DateTime, TimeZone, Utc};
 
     use super::*;
     use crate::dq::dqi::DqiStatus;
