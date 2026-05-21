@@ -13,14 +13,18 @@ use opendqi_core::dq::{
     default_missing_collateral_checks, default_sftr_checks, default_sftr_tr_state_checks,
     stream_checks_into, CheckContext,
 };
-use opendqi_core::{Regime, SftrRecord, SortedIssueSink, Thresholds};
+use opendqi_core::{
+    compute_sftr_dqi_pack, MappingPresence, Regime, SftrDqiInputs, SftrRecord, SortedIssueSink,
+    Thresholds,
+};
 use opendqi_io::CsvMapping;
 
 use crate::convert::{batch_to_sftr_records, Mapping};
+use crate::dqi_schemas::{evidence_to_record_batch, indicators_to_record_batch};
 use crate::emir::{pyarrow_to_record_batch, record_batch_to_pyarrow_table};
 use crate::errors::to_py_err;
 use crate::issues::issues_to_record_batch;
-use crate::result::PyScanResult;
+use crate::result::{PyDqiPackResult, PyScanResult};
 
 const STREAM_SPILL_MAX_ISSUES: usize = 65_536;
 
@@ -402,6 +406,134 @@ pub fn book_reconcile<'py>(
 }
 
 // =================================================================
+// v0.16.0 — SFTR Data Quality Pack
+// =================================================================
+
+/// `opendqi.sftr.data_quality_pack(*, tsr=None, tar=None,
+/// reconciliation=None, missing_collateral=None, as_of=None) ->
+/// PyDqiPackResult`.
+///
+/// SFTR Data Quality Pack (v0.16.0): aggregates the SFTR TR layers
+/// into 4 regulator-style indicators (numerator / denominator /
+/// rate / threshold / status) + ≤ 20 evidence rows per indicator,
+/// AND co-produces the granular issue stream from the existing
+/// SFTR check registries. All inputs are optional ; at least one
+/// must be provided.
+///
+/// **v0.16 indicators** (T2 layer of `auth.079` + `auth.052`):
+/// - `DQI_COLLATERAL_VALUE_MISSING_SFTR`
+/// - `DQI_LOAN_VALUE_MISSING_SFTR`
+/// - `DQI_LOAN_VALUE_STALE_SFTR` (TARGET2 business days)
+/// - `DQI_TIM_REPORTING_LATE_SFTR`
+///
+/// **Inputs (v0.16): paths-only.** `tsr` / `tar` / `reconciliation`
+/// / `missing_collateral` all accept a `str` file path (XML)
+/// only. The dual-input pyarrow.Table path is on the EMIR side
+/// for v0.16 ; SFTR-side Arrow converters for `TrStateRecord` /
+/// reconciliation / missing-collateral are scheduled for v0.17.
+/// The TAR-side `batch_to_sftr_records` converter exists today
+/// but for symmetry the SFTR DQI pack stays paths-only in v0.16.
+///
+/// `reconciliation` (`auth.080`) and `missing_collateral`
+/// (`auth.083`) are accepted as input slots but **no v0.16
+/// computer reads them** — they are reserved for v0.17
+/// indicators (`DQI_REC_STATUS_*_SFTR`, `DQI_MCR_*`). Providing
+/// them today is parsed-and-discarded.
+///
+/// `as_of` defaults to today (UTC). Format: `YYYY-MM-DD`.
+/// Pinning it keeps the stale-loan-value cutoff stable across
+/// calendar days (same trick as the CLI golden).
+///
+/// Granular SFTR issues run on each provided layer using
+/// `default_sftr_checks` (TAR) + `default_sftr_tr_state_checks`
+/// (TSR) ; `prior` is the empty slice (lifecycle-needing checks
+/// no-op without a history store — same as the v0.13 SFTR
+/// `tr_audit` binding).
+#[pyfunction]
+#[pyo3(signature = (*, tsr = None, tar = None, reconciliation = None, missing_collateral = None, as_of = None))]
+pub fn data_quality_pack(
+    tsr: Option<&str>,
+    tar: Option<&str>,
+    reconciliation: Option<&str>,
+    missing_collateral: Option<&str>,
+    as_of: Option<&str>,
+) -> PyResult<PyDqiPackResult> {
+    if tsr.is_none() && tar.is_none() && reconciliation.is_none() && missing_collateral.is_none() {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "data_quality_pack: at least one of tsr / tar / reconciliation / \
+             missing_collateral is required",
+        ));
+    }
+
+    let thresholds = Thresholds::default();
+    let as_of_date = match as_of {
+        Some(s) => chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").map_err(|e| {
+            pyo3::exceptions::PyValueError::new_err(format!(
+                "parsing as_of {s:?} (expected YYYY-MM-DD): {e}"
+            ))
+        })?,
+        None => Utc::now().date_naive(),
+    };
+
+    // Load each provided layer (paths-only in v0.16).
+    let tsr_records = match tsr {
+        Some(p) => {
+            opendqi_xml::read_sftr_tr_state_xml(Path::new(p))
+                .map_err(to_py_err)?
+                .records
+        }
+        None => Vec::new(),
+    };
+    let tar_records = match tar {
+        Some(p) => {
+            opendqi_xml::read_sftr_xml(Path::new(p))
+                .map_err(to_py_err)?
+                .records
+        }
+        None => Vec::new(),
+    };
+    let reconciliation_records = match reconciliation {
+        Some(p) => {
+            opendqi_xml::read_sftr_reconciliation_xml(Path::new(p))
+                .map_err(to_py_err)?
+                .records
+        }
+        None => Vec::new(),
+    };
+    let missing_collateral_records = match missing_collateral {
+        Some(p) => {
+            opendqi_xml::read_sftr_missing_collateral_xml(Path::new(p))
+                .map_err(to_py_err)?
+                .records
+        }
+        None => Vec::new(),
+    };
+
+    let inputs = SftrDqiInputs {
+        tsr: tsr.map(|_| tsr_records.as_slice()),
+        tar: tar.map(|_| tar_records.as_slice()),
+        reconciliation: reconciliation.map(|_| reconciliation_records.as_slice()),
+        missing_collateral: missing_collateral.map(|_| missing_collateral_records.as_slice()),
+    };
+
+    let pack = compute_sftr_dqi_pack(inputs, MappingPresence::default(), &thresholds, as_of_date);
+
+    let indicators_batch = indicators_to_record_batch(&pack.indicators).map_err(to_py_err)?;
+    let evidence_batch = evidence_to_record_batch(&pack.evidence).map_err(to_py_err)?;
+    let issues_batch = issues_to_record_batch(pack.issues.iter().cloned()).map_err(to_py_err)?;
+
+    Ok(PyDqiPackResult::new(
+        pack.indicators,
+        pack.evidence,
+        pack.issues,
+        pack.issues_summary,
+        indicators_batch,
+        evidence_batch,
+        issues_batch,
+    ))
+}
+
+// =================================================================
 // Module registration
 // =================================================================
 
@@ -422,6 +554,8 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(tr_audit, &m)?)?;
     m.add_function(wrap_pyfunction!(missing_collateral, &m)?)?;
     m.add_function(wrap_pyfunction!(book_reconcile, &m)?)?;
+    // Data Quality Pack (v0.16.0).
+    m.add_function(wrap_pyfunction!(data_quality_pack, &m)?)?;
     parent.add_submodule(&m)?;
     Ok(())
 }
