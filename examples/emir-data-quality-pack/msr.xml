@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic ISO 20022 auth.109 Margin State Report (MSR)
+  hand-authored for the v0.15.1 emir-data-quality-pack kit.
+
+  UTI naming is **aligned with the companion TSR**
+  (../tsr.xml from quickstart-emir) so the cross-message
+  DQI_COL_MISSING_STATE indicator has a pedagogical case:
+
+  - TSR has 1 outstanding-collateralised row
+    (OPENDQI-TSR-CLEAN-0001, the only TSR row carrying a
+    CollPrtflCd in tsr.xml).
+  - This MSR deliberately OMITS that UTI → DQI_COL_MISSING_STATE
+    numerator = 1, denominator = 1, status = red (clear
+    teaching moment in the demo output).
+
+  The 4 MSR rows below also exercise the other 2 MSR-side
+  DQIs:
+  - DQI_COL_ALL_ZERO  → row 2 (NOVAL-0003) has all 4
+    margin amounts set to 0.00
+  - DQI_COL_STALE_STATE → row 1 (STALE-0002) has an
+    explicit RptgTmStmp dated 2026-05-15 (6 days old vs
+    the demo's as_of=2026-05-21, beyond the default
+    collateral_max_age_days = 1).
+
+  Element paths follow auth.109.001.01 — same structure as
+  the production fixture in examples/emir/msr/auth109-sample.xml
+  (76 lines, faithful to the ESMA EMIR REFIT usage guideline
+  auth.109.001.01_ESMAUG_DATMDS_1.1.0).
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.109.001.01">
+  <DerivsTradMrgnDataTxStatRpt>
+    <RptHdr><NbRcrds>4</NbRcrds></RptHdr>
+    <TradData>
+
+      <!-- 1. STALE state_as_of (6 days old vs as_of 2026-05-21,
+              > collateral_max_age_days = 1) →
+              DQI_COL_STALE_STATE numerator++. -->
+      <Stat>
+        <RptgTmStmp>2026-05-15T08:00:00Z</RptgTmStmp>
+        <CtrPtyId>
+          <RptgCtrPty><Id><Lgl><Id><LEI>RPTGCPARTY0000000001</LEI></Id></Lgl></Id></RptgCtrPty>
+          <OthrCtrPty><IdTp><Lgl><Id><LEI>OTHRCPARTY0000000002</LEI></Id></Lgl></IdTp></OthrCtrPty>
+        </CtrPtyId>
+        <TxId><UnqTxIdr>OPENDQI-TSR-STALE-0002</UnqTxIdr></TxId>
+        <Coll><CollPrtflCd><Prtfl><Cd>PORT-002</Cd></Prtfl></CollPrtflCd><CollstnCtgy>FLCL</CollstnCtgy></Coll>
+        <PstdMrgnOrColl><InitlMrgnPstdPstHrcut Ccy="EUR">750000.00</InitlMrgnPstdPstHrcut></PstdMrgnOrColl>
+        <RcvdMrgnOrColl><InitlMrgnRcvdPstHrcut Ccy="EUR">700000.00</InitlMrgnRcvdPstHrcut></RcvdMrgnOrColl>
+      </Stat>
+
+      <!-- 2. ALL 4 margin amounts absent (zero by Decimal default
+              in the parser) → DQI_COL_ALL_ZERO numerator++.
+              Fresh state_as_of. -->
+      <Stat>
+        <RptgTmStmp>2026-05-20T18:00:00Z</RptgTmStmp>
+        <TxId><UnqTxIdr>OPENDQI-TSR-NOVAL-0003</UnqTxIdr></TxId>
+        <Coll><CollPrtflCd><Prtfl><Cd>PORT-003</Cd></Prtfl></CollPrtflCd><CollstnCtgy>UNCL</CollstnCtgy></Coll>
+      </Stat>
+
+      <!-- 3. Normal row, exercises the denominator without
+              firing any DQI. Aligned UTI with the TSR. -->
+      <Stat>
+        <RptgTmStmp>2026-05-20T18:00:00Z</RptgTmStmp>
+        <TxId><UnqTxIdr>OPENDQI-TSR-DUP-0006</UnqTxIdr></TxId>
+        <Coll><CollPrtflCd><Prtfl><Cd>PORT-006</Cd></Prtfl></CollPrtflCd><CollstnCtgy>FLCL</CollstnCtgy></Coll>
+        <PstdMrgnOrColl><InitlMrgnPstdPstHrcut Ccy="EUR">500000.00</InitlMrgnPstdPstHrcut></PstdMrgnOrColl>
+        <RcvdMrgnOrColl><InitlMrgnRcvdPstHrcut Ccy="EUR">480000.00</InitlMrgnRcvdPstHrcut></RcvdMrgnOrColl>
+      </Stat>
+
+      <!-- 4. MSR-only UTI (no companion in TSR). Demonstrates
+              that the cross-message join is BY UTI — extras on
+              the MSR side don't affect DQI_COL_MISSING_STATE
+              (whose denominator is TSR-outstanding-collateralised). -->
+      <Stat>
+        <RptgTmStmp>2026-05-20T18:00:00Z</RptgTmStmp>
+        <TxId><UnqTxIdr>OPENDQI-MSR-EXTRA-0008</UnqTxIdr></TxId>
+        <Coll><CollPrtflCd><Prtfl><Cd>PORT-EXTRA</Cd></Prtfl></CollPrtflCd><CollstnCtgy>FLCL</CollstnCtgy></Coll>
+        <PstdMrgnOrColl><InitlMrgnPstdPstHrcut Ccy="EUR">200000.00</InitlMrgnPstdPstHrcut></PstdMrgnOrColl>
+        <RcvdMrgnOrColl><InitlMrgnRcvdPstHrcut Ccy="EUR">200000.00</InitlMrgnRcvdPstHrcut></RcvdMrgnOrColl>
+      </Stat>
+
+    </TradData>
+  </DerivsTradMrgnDataTxStatRpt>
+</Document>

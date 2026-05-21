@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic ISO 20022 auth.092 EMIR Derivatives Trade Rejection
+  Statistical Report fixture. Hand-authored — NOT derived from, and
+  does not redistribute, any ESMA or SWIFT example or schema.
+
+  Element paths follow the real ESMA EMIR REFIT usage guideline
+  auth.092.001.04_ESMAUG_DATREJ_1.0.0
+  (DerivativesTradeRejectionStatisticalReportV04):
+  Document > DerivsTradRjctnSttstclRpt > RjctnSttstcs/Rpt > ... >
+  DtldSttstcs > TxsRjctnsRsn. Schema-shaped, not a fully XSD-valid
+  instance. See docs/auth-messages/emir-auth092.md.
+
+  auth.092 is a rejection STATISTICS report, not a per-UTI feed; it has
+  no Missing/Inaccurate branch (those EMIR.FBK.* checks are unreachable
+  from real auth.092). OpenDQI projects each rejected TxsRjctnsRsn onto
+  the scalar FeedbackRecord, keeping only the FIRST DtldVldtnRule.
+  Sts=ACPT rows are not feedback and are skipped.
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.092.001.04">
+  <DerivsTradRjctnSttstclRpt>
+    <RjctnSttstcs>
+      <Rpt>
+        <RjctnSttstcs>
+          <DerivSttstcs>
+            <DtldSttstcs>
+
+              <!-- 1. Rejected (RJCT) with two validation rules ->
+                   EMIR.FBK.TR_REJECTED_UTI; only VR-0001 is kept. -->
+              <TxsRjctnsRsn>
+                <TxId>
+                  <UnqIdr><UnqTxIdr>OPENDQI-FBK-RJCT-0001</UnqTxIdr></UnqIdr>
+                  <RptgTmStmp>2026-05-13T08:00:00Z</RptgTmStmp>
+                </TxId>
+                <Sts>RJCT</Sts>
+                <DtldVldtnRule><Id>VR-0001</Id><Desc>Notional amount missing</Desc></DtldVldtnRule>
+                <DtldVldtnRule><Id>VR-0042</Id><Desc>Maturity before effective</Desc></DtldVldtnRule>
+              </TxsRjctnsRsn>
+
+              <!-- 2. Incorrect-filename status (INCF) is also a
+                   rejection -> EMIR.FBK.TR_REJECTED_UTI. -->
+              <TxsRjctnsRsn>
+                <TxId>
+                  <UnqIdr><UnqTxIdr>OPENDQI-FBK-INCF-0002</UnqTxIdr></UnqIdr>
+                  <RptgTmStmp>2026-05-13T08:05:00Z</RptgTmStmp>
+                </TxId>
+                <Sts>INCF</Sts>
+                <DtldVldtnRule><Id>VR-0100</Id></DtldVldtnRule>
+              </TxsRjctnsRsn>
+
+              <!-- 3. Accepted (ACPT) — not feedback, skipped. -->
+              <TxsRjctnsRsn>
+                <TxId><UnqIdr><UnqTxIdr>OPENDQI-FBK-ACPT-0003</UnqTxIdr></UnqIdr></TxId>
+                <Sts>ACPT</Sts>
+              </TxsRjctnsRsn>
+
+            </DtldSttstcs>
+          </DerivSttstcs>
+        </RjctnSttstcs>
+      </Rpt>
+    </RjctnSttstcs>
+  </DerivsTradRjctnSttstclRpt>
+</Document>

@@ -57,3 +57,6 @@ samples/private/
 # Strictly local — never commit. See docs/iso20022-emir.md for how
 # to obtain the official schemas yourself.
 ESMA_docs/
+
+# v0.15.1 — example kit produces ./out/ on each demo.sh run
+examples/emir-data-quality-pack/out/

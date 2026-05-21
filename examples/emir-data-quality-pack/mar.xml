@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic ISO 20022 auth.108 Margin Activity Report (MAR)
+  hand-authored for the v0.15.1 emir-data-quality-pack kit.
+
+  None of the v0.15 DQI indicators read MAR records directly
+  (no DQI_MAR_* in the catalogue). MAR is included in this
+  kit for completeness: the granular EMIR.MAR.* check stream
+  still runs on these rows and contributes to result.issues
+  (the granular layer co-produced by the DQI pack).
+
+  UTIs are aligned with the companion TSR where possible
+  (OPENDQI-TSR-* prefix) so the joined audit view stays
+  coherent across layers.
+
+  Element paths follow auth.108.001.01_ESMAUG_DATMDA_1.1.0
+  (DerivativesTradeMarginDataReportV01). Same structure as
+  examples/emir/mar/auth108-sample.xml.
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.108.001.01">
+  <DerivsTradMrgnDataRpt>
+    <RptHdr><NbRcrds>3</NbRcrds></RptHdr>
+    <TradData>
+
+      <!-- 1. Normal IM posted update, aligned UTI. -->
+      <Rpt><MrgnUpd>
+        <RptgTmStmp>2026-05-20T08:00:00Z</RptgTmStmp>
+        <CtrPtyId>
+          <RptgCtrPty><Id><Lgl><Id><LEI>RPTGCPARTY0000000001</LEI></Id></Lgl></Id></RptgCtrPty>
+          <OthrCtrPty><IdTp><Lgl><Id><LEI>OTHRCPARTY0000000002</LEI></Id></Lgl></IdTp></OthrCtrPty>
+        </CtrPtyId>
+        <EvtDt>2026-05-20</EvtDt>
+        <TxId><UnqTxIdr>OPENDQI-TSR-STALE-0002</UnqTxIdr></TxId>
+        <Coll><CollPrtflCd><Prtfl><Cd>PORT-002</Cd></Prtfl></CollPrtflCd><CollstnCtgy>FLCL</CollstnCtgy></Coll>
+        <PstdMrgnOrColl><InitlMrgnPstdPstHrcut Ccy="EUR">750000.00</InitlMrgnPstdPstHrcut></PstdMrgnOrColl>
+      </MrgnUpd></Rpt>
+
+      <!-- 2. Normal VM update, aligned UTI. -->
+      <Rpt><MrgnUpd>
+        <RptgTmStmp>2026-05-20T09:00:00Z</RptgTmStmp>
+        <EvtDt>2026-05-20</EvtDt>
+        <TxId><UnqTxIdr>OPENDQI-TSR-DUP-0006</UnqTxIdr></TxId>
+        <Coll><CollPrtflCd><Prtfl><Cd>PORT-006</Cd></Prtfl></CollPrtflCd><CollstnCtgy>FLCL</CollstnCtgy></Coll>
+        <PstdMrgnOrColl><VartnMrgnPstdPstHrcut Ccy="EUR">12000.00</VartnMrgnPstdPstHrcut></PstdMrgnOrColl>
+      </MrgnUpd></Rpt>
+
+      <!-- 3. Correction event aligned UTI. -->
+      <Rpt><Crrctn>
+        <RptgTmStmp>2026-05-20T10:00:00Z</RptgTmStmp>
+        <EvtDt>2026-05-20</EvtDt>
+        <TxId><UnqTxIdr>OPENDQI-TSR-CLEAN-0001</UnqTxIdr></TxId>
+        <Coll><CollPrtflCd><Prtfl><Cd>PORT-001</Cd></Prtfl></CollPrtflCd><CollstnCtgy>FLCL</CollstnCtgy></Coll>
+        <PstdMrgnOrColl><InitlMrgnPstdPstHrcut Ccy="EUR">100000.00</InitlMrgnPstdPstHrcut></PstdMrgnOrColl>
+      </Crrctn></Rpt>
+
+    </TradData>
+  </DerivsTradMrgnDataRpt>
+</Document>

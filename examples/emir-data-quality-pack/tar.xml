@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic ISO 20022 auth.030 TAR fixture for OpenDQI tr-activity-scan.
+  Hand-authored — not derived from any ESMA or SWIFT example.
+
+  20 records, action distribution :
+   - 2 NEWT (both same UTI U-DUP-NEWT)        → DUPLICATE_NEWT_IN_BATCH × 2
+   - 9 MODI (distinct UTIs)                   → SPIKE_MODI fires (45% > 40%)
+   - 3 CORR (all on U-CORR-001)               → REPEATED_CORRECTION × 3
+   - 6 ETRM (distinct UTIs)                   → SPIKE_TERM fires (30% > 25%)
+
+  All UTIs are intentionally distinct from those in
+  examples/emir/tr_state/auth107-sample.xml so that
+  NEWT_NOT_IN_TSR fires when `--tsr` is provided.
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.030.001.03">
+  <DerivsTradRpt>
+    <TradData>
+
+      <!-- 2 duplicate NEWTs on the same UTI -->
+      <Rpt><New><CmonTradData><TxData><TradId><UnqTxIdr>U-DUP-NEWT</UnqTxIdr></TradId></TxData></CmonTradData></New></Rpt>
+      <Rpt><New><CmonTradData><TxData><TradId><UnqTxIdr>U-DUP-NEWT</UnqTxIdr></TradId></TxData></CmonTradData></New></Rpt>
+
+      <!-- 9 MODI on distinct UTIs -->
+      <Rpt><Mod><CmonTradData><TxData><TradId><UnqTxIdr>U-MODI-001</UnqTxIdr></TradId></TxData></CmonTradData></Mod></Rpt>
+      <Rpt><Mod><CmonTradData><TxData><TradId><UnqTxIdr>U-MODI-002</UnqTxIdr></TradId></TxData></CmonTradData></Mod></Rpt>
+      <Rpt><Mod><CmonTradData><TxData><TradId><UnqTxIdr>U-MODI-003</UnqTxIdr></TradId></TxData></CmonTradData></Mod></Rpt>
+      <Rpt><Mod><CmonTradData><TxData><TradId><UnqTxIdr>U-MODI-004</UnqTxIdr></TradId></TxData></CmonTradData></Mod></Rpt>
+      <Rpt><Mod><CmonTradData><TxData><TradId><UnqTxIdr>U-MODI-005</UnqTxIdr></TradId></TxData></CmonTradData></Mod></Rpt>
+      <Rpt><Mod><CmonTradData><TxData><TradId><UnqTxIdr>U-MODI-006</UnqTxIdr></TradId></TxData></CmonTradData></Mod></Rpt>
+      <Rpt><Mod><CmonTradData><TxData><TradId><UnqTxIdr>U-MODI-007</UnqTxIdr></TradId></TxData></CmonTradData></Mod></Rpt>
+      <Rpt><Mod><CmonTradData><TxData><TradId><UnqTxIdr>U-MODI-008</UnqTxIdr></TradId></TxData></CmonTradData></Mod></Rpt>
+      <Rpt><Mod><CmonTradData><TxData><TradId><UnqTxIdr>U-MODI-009</UnqTxIdr></TradId></TxData></CmonTradData></Mod></Rpt>
+
+      <!-- 3 CORR on the same UTI -->
+      <Rpt><Crrctn><CmonTradData><TxData><TradId><UnqTxIdr>U-CORR-001</UnqTxIdr></TradId></TxData></CmonTradData></Crrctn></Rpt>
+      <Rpt><Crrctn><CmonTradData><TxData><TradId><UnqTxIdr>U-CORR-001</UnqTxIdr></TradId></TxData></CmonTradData></Crrctn></Rpt>
+      <Rpt><Crrctn><CmonTradData><TxData><TradId><UnqTxIdr>U-CORR-001</UnqTxIdr></TradId></TxData></CmonTradData></Crrctn></Rpt>
+
+      <!-- 6 ETRM on distinct UTIs -->
+      <Rpt><EarlyTermntn><CmonTradData><TxData><TradId><UnqTxIdr>U-ETRM-001</UnqTxIdr></TradId></TxData></CmonTradData></EarlyTermntn></Rpt>
+      <Rpt><EarlyTermntn><CmonTradData><TxData><TradId><UnqTxIdr>U-ETRM-002</UnqTxIdr></TradId></TxData></CmonTradData></EarlyTermntn></Rpt>
+      <Rpt><EarlyTermntn><CmonTradData><TxData><TradId><UnqTxIdr>U-ETRM-003</UnqTxIdr></TradId></TxData></CmonTradData></EarlyTermntn></Rpt>
+      <Rpt><EarlyTermntn><CmonTradData><TxData><TradId><UnqTxIdr>U-ETRM-004</UnqTxIdr></TradId></TxData></CmonTradData></EarlyTermntn></Rpt>
+      <Rpt><EarlyTermntn><CmonTradData><TxData><TradId><UnqTxIdr>U-ETRM-005</UnqTxIdr></TradId></TxData></CmonTradData></EarlyTermntn></Rpt>
+      <Rpt><EarlyTermntn><CmonTradData><TxData><TradId><UnqTxIdr>U-ETRM-006</UnqTxIdr></TradId></TxData></CmonTradData></EarlyTermntn></Rpt>
+
+    </TradData>
+  </DerivsTradRpt>
+</Document>
