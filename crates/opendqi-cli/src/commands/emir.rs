@@ -18,16 +18,18 @@ use opendqi_core::dq::{
     default_warnings_transaction_checks, run_all_lifecycle, run_all_pre_submission, CheckContext,
 };
 use opendqi_core::{
-    stream_checks_into, stream_emir_checks_into, DqDimension, DqIssue, EmirRecord,
-    MarginActivityRecord, MarginStateRecord, Regime, Severity, SortedIssueSink, Thresholds,
-    TrActivitySummary, TrStateRecord, STREAM_SPILL_MAX_ISSUES,
+    compute_emir_dqi_pack, stream_checks_into, stream_emir_checks_into, DqDimension, DqIssue,
+    EmirDqiInputs, EmirRecord, MappingPresence, MarginActivityRecord, MarginStateRecord, Regime,
+    Severity, SortedIssueSink, Thresholds, TrActivitySummary, TrStateRecord,
+    STREAM_SPILL_MAX_ISSUES,
 };
 use opendqi_io::{
     discover_emir_inputs, has_extension, read_emir_csv, read_emir_parquet, write_emir_parquet,
     CsvMapping,
 };
 use opendqi_report::{
-    write_issues_csv_from_iter, write_report_html, write_summary_json, TopIssues,
+    write_evidence_csv, write_indicators_csv, write_issues_csv, write_issues_csv_from_iter,
+    write_report_html, write_summary_json, TopIssues,
 };
 use opendqi_xml::{
     check_wellformedness, read_emir_feedback_xml, read_emir_mar_xml, read_emir_msr_xml,
@@ -332,6 +334,55 @@ pub enum EmirAction {
         #[arg(long, value_name = "PATH")]
         email_config: Option<PathBuf>,
     },
+    /// EMIR Data Quality Pack (v0.15). Aggregates the 5 EMIR TR
+    /// layers (TSR / TAR / MSR / MAR / Feedback) into 10
+    /// regulator-style indicators (numerator / denominator / rate
+    /// / threshold / status). Each indicator gets ≤ 20 evidence
+    /// rows for drill-down. The granular 216-check stream is
+    /// **co-produced** (not replaced) — `issues.csv` carries the
+    /// per-row defects, `indicators.csv` carries the aggregated
+    /// metrics. See `docs/data-quality-pack.md` (added in D9).
+    ///
+    /// All input flags are optional ; at least one is required.
+    /// Indicators that lack their input layer (or whose gated
+    /// field is not mapped) report `status: not_applicable` with
+    /// no rate and no evidence.
+    DataQualityPack {
+        /// Path to the TSR `auth.107` XML file.
+        #[arg(long)]
+        tsr: Option<PathBuf>,
+        /// Path to the TAR `auth.030` XML file (or directory).
+        #[arg(long)]
+        tar: Option<PathBuf>,
+        /// Path to the MSR `auth.109` XML file.
+        #[arg(long)]
+        msr: Option<PathBuf>,
+        /// Path to the MAR `auth.108` XML file.
+        #[arg(long)]
+        mar: Option<PathBuf>,
+        /// Path to the feedback `auth.092` XML file.
+        #[arg(long)]
+        feedback: Option<PathBuf>,
+        /// Optional YAML thresholds configuration (overrides the
+        /// shipped DQI defaults via the `dqi:` block).
+        #[arg(long)]
+        config: Option<PathBuf>,
+        /// Reference date for age-based indicators (stale
+        /// valuation, stale collateral state). Defaults to today
+        /// (UTC). Format: `YYYY-MM-DD`.
+        #[arg(long)]
+        as_of: Option<String>,
+        /// Directory where outputs are written. Created if absent.
+        /// Writes `report.html`, `summary.json`, `issues.csv`,
+        /// `indicators.csv`, `evidence.csv`.
+        #[arg(long)]
+        out: PathBuf,
+        /// Optional SMTP configuration YAML. When set, the
+        /// `report.html` is emailed to the recipients listed in
+        /// the config. See `docs/email-notifications.md`.
+        #[arg(long, value_name = "PATH")]
+        email_config: Option<PathBuf>,
+    },
     /// Normalize EMIR XML/CSV input into a canonical Parquet file
     /// (Snappy-compressed). Schema is stable and analytics-friendly
     /// (DuckDB / Polars / PyArrow). See `docs/parquet-normalize.md`.
@@ -494,6 +545,30 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
             email_config,
         } => {
             run_warnings(&input, config.as_deref(), &out, email_config.as_deref())?;
+            Ok(ExitCode::SUCCESS)
+        }
+        EmirAction::DataQualityPack {
+            tsr,
+            tar,
+            msr,
+            mar,
+            feedback,
+            config,
+            as_of,
+            out,
+            email_config,
+        } => {
+            run_data_quality_pack(
+                tsr.as_deref(),
+                tar.as_deref(),
+                msr.as_deref(),
+                mar.as_deref(),
+                feedback.as_deref(),
+                config.as_deref(),
+                as_of.as_deref(),
+                &out,
+                email_config.as_deref(),
+            )?;
             Ok(ExitCode::SUCCESS)
         }
         EmirAction::Normalize {
@@ -2379,5 +2454,228 @@ fn write_xsd_errors_csv(path: &Path, rows: &[XsdReportRow]) -> Result<()> {
         ])?;
     }
     writer.flush()?;
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_data_quality_pack(
+    tsr_path: Option<&Path>,
+    tar_path: Option<&Path>,
+    msr_path: Option<&Path>,
+    mar_path: Option<&Path>,
+    feedback_path: Option<&Path>,
+    config_path: Option<&Path>,
+    as_of_str: Option<&str>,
+    out: &Path,
+    email_config_path: Option<&Path>,
+) -> Result<()> {
+    if tsr_path.is_none()
+        && tar_path.is_none()
+        && msr_path.is_none()
+        && mar_path.is_none()
+        && feedback_path.is_none()
+    {
+        return Err(anyhow!(
+            "data-quality-pack: at least one of --tsr / --tar / --msr / --mar / --feedback is required"
+        ));
+    }
+
+    // Resolve thresholds (default + optional YAML override).
+    let thresholds = match config_path {
+        Some(p) => {
+            let text = std::fs::read_to_string(p)
+                .with_context(|| format!("reading thresholds config {}", p.display()))?;
+            serde_yaml::from_str::<Thresholds>(&text)
+                .with_context(|| format!("parsing thresholds config {}", p.display()))?
+        }
+        None => Thresholds::default(),
+    };
+
+    // Resolve as_of (default = today UTC).
+    let as_of = match as_of_str {
+        Some(s) => chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
+            .with_context(|| format!("parsing --as-of {s:?} (expected YYYY-MM-DD)"))?,
+        None => Utc::now().date_naive(),
+    };
+
+    // Load each provided layer (XML readers; CSV mapping for the
+    // DQI pack is deferred to a future increment).
+    let tsr_records = match tsr_path {
+        Some(p) => {
+            let outcome = read_emir_tr_state_xml(p)
+                .with_context(|| format!("reading TSR {}", p.display()))?;
+            info!(records = outcome.records.len(), "loaded TSR");
+            outcome.records
+        }
+        None => Vec::new(),
+    };
+    let mut tar_records: Vec<EmirRecord> = Vec::new();
+    if let Some(p) = tar_path {
+        let inputs = discover_emir_inputs(p)?;
+        for q in &inputs {
+            if !has_extension(q, "xml") {
+                warn!(path = %q.display(), "skipping non-XML file in TAR input");
+                continue;
+            }
+            let mut outcome = read_emir_xml(q)?;
+            tar_records.append(&mut outcome.records);
+        }
+        info!(records = tar_records.len(), "loaded TAR");
+    }
+    let msr_records = match msr_path {
+        Some(p) => {
+            let outcome =
+                read_emir_msr_xml(p).with_context(|| format!("reading MSR {}", p.display()))?;
+            info!(records = outcome.records.len(), "loaded MSR");
+            outcome.records
+        }
+        None => Vec::new(),
+    };
+    let mar_records = match mar_path {
+        Some(p) => {
+            let outcome =
+                read_emir_mar_xml(p).with_context(|| format!("reading MAR {}", p.display()))?;
+            info!(records = outcome.records.len(), "loaded MAR");
+            outcome.records
+        }
+        None => Vec::new(),
+    };
+    let feedback_records = match feedback_path {
+        Some(p) => {
+            let outcome = read_emir_feedback_xml(p)
+                .with_context(|| format!("reading feedback {}", p.display()))?;
+            info!(records = outcome.records.len(), "loaded feedback");
+            outcome.records
+        }
+        None => Vec::new(),
+    };
+
+    // Detect raw_fields presence for the 2 gated indicators.
+    // (Conservative: any record carries the key with a non-empty
+    // value → on.)
+    let has_conf = tar_records.iter().any(|r| {
+        r.raw_fields
+            .get("confirmation_timestamp")
+            .map(|v| !v.trim().is_empty())
+            .unwrap_or(false)
+    });
+    let has_rec = tar_records.iter().any(|r| {
+        r.raw_fields
+            .get("reconciliation_status")
+            .map(|v| !v.trim().is_empty())
+            .unwrap_or(false)
+    });
+    let mapping_presence = MappingPresence {
+        has_confirmation_timestamp: has_conf,
+        has_reconciliation_status: has_rec,
+    };
+
+    // Build the typed inputs view.
+    let inputs = EmirDqiInputs {
+        tsr: if tsr_path.is_some() {
+            Some(&tsr_records)
+        } else {
+            None
+        },
+        tar: if tar_path.is_some() {
+            Some(&tar_records)
+        } else {
+            None
+        },
+        msr: if msr_path.is_some() {
+            Some(&msr_records)
+        } else {
+            None
+        },
+        mar: if mar_path.is_some() {
+            Some(&mar_records)
+        } else {
+            None
+        },
+        feedback: if feedback_path.is_some() {
+            Some(&feedback_records)
+        } else {
+            None
+        },
+    };
+
+    let pack = compute_emir_dqi_pack(inputs, mapping_presence, &thresholds, as_of);
+
+    // Collect source labels for the report context.
+    let mut sources: Vec<String> = Vec::new();
+    for (lbl, p) in [
+        ("TSR", tsr_path),
+        ("TAR", tar_path),
+        ("MSR", msr_path),
+        ("MAR", mar_path),
+        ("Feedback", feedback_path),
+    ] {
+        if let Some(path) = p {
+            sources.push(format!("{lbl}: {}", path.display()));
+        }
+    }
+
+    // Write outputs.
+    std::fs::create_dir_all(out)
+        .with_context(|| format!("creating output directory {}", out.display()))?;
+    write_summary_json(&out.join("summary.json"), &pack.issues_summary)?;
+    write_issues_csv(&out.join("issues.csv"), &pack.issues)?;
+    write_indicators_csv(&out.join("indicators.csv"), &pack.indicators)?;
+    write_evidence_csv(&out.join("evidence.csv"), &pack.evidence)?;
+
+    let mut top = TopIssues::with_capacity(20);
+    for issue in &pack.issues {
+        top.offer(issue);
+    }
+    let top = top.into_sorted();
+    write_report_html(
+        &out.join("report.html"),
+        &pack.issues_summary,
+        &top,
+        &sources,
+    )?;
+
+    if let Some(path) = email_config_path {
+        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
+        let sent = opendqi_report::send_report_email(
+            &cfg,
+            &pack.issues_summary,
+            &out.join("report.html"),
+            &out.join("summary.json"),
+            &out.join("issues.csv"),
+        )?;
+        if sent {
+            info!(to = ?cfg.to, "data-quality-pack report emailed");
+        } else {
+            info!("email config is disabled — skipped send");
+        }
+    }
+
+    // Friendly stdout summary.
+    let computed = pack
+        .indicators
+        .iter()
+        .filter(|i| i.status != opendqi_core::DqiStatus::NotApplicable)
+        .count();
+    let red = pack
+        .indicators
+        .iter()
+        .filter(|i| i.status == opendqi_core::DqiStatus::Red)
+        .count();
+    let amber = pack
+        .indicators
+        .iter()
+        .filter(|i| i.status == opendqi_core::DqiStatus::Amber)
+        .count();
+    println!(
+        "Data Quality Pack: {}/{} indicators computed ({} red, {} amber). Granular: {} issues, score {:.1}/100.",
+        computed,
+        pack.indicators.len(),
+        red,
+        amber,
+        pack.issues_summary.issues_total,
+        pack.issues_summary.quality_score,
+    );
+    println!("Report: {}", out.join("report.html").display());
     Ok(())
 }

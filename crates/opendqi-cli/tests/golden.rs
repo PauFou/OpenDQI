@@ -366,6 +366,72 @@ golden_test!(
     ])
 );
 
+// `emir data-quality-pack` writes FOUR artefacts (summary.json +
+// issues.csv + indicators.csv + evidence.csv) — the standard
+// `run_case` helper only handles one issues CSV per command, so
+// the DQI pack gets a dedicated test that snapshots all four.
+//
+// `--as-of` is pinned so that the stale-valuation indicator's
+// cutoff is stable across calendar days (same intent as the
+// `mask_today` masking we apply to other goldens).
+#[test]
+fn emir_data_quality_pack() {
+    let bin = env!("CARGO_BIN_EXE_opendqi");
+    let out = unique_dir("emir-data-quality-pack-out");
+    let ws = ws_root().to_string_lossy().into_owned();
+    let tmp = std::env::temp_dir()
+        .canonicalize()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+
+    let args: Vec<String> = a(&[
+        "emir",
+        "data-quality-pack",
+        "--tsr",
+        &ex("examples/quickstart-emir/auth107-tsr.xml"),
+        "--tar",
+        &ex("examples/quickstart-emir/auth030-tar.xml"),
+        "--feedback",
+        &ex("examples/quickstart-emir/auth092-feedback.xml"),
+        "--as-of",
+        "2026-05-21",
+    ])
+    .into_iter()
+    .chain(["--out".to_string(), out.to_string_lossy().into_owned()])
+    .collect();
+
+    let output = Command::new(bin)
+        .args(&args)
+        .output()
+        .expect("spawn opendqi");
+
+    assert!(
+        out.join("summary.json").exists(),
+        "no summary.json produced.\nargs: {args:?}\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    for (rel, ext, is_summary) in [
+        ("summary.json", "summary.json", true),
+        ("issues.csv", "issues.csv", false),
+        ("indicators.csv", "indicators.csv", false),
+        ("evidence.csv", "evidence.csv", false),
+    ] {
+        let path = out.join(rel);
+        assert!(path.exists(), "missing {rel} in DQI pack output");
+        let txt = std::fs::read_to_string(&path).unwrap();
+        check_or_update(
+            "emir-data-quality-pack",
+            ext,
+            &normalize(&txt, &ws, &tmp, is_summary),
+        );
+    }
+
+    let _ = std::fs::remove_dir_all(&out);
+}
+
 // ---- EMIR (store-backed) -------------------------------------------
 #[test]
 fn emir_feedback() {
