@@ -9,8 +9,8 @@ use pyo3::prelude::*;
 use pyo3::types::PyAny;
 
 use opendqi_core::dq::{
-    compute_tr_audit_sftr_issues, default_sftr_checks, default_sftr_tr_state_checks,
-    stream_checks_into, CheckContext,
+    compute_tr_audit_sftr_issues, default_missing_collateral_checks, default_sftr_checks,
+    default_sftr_tr_state_checks, stream_checks_into, CheckContext,
 };
 use opendqi_core::{Regime, SftrRecord, SortedIssueSink, Thresholds};
 
@@ -223,6 +223,74 @@ pub fn tr_audit(tar: &str, tsr: &str) -> PyResult<PyScanResult> {
 }
 
 // =================================================================
+// v0.13.0 — cross-message workflow: missing_collateral
+// =================================================================
+
+/// `opendqi.sftr.missing_collateral(auth083, *, tsr=None) -> PyScanResult`.
+///
+/// Mirror of the CLI `opendqi sftr missing-collateral
+/// auth083.xml [--tsr auth079.xml]`. Parses an SFTR Missing
+/// Collateral Request (`auth.083`) and runs the 2 base
+/// `SFTR.MCR.*` single-batch checks. If `tsr` is supplied, also
+/// reads the SFTR Trade State Report (`auth.079`) and runs the
+/// 3 additional cross-reference checks (`COLLATERAL_PRESENT_IN_TSR`,
+/// `STILL_MISSING_IN_TSR`, `REQUESTED_UTI_NOT_IN_TSR`) — the
+/// `tsr` cross-ref is the higher-value path most users want.
+///
+/// **Store-backed cross-ref** (the CLI's `--store` flag, which
+/// looks up the latest persisted SFTR trade state for the
+/// requested UTIs) is NOT exposed in v0.13.0 — store wrapping
+/// is deferred to v0.14+. Users with a history store either use
+/// the CLI or do their own SQL lookup and pass the TSR records
+/// via the (unsupported in v0.13) `tsr` path argument.
+#[pyfunction]
+#[pyo3(signature = (auth083, *, tsr = None))]
+pub fn missing_collateral(auth083: &str, tsr: Option<&str>) -> PyResult<PyScanResult> {
+    let started_at = Utc::now();
+    let ctx = CheckContext::now_with_defaults();
+    let thresholds = Thresholds::default();
+
+    let outcome = opendqi_xml::read_sftr_missing_collateral_xml(Path::new(auth083))
+        .map_err(to_py_err)?;
+
+    // Optional companion TSR for the 3 cross-ref checks. The
+    // store-backed variant from the CLI is deliberately out of
+    // scope (Python doesn't touch the SQLite store in v0.13).
+    let tsr_records: Option<Vec<opendqi_core::SftrTrStateRecord>> = match tsr {
+        Some(p) => Some(
+            opendqi_xml::read_sftr_tr_state_xml(Path::new(p))
+                .map_err(to_py_err)?
+                .records,
+        ),
+        None => None,
+    };
+
+    let sink = Mutex::new(SortedIssueSink::new(&thresholds, STREAM_SPILL_MAX_ISSUES));
+    // Format-level issues from the parser (file-not-well-formed,
+    // unexpected namespace, ...) get included — they're a real
+    // signal users want to see ; consistent with the CLI which
+    // also `push_batch`es them.
+    if !outcome.issues.is_empty() {
+        sink.lock()
+            .expect("sink mutex not poisoned")
+            .push_batch(outcome.issues);
+    }
+    stream_checks_into(&default_missing_collateral_checks(), &sink, |c| {
+        c.run(&outcome.records, tsr_records.as_deref(), &ctx)
+    });
+
+    let finished_at = Utc::now();
+    let n = outcome.records.len() as u32;
+    let files = if tsr.is_some() { 2 } else { 1 };
+    let (summary, sorted_issues) = sink
+        .into_inner()
+        .expect("sink mutex not poisoned")
+        .finish(Regime::Sftr, files, n, started_at, finished_at);
+    let batch = issues_to_record_batch(sorted_issues).map_err(to_py_err)?;
+    Ok(PyScanResult::new(summary, Some(batch), None))
+}
+
+// =================================================================
 // Module registration
 // =================================================================
 
@@ -241,6 +309,7 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(scan_files, &m)?)?;
     // Cross-message workflow entry points (v0.13.0).
     m.add_function(wrap_pyfunction!(tr_audit, &m)?)?;
+    m.add_function(wrap_pyfunction!(missing_collateral, &m)?)?;
     parent.add_submodule(&m)?;
     Ok(())
 }

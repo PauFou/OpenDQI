@@ -26,8 +26,9 @@ use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyList};
 
 use opendqi_core::dq::{
-    compute_tr_audit_emir_issues, default_checks, default_feedback_checks,
-    default_tr_state_checks, stream_checks_into, stream_emir_checks_into, CheckContext,
+    compute_collateral_emir_issues, compute_tr_audit_emir_issues, default_checks,
+    default_feedback_checks, default_tr_state_checks, stream_checks_into,
+    stream_emir_checks_into, CheckContext,
 };
 use opendqi_core::{EmirRecord, Regime, SortedIssueSink, Thresholds};
 
@@ -322,6 +323,61 @@ pub fn tr_audit(tar: &str, tsr: &str, feedback: &str) -> PyResult<PyScanResult> 
 }
 
 // =================================================================
+// v0.13.0 — cross-message workflow: collateral_audit
+// =================================================================
+
+/// `opendqi.emir.collateral_audit(*, tsr, msr) -> PyScanResult`.
+///
+/// EMIR Article 11 collateral obligation check — joins the TSR
+/// (`auth.107`, trade state) with the MSR (`auth.109`, margin
+/// state) by UTI and emits the 2 `EMIR.COL.*` cross-message
+/// checks (`EMIR.COL.MISSING` when no MSR link exists or all 4
+/// IM/VM posted+collected amounts are absent/zero ;
+/// `EMIR.COL.STALE` when the linked margin snapshot is older
+/// than `emir_rmt.collateral_max_age_days` vs the TSR
+/// `state_as_of`). Mirror of the v0.10.0 CLI
+/// `opendqi emir collateral-audit --tsr ... --msr ...`.
+///
+/// Default thresholds (`Thresholds::default()`) — Python can't
+/// override the threshold config in v0.13.0. Users who need
+/// custom thresholds (`collateral_max_age_days`, severity
+/// overrides, ...) go through the CLI with `--config
+/// thresholds.yml`. Programmatic threshold passthrough is a
+/// v0.14+ item.
+#[pyfunction]
+#[pyo3(signature = (*, tsr, msr))]
+pub fn collateral_audit(tsr: &str, msr: &str) -> PyResult<PyScanResult> {
+    let started_at = Utc::now();
+    let thresholds = Thresholds::default();
+
+    let tsr_records = opendqi_xml::read_emir_tr_state_xml(Path::new(tsr))
+        .map_err(to_py_err)?
+        .records;
+    let msr_records = opendqi_xml::read_emir_msr_xml(Path::new(msr))
+        .map_err(to_py_err)?
+        .records;
+
+    let now = Utc::now();
+    let cross = compute_collateral_emir_issues(&tsr_records, &msr_records, &thresholds, now);
+
+    let sink = Mutex::new(SortedIssueSink::new(&thresholds, STREAM_SPILL_MAX_ISSUES));
+    if !cross.is_empty() {
+        sink.lock()
+            .expect("sink mutex not poisoned")
+            .push_batch(cross);
+    }
+
+    let finished_at = Utc::now();
+    let records_total = (tsr_records.len() + msr_records.len()) as u32;
+    let (summary, sorted_issues) = sink
+        .into_inner()
+        .expect("sink mutex not poisoned")
+        .finish(Regime::Emir, 2, records_total, started_at, finished_at);
+    let batch = issues_to_record_batch(sorted_issues).map_err(to_py_err)?;
+    Ok(PyScanResult::new(summary, Some(batch), None))
+}
+
+// =================================================================
 // Module registration
 // =================================================================
 
@@ -340,6 +396,7 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(scan_files, &m)?)?;
     // Cross-message workflow entry points (v0.13.0).
     m.add_function(wrap_pyfunction!(tr_audit, &m)?)?;
+    m.add_function(wrap_pyfunction!(collateral_audit, &m)?)?;
     parent.add_submodule(&m)?;
     Ok(())
 }
