@@ -4,12 +4,16 @@
 //! P3: `issues` is now a real Arrow `pyarrow.Table` (the v1.0
 //! contract). `normalized` is still `None` until P5.
 
+use std::path::Path;
+
 use arrow::array::RecordBatch;
 use arrow::pyarrow::ToPyArrow;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyDict, PyList};
 
-use opendqi_core::ScanSummary;
+use opendqi_core::{DqIssue, DqiEvidence, DqiIndicator, ScanSummary};
+
+use crate::errors::to_py_err;
 
 /// Result of an OpenDQI scan, exposed to Python.
 ///
@@ -107,6 +111,141 @@ impl PyScanResult {
             self.summary.quality_score,
         )
     }
+}
+
+/// v0.15 Data Quality Pack result exposed to Python — bundles
+/// the 10 [`DqiIndicator`] rows, their [`DqiEvidence`] (≤ 20 per
+/// indicator), the granular issue stream from running the
+/// existing 216-check registries, and a standard [`ScanSummary`]
+/// over those issues.
+///
+/// Getters all return `pyarrow.Table`s (single-chunk) matching
+/// the v1.0 stable schemas in
+/// [`crate::dqi_schemas::indicators_schema`] /
+/// [`crate::dqi_schemas::evidence_schema`] /
+/// [`crate::issues::issues_schema`]. `.summary` returns a dict
+/// with the same shape as `summary.json`. `.report(out_dir)`
+/// writes the same 5 files the CLI subcommand does.
+#[pyclass(module = "opendqi", frozen)]
+pub struct PyDqiPackResult {
+    pub(crate) indicators: Vec<DqiIndicator>,
+    pub(crate) evidence: Vec<DqiEvidence>,
+    pub(crate) issues: Vec<DqIssue>,
+    pub(crate) summary: ScanSummary,
+    pub(crate) indicators_batch: RecordBatch,
+    pub(crate) evidence_batch: RecordBatch,
+    pub(crate) issues_batch: RecordBatch,
+}
+
+impl PyDqiPackResult {
+    pub(crate) fn new(
+        indicators: Vec<DqiIndicator>,
+        evidence: Vec<DqiEvidence>,
+        issues: Vec<DqIssue>,
+        summary: ScanSummary,
+        indicators_batch: RecordBatch,
+        evidence_batch: RecordBatch,
+        issues_batch: RecordBatch,
+    ) -> Self {
+        Self {
+            indicators,
+            evidence,
+            issues,
+            summary,
+            indicators_batch,
+            evidence_batch,
+            issues_batch,
+        }
+    }
+}
+
+#[pymethods]
+impl PyDqiPackResult {
+    /// Indicators as `pyarrow.Table` — v1.0 stable 11-column
+    /// schema (see `crate::dqi_schemas::indicators_schema`).
+    #[getter]
+    fn indicators<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        batch_to_pyarrow_table(py, &self.indicators_batch)
+    }
+
+    /// Evidence rows as `pyarrow.Table` — v1.0 stable 7-column
+    /// schema (see `crate::dqi_schemas::evidence_schema`).
+    #[getter]
+    fn evidence<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        batch_to_pyarrow_table(py, &self.evidence_batch)
+    }
+
+    /// Granular issues from running the existing 216-check
+    /// registries on every provided layer — same `pyarrow.Table`
+    /// 11-column contract as the v0.12+ `PyScanResult.issues`.
+    #[getter]
+    fn issues<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        batch_to_pyarrow_table(py, &self.issues_batch)
+    }
+
+    /// ScanSummary as a dict — same shape as the on-disk
+    /// `summary.json` (the DQI pack reuses the existing
+    /// `IssueAggregator` contract).
+    #[getter]
+    fn summary<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        summary_to_dict(py, &self.summary)
+    }
+
+    /// Write the 5 on-disk artefacts the CLI subcommand writes:
+    /// `report.html`, `summary.json`, `issues.csv`,
+    /// `indicators.csv`, `evidence.csv`. `out_dir` is created
+    /// if absent.
+    fn report(&self, out_dir: &str) -> PyResult<()> {
+        let out = Path::new(out_dir);
+        std::fs::create_dir_all(out)
+            .map_err(|e| to_py_err(anyhow::anyhow!("creating {out_dir}: {e}")))?;
+        opendqi_report::write_summary_json(&out.join("summary.json"), &self.summary)
+            .map_err(to_py_err)?;
+        opendqi_report::write_issues_csv(&out.join("issues.csv"), &self.issues)
+            .map_err(to_py_err)?;
+        opendqi_report::write_indicators_csv(&out.join("indicators.csv"), &self.indicators)
+            .map_err(to_py_err)?;
+        opendqi_report::write_evidence_csv(&out.join("evidence.csv"), &self.evidence)
+            .map_err(to_py_err)?;
+        opendqi_report::write_report_html_with_dqi(
+            &out.join("report.html"),
+            &self.summary,
+            &self.issues,
+            &[],
+            Some(&self.indicators),
+        )
+        .map_err(to_py_err)?;
+        Ok(())
+    }
+
+    fn __repr__(&self) -> String {
+        let computed = self
+            .indicators
+            .iter()
+            .filter(|i| !matches!(i.status, opendqi_core::DqiStatus::NotApplicable))
+            .count();
+        format!(
+            "PyDqiPackResult(indicators={}/{} computed, evidence={}, issues={}, score={:.2})",
+            computed,
+            self.indicators.len(),
+            self.evidence.len(),
+            self.issues.len(),
+            self.summary.quality_score,
+        )
+    }
+}
+
+/// Wrap an Arrow `RecordBatch` as a single-chunk `pyarrow.Table`.
+/// Shared with the [`PyScanResult`] getters.
+fn batch_to_pyarrow_table<'py>(
+    py: Python<'py>,
+    batch: &RecordBatch,
+) -> PyResult<Bound<'py, PyAny>> {
+    let rb_py = batch.to_pyarrow(py)?;
+    let pa = py.import_bound("pyarrow")?;
+    let batches = PyList::new_bound(py, [rb_py]);
+    let table = pa.getattr("Table")?.call_method1("from_batches", (batches,))?;
+    Ok(table)
 }
 
 /// Build a `PyDict` mirroring the canonical `ScanSummary` shape —

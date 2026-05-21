@@ -30,13 +30,17 @@ use opendqi_core::dq::{
     default_checks, default_feedback_checks, default_tr_state_checks, stream_checks_into,
     stream_emir_checks_into, CheckContext,
 };
-use opendqi_core::{EmirRecord, Regime, SortedIssueSink, Thresholds};
+use opendqi_core::{
+    compute_emir_dqi_pack, EmirDqiInputs, EmirRecord, MappingPresence, Regime, SortedIssueSink,
+    Thresholds,
+};
 use opendqi_io::CsvMapping;
 
 use crate::convert::{batch_to_emir_records, Mapping};
+use crate::dqi_schemas::{evidence_to_record_batch, indicators_to_record_batch};
 use crate::errors::to_py_err;
 use crate::issues::issues_to_record_batch;
-use crate::result::PyScanResult;
+use crate::result::{PyDqiPackResult, PyScanResult};
 
 /// Match the CLI default — small enough that every shipped golden
 /// stays in the no-spill path, which is byte-identical to the
@@ -495,6 +499,145 @@ pub fn book_reconcile<'py>(
 }
 
 // =================================================================
+// v0.15 — EMIR Data Quality Pack
+// =================================================================
+
+/// `opendqi.emir.data_quality_pack(*, tsr=None, tar=None, msr=None,
+/// mar=None, feedback=None, as_of=None) -> PyDqiPackResult`.
+///
+/// EMIR Data Quality Pack (v0.15): aggregates the 5 EMIR TR layers
+/// into 10 regulator-style indicators (numerator / denominator /
+/// rate / threshold / status) + ≤ 20 evidence rows per indicator,
+/// AND co-produces the granular issue stream from the existing
+/// 216-check registries. All paths are optional ; at least one
+/// must be provided.
+///
+/// Inputs are file paths only in v0.15 (mirrors `tr_audit` /
+/// `collateral_audit`). Arrow Table / RecordBatch dual input is
+/// scheduled for a follow-up release. Custom thresholds via
+/// programmatic YAML config are also deferred — users needing
+/// overrides use the CLI's `--config`.
+///
+/// `as_of` defaults to today (UTC). Format: `YYYY-MM-DD`.
+/// Pinning it keeps the stale-valuation cutoff stable across
+/// calendar days (the CLI golden uses this same trick).
+///
+/// Gating: the orchestrator inspects the loaded TAR records'
+/// `raw_fields` for `confirmation_timestamp` /
+/// `reconciliation_status` ; if either is observed at least
+/// once non-empty, the matching `DQI_CONF_MISSING` /
+/// `DQI_REC_STATUS_UNPAIRED` indicator computes. Otherwise it
+/// reports `status: not_applicable` with no rate.
+#[pyfunction]
+#[pyo3(signature = (*, tsr=None, tar=None, msr=None, mar=None, feedback=None, as_of=None))]
+#[allow(clippy::too_many_arguments)]
+pub fn data_quality_pack(
+    tsr: Option<&str>,
+    tar: Option<&str>,
+    msr: Option<&str>,
+    mar: Option<&str>,
+    feedback: Option<&str>,
+    as_of: Option<&str>,
+) -> PyResult<PyDqiPackResult> {
+    if tsr.is_none() && tar.is_none() && msr.is_none() && mar.is_none() && feedback.is_none() {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "data_quality_pack: at least one of tsr / tar / msr / mar / feedback is required",
+        ));
+    }
+
+    let thresholds = Thresholds::default();
+
+    // Resolve as_of (default = today UTC).
+    let as_of_date = match as_of {
+        Some(s) => chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").map_err(|e| {
+            pyo3::exceptions::PyValueError::new_err(format!(
+                "parsing as_of {s:?} (expected YYYY-MM-DD): {e}"
+            ))
+        })?,
+        None => Utc::now().date_naive(),
+    };
+
+    // Load each provided layer.
+    let tsr_records = match tsr {
+        Some(p) => opendqi_xml::read_emir_tr_state_xml(Path::new(p))
+            .map_err(to_py_err)?
+            .records,
+        None => Vec::new(),
+    };
+    let tar_records = match tar {
+        Some(p) => opendqi_xml::read_emir_xml(Path::new(p))
+            .map_err(to_py_err)?
+            .records,
+        None => Vec::new(),
+    };
+    let msr_records = match msr {
+        Some(p) => opendqi_xml::read_emir_msr_xml(Path::new(p))
+            .map_err(to_py_err)?
+            .records,
+        None => Vec::new(),
+    };
+    let mar_records = match mar {
+        Some(p) => opendqi_xml::read_emir_mar_xml(Path::new(p))
+            .map_err(to_py_err)?
+            .records,
+        None => Vec::new(),
+    };
+    let feedback_records = match feedback {
+        Some(p) => opendqi_xml::read_emir_feedback_xml(Path::new(p))
+            .map_err(to_py_err)?
+            .records,
+        None => Vec::new(),
+    };
+
+    // Detect raw_fields presence for the 2 gated indicators
+    // (same heuristic as the CLI run_data_quality_pack).
+    let has_conf = tar_records.iter().any(|r| {
+        r.raw_fields
+            .get("confirmation_timestamp")
+            .map(|v| !v.trim().is_empty())
+            .unwrap_or(false)
+    });
+    let has_rec = tar_records.iter().any(|r| {
+        r.raw_fields
+            .get("reconciliation_status")
+            .map(|v| !v.trim().is_empty())
+            .unwrap_or(false)
+    });
+    let mapping_presence = MappingPresence {
+        has_confirmation_timestamp: has_conf,
+        has_reconciliation_status: has_rec,
+    };
+
+    let inputs = EmirDqiInputs {
+        tsr: if tsr.is_some() { Some(&tsr_records) } else { None },
+        tar: if tar.is_some() { Some(&tar_records) } else { None },
+        msr: if msr.is_some() { Some(&msr_records) } else { None },
+        mar: if mar.is_some() { Some(&mar_records) } else { None },
+        feedback: if feedback.is_some() {
+            Some(&feedback_records)
+        } else {
+            None
+        },
+    };
+
+    let pack = compute_emir_dqi_pack(inputs, mapping_presence, &thresholds, as_of_date);
+
+    let indicators_batch = indicators_to_record_batch(&pack.indicators).map_err(to_py_err)?;
+    let evidence_batch = evidence_to_record_batch(&pack.evidence).map_err(to_py_err)?;
+    let issues_batch = issues_to_record_batch(pack.issues.iter().cloned()).map_err(to_py_err)?;
+
+    Ok(PyDqiPackResult::new(
+        pack.indicators,
+        pack.evidence,
+        pack.issues,
+        pack.issues_summary,
+        indicators_batch,
+        evidence_batch,
+        issues_batch,
+    ))
+}
+
+// =================================================================
 // Module registration
 // =================================================================
 
@@ -515,6 +658,8 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(tr_audit, &m)?)?;
     m.add_function(wrap_pyfunction!(collateral_audit, &m)?)?;
     m.add_function(wrap_pyfunction!(book_reconcile, &m)?)?;
+    // Data Quality Pack (v0.15.0).
+    m.add_function(wrap_pyfunction!(data_quality_pack, &m)?)?;
     parent.add_submodule(&m)?;
     Ok(())
 }

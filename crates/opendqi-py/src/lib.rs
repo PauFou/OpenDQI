@@ -15,6 +15,7 @@
 use pyo3::prelude::*;
 
 mod convert;
+mod dqi_schemas;
 mod emir;
 mod errors;
 mod issues;
