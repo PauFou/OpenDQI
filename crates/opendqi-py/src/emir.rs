@@ -1,18 +1,19 @@
 //! `opendqi.emir` submodule — EMIR-side bindings.
 //!
-//! Three entry points :
-//! - `scan_parquet(path)`        — P2: scan a normalized EMIR
-//!                                  Parquet, return summary + issues.
-//! - `scan_table(table, mapping)` — P4: scan an Arrow table directly
-//!                                  with a canonical-field → user-col
-//!                                  mapping. Avoids the Parquet
-//!                                  roundtrip.
-//! - `parse_xml(path)`           — P4: parse any EMIR ISO 20022
-//!                                  firm submission (auth.030,
-//!                                  auth.052 SFTR-side) into an
-//!                                  Arrow Table that can be passed
-//!                                  back into `scan_table` or
-//!                                  inspected directly.
+//! Single-file entry points (v0.12.0 P2-P4) :
+//! - `scan_parquet(path)`        — scan a normalized EMIR Parquet.
+//! - `scan_table(table, mapping)` — scan an Arrow table with a
+//!                                  canonical-field → user-col
+//!                                  mapping (avoids Parquet
+//!                                  roundtrip).
+//! - `parse_xml(path)`           — parse EMIR ISO 20022 firm
+//!                                  submission XML into the
+//!                                  canonical Arrow Table.
+//!
+//! Multi-file entry points (v0.13.0) :
+//! - `scan_directory(path)`      — walk a directory of EMIR
+//!                                  submissions, aggregate, scan.
+//! - `scan_files([paths])`       — same with an explicit path list.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -137,15 +138,113 @@ pub fn parse_xml<'py>(py: Python<'py>, path: &str) -> PyResult<Bound<'py, PyAny>
     record_batch_to_pyarrow_table(py, &batch)
 }
 
+// =================================================================
+// v0.13.0 — multi-file entry points
+// =================================================================
+
+/// Dispatch a single path to the right EMIR reader by extension.
+/// Returns the parsed records; format-level issues (file-not-
+/// well-formed, wrong-namespace, ...) are dropped here — they
+/// would surface as `EMIR.FMT.*` issues if we exposed them, but
+/// `scan_directory` / `scan_files` are aggregator entry points
+/// and we want clean errors for unreadable files, not in-band
+/// issue mixing. A future v0.14 may add an `include_format_
+/// issues=True` knob; for now we keep the v0.13 surface minimal.
+fn read_emir_path_as_records(path: &Path) -> PyResult<Vec<EmirRecord>> {
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    match ext.as_str() {
+        "xml" => Ok(opendqi_xml::read_emir_xml(path).map_err(to_py_err)?.records),
+        "parquet" => opendqi_io::read_emir_parquet(path).map_err(to_py_err),
+        "csv" => Err(pyo3::exceptions::PyValueError::new_err(format!(
+            "scan_directory / scan_files cannot handle CSV inputs in v0.13.0 \
+             (CSV requires a column mapping). For CSV: use \
+             `opendqi.emir.scan_table(pyarrow.csv.read_csv(path), mapping=…)` \
+             on each file. Offending path: {}",
+            path.display()
+        ))),
+        other => Err(pyo3::exceptions::PyValueError::new_err(format!(
+            "unsupported file extension {:?} (expected .xml, .parquet, or .csv; \
+             .csv requires a mapping and isn't supported by the multi-file \
+             entry points). Offending path: {}",
+            other,
+            path.display()
+        ))),
+    }
+}
+
+/// `opendqi.emir.scan_directory(path: str) -> PyScanResult`.
+///
+/// Walks the directory at `path` (non-recursive), discovers all
+/// EMIR `.xml` and `.parquet` files (plus expands any `.zip` /
+/// `.gz` archives the same way the CLI does), parses each into
+/// `EmirRecord`s, aggregates the lot into one big in-memory
+/// batch, and runs the standard `default_checks()` suite over
+/// the aggregate. `summary.files_processed` reflects the actual
+/// number of files contributed records.
+///
+/// **`.csv` files are rejected** in v0.13.0 (CSV requires a
+/// column mapping ; see error message for the workaround).
+#[pyfunction]
+#[pyo3(signature = (path, *, normalize = false))]
+pub fn scan_directory(path: &str, normalize: bool) -> PyResult<PyScanResult> {
+    let paths = opendqi_io::discover_emir_inputs(Path::new(path)).map_err(to_py_err)?;
+    scan_emir_paths(&paths, normalize)
+}
+
+/// `opendqi.emir.scan_files(paths: list[str]) -> PyScanResult`.
+///
+/// Explicit-list variant of `scan_directory` — skips the
+/// directory walk and parses exactly the paths the caller
+/// provides. Same extension contract (`.xml`, `.parquet`) and
+/// same aggregation behaviour.
+#[pyfunction]
+#[pyo3(signature = (paths, *, normalize = false))]
+pub fn scan_files(paths: Vec<String>, normalize: bool) -> PyResult<PyScanResult> {
+    let path_bufs: Vec<std::path::PathBuf> = paths.iter().map(std::path::PathBuf::from).collect();
+    scan_emir_paths(&path_bufs, normalize)
+}
+
+/// Shared helper for `scan_directory` + `scan_files`: parse each
+/// path, aggregate the records, run the standard EMIR scan
+/// pipeline. `files_processed` = number of paths actually
+/// contributing records.
+fn scan_emir_paths(paths: &[std::path::PathBuf], normalize: bool) -> PyResult<PyScanResult> {
+    if paths.is_empty() {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "scan_directory / scan_files received no input files (empty \
+             directory or empty list). Provide at least one .xml or .parquet path.",
+        ));
+    }
+    let mut all_records: Vec<EmirRecord> = Vec::new();
+    for p in paths {
+        let recs = read_emir_path_as_records(p)?;
+        all_records.extend(recs);
+    }
+    let files = paths.len() as u32;
+    scan_emir_records(all_records, files, normalize)
+}
+
+// =================================================================
+// Module registration
+// =================================================================
+
 /// Register the `opendqi.emir` submodule on the parent
 /// `opendqi` module.
 pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     let py = parent.py();
     let m = PyModule::new_bound(py, "emir")?;
     m.add("__doc__", "EMIR data-quality bindings.")?;
+    // Single-file entry points (v0.12.0).
     m.add_function(wrap_pyfunction!(scan_parquet, &m)?)?;
     m.add_function(wrap_pyfunction!(scan_table, &m)?)?;
     m.add_function(wrap_pyfunction!(parse_xml, &m)?)?;
+    // Multi-file entry points (v0.13.0).
+    m.add_function(wrap_pyfunction!(scan_directory, &m)?)?;
+    m.add_function(wrap_pyfunction!(scan_files, &m)?)?;
     parent.add_submodule(&m)?;
     Ok(())
 }
