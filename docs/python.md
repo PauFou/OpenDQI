@@ -1,14 +1,22 @@
 # OpenDQI from Python
 
-> **Status: preview (v0.12.x).**
+> **Status: preview (v0.13.x).**
 > **Stable**: the v1.0 Arrow output contract for `result.issues`
 > (11 cols, names + types frozen, byte-identical to the existing
 > `issues.csv` produced by the CLI — locked in v0.12.0 P3 and
 > tested by `crates/opendqi-py/tests/test_issues_schema.py::
 > test_arrow_schema_matches_csv_golden`).
-> **Evolving**: API additions in v0.13 (`scan_directory`,
-> `tr_audit`, `collateral_audit`, `book_reconcile`, a Spark UDF
-> namespace) — **additive**, no breaking changes planned.
+> **v0.13.0 shipped (additive)**: 10 new entry points covering
+> multi-file scans (`scan_directory`, `scan_files`) and the four
+> cross-message workflows (`tr_audit`, `collateral_audit`,
+> `book_reconcile`, `missing_collateral`), plus an experimental
+> `opendqi.spark.scan_spark_dataframe` helper. Single-file
+> functions from v0.12 (`scan_parquet`, `scan_table`, `parse_xml`)
+> are unchanged.
+> **Evolving (v0.14+)**: store-backed lifecycle wrapping, native
+> Spark mapInPandas UDF, Polars LazyFrame fast path, custom
+> CsvMapping date formats — **additive**, no breaking changes
+> planned.
 
 ## Install
 
@@ -107,23 +115,114 @@ silent all-None records.
 **See [`examples/python/`](../examples/python/) for runnable
 versions of all 3.**
 
-## Public API surface
+## Multi-file scans (v0.13.0)
 
-Six functions total (3 per regime), symmetric.
+For pipelines that materialise more than one file per scan
+(daily directory dump, mixed XML+Parquet inputs, etc.), v0.13
+adds two aggregator entry points :
+
+```python
+# Walk a directory non-recursively, dispatch by extension,
+# aggregate all records, scan as one batch.
+result = opendqi.emir.scan_directory("/path/to/inputs/")
+
+# Explicit list — same logic minus the discovery walk.
+result = opendqi.emir.scan_files([
+    "auth030.xml",
+    "trades.parquet",
+    "more_auth030.xml",
+])
+
+# Symmetric for SFTR.
+result = opendqi.sftr.scan_directory("/path/to/sftr/inputs/")
+```
+
+Accepts `.xml` (firm-submission ISO 20022) and `.parquet` (the
+canonical normalized schema). **`.csv` is rejected** since it
+needs a column mapping; use `scan_table(pa.csv.read_csv(path),
+mapping=…)` per file for that case.
+
+## Cross-message workflows (v0.13.0)
+
+The four cross-message CLI commands now have native Python
+equivalents — same engine, same checks, single-call API :
+
+```python
+# 3-layer post-TR audit (TAR + TSR + feedback) + 3 EMIR.AUD.*
+# cross-layer coherence checks. SFTR variant takes 2 layers.
+result = opendqi.emir.tr_audit(
+    tar="auth030.xml",
+    tsr="auth107.xml",
+    feedback="auth092.xml",
+)
+result = opendqi.sftr.tr_audit(tar="auth052.xml", tsr="auth079.xml")
+
+# EMIR Article 11 collateral obligation — TSR ↔ MSR cross-ref
+# by UTI; fires EMIR.COL.MISSING / EMIR.COL.STALE.
+result = opendqi.emir.collateral_audit(
+    tsr="auth107.xml",
+    msr="auth109.xml",
+)
+
+# SFTR Missing Collateral Request — 2 base SFTR.MCR.* + 3
+# optional cross-ref checks when --tsr is provided.
+result = opendqi.sftr.missing_collateral(
+    "auth083.xml",
+    tsr="auth079.xml",   # optional — adds 3 cross-ref checks
+)
+
+# Internal book ↔ TR state reconciliation — 5 EMIR.BREC.* /
+# SFTR.BREC.* mismatch checks. The `book` arg is dual-input :
+# str path (.csv with mapping, or .parquet without) OR a
+# pyarrow.Table/RecordBatch already in memory (always needs
+# mapping).
+result = opendqi.emir.book_reconcile(
+    "book.csv",
+    "auth107.xml",
+    mapping={"uti": "trade_uti", "notional_amount": "notional", ...},
+)
+```
+
+All cross-message workflows return the same `PyScanResult`
+shape; check IDs are prefixed by layer (`EMIR.{COMP,VLD,...,
+TST,FBK,AUD,COL,BREC,MCR}.…`) so per-layer filtering in Python
+is a one-liner :
+
+```python
+aud_only = result.issues.filter(
+    pa.compute.starts_with(result.issues.column("check_id"), "EMIR.AUD.")
+)
+```
+
+**Store-backed lifecycle checks** (the CLI's `--store` flag)
+are NOT yet wrapped in Python — use the CLI for cross-batch
+lifecycle. v0.14+ may add it.
+
+## Public API surface
 
 | Function | Returns | Inputs |
 |---|---|---|
+| **Single-file** (v0.12.0) | | |
 | `opendqi.emir.scan_parquet(path, *, normalize=False)` | `PyScanResult` | path to canonical EMIR Parquet |
 | `opendqi.emir.scan_table(table, mapping, *, normalize=False)` | `PyScanResult` | pyarrow.Table / RecordBatch + mapping dict |
 | `opendqi.emir.parse_xml(path)` | `pyarrow.Table` | path to `auth.030.001.{03,04}` |
-| `opendqi.sftr.scan_parquet(...)`, `scan_table(...)`, `parse_xml(...)` | (symmetric) | SFTR equivalents |
+| **Multi-file** (v0.13.0) | | |
+| `opendqi.emir.scan_directory(path, *, normalize=False)` | `PyScanResult` | directory path; aggregates all .xml + .parquet |
+| `opendqi.emir.scan_files(paths, *, normalize=False)` | `PyScanResult` | explicit list of paths |
+| **Cross-message** (v0.13.0) | | |
+| `opendqi.emir.tr_audit(*, tar, tsr, feedback)` | `PyScanResult` | 3 paths; 3 EMIR.AUD.* + per-layer |
+| `opendqi.emir.collateral_audit(*, tsr, msr)` | `PyScanResult` | auth.107 + auth.109; EMIR.COL.* |
+| `opendqi.emir.book_reconcile(book, tsr, *, mapping=None)` | `PyScanResult` | str path or pa.Table + auth.107; EMIR.BREC.* |
+| `opendqi.sftr.{scan_parquet, scan_table, parse_xml, scan_directory, scan_files, tr_audit, book_reconcile, missing_collateral}(…)` | (symmetric, no `collateral_audit` — SFTR-side cross-collateral is `missing_collateral`) | |
+| **Experimental** (v0.13.0) | | |
+| `opendqi.spark.scan_spark_dataframe(df, *, regime, mapping, normalize=False)` | `pyspark.sql.DataFrame` | Spark DataFrame round-trip via pandas+Arrow; emits FutureWarning |
 
 Plus module-level:
 
 | Attribute | Description |
 |---|---|
 | `opendqi.__version__` | semver string from Cargo.toml |
-| `opendqi.emir`, `opendqi.sftr` | regime submodules |
+| `opendqi.emir`, `opendqi.sftr`, `opendqi.spark` | submodules |
 
 ## Output shapes
 
@@ -218,33 +317,37 @@ df = result.issues.to_pandas()
 df["check_id"].value_counts().head(10)
 ```
 
-### Spark (via Arrow / Parquet handoff — *not* yet a native UDF)
+### Spark — `opendqi.spark` (v0.13.0 experimental)
 
-Until v0.13 ships a dedicated `opendqi.spark` namespace with a
-native `mapInPandas` UDF, the recommended pattern is to let Spark
-write canonical Parquet and OpenDQI read it back:
+v0.13.0 ships an **experimental** Python-only helper that does
+the Spark→pandas→Arrow→scan_table→pandas→Spark round-trip in
+one call :
 
 ```python
-# Spark side: write canonical EMIR Parquet
+import opendqi
+
+issues_sdf = opendqi.spark.scan_spark_dataframe(
+    spark_df,
+    regime="emir",
+    mapping={"uti": "trade_uti", "valuation_timestamp": "MtmTs", ...},
+)
+# issues_sdf is a Spark DataFrame with the 11-column v1.0 issues
+# schema. Emits a FutureWarning — signature may evolve in v0.14
+# once a native mapInPandas UDF ships.
+```
+
+PySpark is **not** declared as a dependency of the `opendqi`
+wheel (duck-typed import inside the helper) — install it
+yourself: `pip install pyspark`.
+
+For large batch pipelines, the Parquet handoff via CLI is still
+the most robust pattern:
+
+```python
 spark_df.write.mode("overwrite").parquet("/tmp/opendqi/input")
-
-# OpenDQI side: scan
-result = opendqi.emir.scan_parquet("/tmp/opendqi/input")
-
-# Spark side: read issues back as a DataFrame
-issues_sdf = spark.createDataFrame(result.issues.to_pandas())
-```
-
-For batch pipelines, calling the CLI directly is also a fine
-option:
-
-```bash
-opendqi emir scan /tmp/opendqi/input --out /tmp/opendqi/report
-```
-
-then on the Spark side:
-
-```python
+# then in a shell:
+#   opendqi emir scan /tmp/opendqi/input --out /tmp/opendqi/report
+# back in PySpark:
 issues = spark.read.csv("/tmp/opendqi/report/issues.csv", header=True)
 ```
 
@@ -254,27 +357,29 @@ issues = spark.read.csv("/tmp/opendqi/report/issues.csv", header=True)
   API additively. **Breaking changes to the v1.0 Arrow contract
   for `result.issues` are explicitly out of scope** (locked in
   v0.12.0 P3, parity-tested vs the CLI golden).
-- **No Spark-native UDF yet.** Use the Arrow / Parquet handoff
-  pattern above; the dedicated namespace is on the
-  [v0.13 roadmap](python-roadmap.md).
-- **No `scan_directory` yet.** Call `scan_parquet` per file in a
-  Python `for` loop. Native in v0.13.
-- **No cross-message subcommands from Python yet** (`tr_audit`,
-  `collateral_audit`, `book_reconcile`). Use the CLI for those
-  multi-file flows in v0.12.x. Python wrappers v0.13 (trivial
-  follow-on — P4 already exposes every needed primitive).
-- **No Python wrapping of the SQLite feedback-store workflow.**
-  Use the CLI (`opendqi feedback list/resolve/stale/analytics`).
-- **No PyPI publish of an in-process workflow store**; the
-  bindings stay stateless. Lifecycle / feedback / book-vs-TR
-  remain CLI flows in v0.12.x.
+- **`opendqi.spark` is EXPERIMENTAL** in v0.13. The Spark→
+  pandas→Arrow round-trip works but emits a `FutureWarning`.
+  The signature may evolve in v0.14 once a native
+  `mapInPandas` UDF ships (partition-friendly, zero-copy).
+- **No Python wrapping of the SQLite feedback-store / lifecycle
+  workflow.** `--store` and the lifecycle / feedback
+  list/resolve/stale/analytics commands stay CLI-only. The
+  Python `tr_audit` runs the cross-layer audit but NOT cross-
+  batch lifecycle checks (which need store-loaded prior records).
+- **`book_reconcile` accepts CSV / Parquet / pyarrow.Table** for
+  the book side, but `CsvMapping` date/datetime format strings
+  use the defaults (`%Y-%m-%d` and RFC 3339). Non-default formats
+  go through the CLI with `--mapping` YAML. Will be exposed in
+  Python in v0.14+ if asked.
+- **No `mar_scan` / `msr_scan` / `recon_stats` / `warnings`
+  single-message Python wrappers.** These are single-message TR
+  scans that don't add much over `scan_table(pa.from_…(message))`.
+  Add in v0.14+ if a user pattern emerges.
 - **No Polars `LazyFrame` zero-copy fast path** — for now,
   `pl.from_arrow(result.issues)` materialises a regular `pl.
-  DataFrame` (cheap, single-batch). Lazy-frame fast-path v0.13+.
+  DataFrame` (cheap, single-batch). Lazy-frame fast-path v0.14+.
 - **No Windows wheels** — consistent with the existing
-  Ubuntu+macOS CI matrix. Add a Windows runner to
-  `.github/workflows/{ci,python-release}.yml` if you need it
-  internally.
+  Ubuntu+macOS CI matrix.
 
 ## Architecture
 

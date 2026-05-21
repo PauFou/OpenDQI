@@ -35,9 +35,9 @@ python examples/python/quickstart.py
 ```
 
 If that prints a summary dict + a 5-row pandas head, you're set.
-Then dig into the 3 progressively-more-realistic patterns below.
+Then dig into the progressively-more-realistic patterns below.
 
-## The three deeper patterns
+## The deeper patterns
 
 ```bash
 # 1. Scan a normalized Parquet file
@@ -50,6 +50,9 @@ python examples/python/02_parse_xml_then_scan.py
 # 3. Scan a user-named Arrow table via a custom column mapping
 #    (the realistic data-warehouse path)
 python examples/python/03_custom_mapping.py
+
+# 4. v0.13.0 — cross-message tr_audit: 3 files, 3 EMIR.AUD.* checks
+python examples/python/04_tr_audit.py
 ```
 
 | Script | What it shows | Best for |
@@ -58,6 +61,7 @@ python examples/python/03_custom_mapping.py
 | **`01_scan_parquet.py`** | Single-call entry point on an existing canonical Parquet | Pipelines that already materialise normalized data |
 | **`02_parse_xml_then_scan.py`** | `parse_xml → scan_table` chain, no disk intermediate | One-off interactive audits + in-memory data platforms |
 | **`03_custom_mapping.py`** | `mapping={canonical: user_col}` for renamed columns | Real-world data warehouses where columns aren't named per ESMA convention |
+| **`04_tr_audit.py`** *(v0.13)* | `tr_audit(tar=…, tsr=…, feedback=…)` — 3 files, 3 layers, 3 cross-layer `EMIR.AUD.*` checks | Post-TR consolidated audits ; the highest-value cross-message workflow |
 
 ## What you get back
 

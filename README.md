@@ -82,7 +82,15 @@ print(result.summary)   # dict — same shape as summary.json
 print(result.issues)    # pyarrow.Table — v1.0 stable 11-column schema
 ```
 
-More on the Python side: minimal copy-paste demo in [`examples/python/quickstart.py`](examples/python/quickstart.py) · 3 progressively-realistic patterns in [`examples/python/`](examples/python/) · executable Jupyter notebook in [`examples/python/quickstart.ipynb`](examples/python/quickstart.ipynb) · full quickstart guide in [`docs/python.md`](docs/python.md) · architecture spec in [`docs/python-roadmap.md`](docs/python-roadmap.md).
+Or one of the new v0.13 cross-message workflows — 3 files, one call, post-TR audit including the 3 `EMIR.AUD.*` cross-layer coherence checks:
+
+```python
+result = opendqi.emir.tr_audit(
+    tar="auth030.xml", tsr="auth107.xml", feedback="auth092.xml",
+)
+```
+
+The full v0.13 surface adds 10 new entry points (`scan_directory`, `scan_files`, `tr_audit`, `collateral_audit`, `book_reconcile`, `missing_collateral`) plus an experimental `opendqi.spark.scan_spark_dataframe(...)` helper. More on the Python side: minimal demo in [`examples/python/quickstart.py`](examples/python/quickstart.py) · 4 progressively-realistic patterns in [`examples/python/`](examples/python/) · executable Jupyter notebook in [`examples/python/quickstart.ipynb`](examples/python/quickstart.ipynb) · full quickstart guide in [`docs/python.md`](docs/python.md) · architecture spec in [`docs/python-roadmap.md`](docs/python-roadmap.md).
 
 ## Coverage at a glance
 
