@@ -1,28 +1,41 @@
-# Python / Arrow bindings — wheel build + GitHub Release upload
-# + PyPI publish via OIDC trusted publishing (v0.12.1+).
+# Python / Arrow bindings — wheel build + PyPI publish via OIDC
+# trusted publishing (v0.12.3+).
 #
 # Triggered by the same `v*` tag push that triggers the cargo-dist
 # `release.yml` workflow (which builds the CLI binaries). The two
-# workflows run in parallel and upload to the SAME GitHub Release
-# created by cargo-dist — wheels are added as extra assets.
+# workflows have orthogonal targets:
+#   release.yml          → GitHub Release (CLI binaries, installer)
+#   python-release.yml   → PyPI (wheels only)
 #
-# Three jobs:
-#   build    — produce 4 abi3-py39 wheels via maturin-action
-#   release  — attach wheels to the GitHub Release (same tag as
-#              cargo-dist)
+# Two jobs:
+#   build    — produce 3 abi3-py39 wheels via maturin-action
 #   publish  — push wheels to PyPI via OIDC trusted publishing
 #              (no API token in GH secrets; PyPI pending publisher
 #              must be configured one-shot on pypi.org for
 #              PauFou/OpenDQI/python-release.yml/environment=pypi)
 #
+# v0.12.3 NOTE: the previous `release` job that attached wheels to
+# the GitHub Release was removed. It used
+# softprops/action-gh-release@v2 which CREATES the release if
+# missing, racing with cargo-dist's `host` job. When python-release
+# ran faster than cargo-dist (which happened on v0.12.2 once
+# macos-13 was dropped from the matrix), cargo-dist's `host`
+# failed with "release already exists" — and we had to manually
+# `gh release upload` the 13 cargo-dist artefacts. Dropping the
+# `release` job here makes the two workflows structurally
+# independent: cargo-dist always owns the GitHub Release page,
+# python-release always owns PyPI. Users who want a wheel URL
+# fallback can `pip download opendqi==X.Y.Z --no-deps --dest
+# ./wheels/` or grab the workflow artefacts from the Actions UI
+# (90-day retention).
+#
 # Build matrix: 3 targets — Linux x86_64 + ARM64, macOS ARM64
 # (Apple Silicon). x86_64-apple-darwin (Intel) was dropped in
 # v0.12.2 because the `macos-13` GitHub-hosted runner is now
-# deprecated and free-tier jobs queue indefinitely. See the
-# inline comment on the matrix below. CLI release (cargo-dist)
-# still ships an Intel-macOS binary via a different runner path.
-# No Windows wheels (consistent with the existing CI matrix
-# Ubuntu + macOS in `.github/workflows/ci.yml`).
+# deprecated and free-tier jobs queue indefinitely. CLI release
+# (cargo-dist) still ships an Intel-macOS binary via a different
+# runner path. No Windows wheels (consistent with the existing
+# CI matrix Ubuntu + macOS in `.github/workflows/ci.yml`).
 
 name: Python Release
 
@@ -31,8 +44,10 @@ on:
     tags:
       - "v*"
 
-permissions:
-  contents: write   # required to upload wheels to the release
+# No workflow-level `permissions` block — the only job that needs
+# `id-token: write` (publish) declares it on its own scope. The
+# old `contents: write` permission (needed by the now-removed
+# `release` job) is gone.
 
 jobs:
   build:
@@ -91,32 +106,6 @@ jobs:
           name: opendqi-py-${{ matrix.target }}
           path: crates/opendqi-py/dist/*.whl
           if-no-files-found: error
-
-  release:
-    name: Attach wheels to GitHub Release
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Download all wheels
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-          merge-multiple: true
-
-      - name: List wheels (for the action log)
-        run: ls -la dist/
-
-      - name: Attach wheels to existing GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          # Same tag as cargo-dist's `release.yml` — wheels are
-          # added to that release as additional assets, not a
-          # separate release.
-          tag_name: ${{ github.ref_name }}
-          files: dist/*.whl
-          fail_on_unmatched_files: true
 
   publish:
     name: Publish wheels to PyPI (OIDC)
