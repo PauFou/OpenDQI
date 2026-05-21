@@ -400,12 +400,21 @@ pub fn collateral_audit(tsr: &str, msr: &str) -> PyResult<PyScanResult> {
 /// The `mapping` dict direction is `canonical_field_name →
 /// user_column_name` (same as `scan_table` and the existing
 /// CSV mapping YAML format).
+///
+/// v0.14.0: `date_format` and `datetime_format` kwargs let
+/// callers override the CSV parser's date/datetime parsing
+/// formats. Defaults are `%Y-%m-%d` (date) and RFC 3339
+/// (datetime) — the same as `CsvMapping::effective_*_format`.
+/// Ignored when `book` is a pyarrow.Table/RecordBatch (the
+/// Arrow input path doesn't go through `CsvMapping`).
 #[pyfunction]
-#[pyo3(signature = (book, tsr, *, mapping = None))]
+#[pyo3(signature = (book, tsr, *, mapping = None, date_format = None, datetime_format = None))]
 pub fn book_reconcile<'py>(
     book: &Bound<'py, PyAny>,
     tsr: &str,
     mapping: Option<HashMap<String, String>>,
+    date_format: Option<String>,
+    datetime_format: Option<String>,
 ) -> PyResult<PyScanResult> {
     let started_at = Utc::now();
 
@@ -433,8 +442,8 @@ pub fn book_reconcile<'py>(
                 })?;
                 let csv_mapping = CsvMapping {
                     fields: mapping.into_iter().collect(), // HashMap → BTreeMap
-                    date_format: None,
-                    datetime_format: None,
+                    date_format: date_format.clone(),
+                    datetime_format: datetime_format.clone(),
                 };
                 opendqi_io::read_emir_csv(path, &csv_mapping).map_err(to_py_err)?
             }

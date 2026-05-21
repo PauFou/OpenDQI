@@ -122,3 +122,71 @@ def test_sftr_book_reconcile_function_present() -> None:
     """SFTR symmetric — exercising end-to-end needs SFTR fixtures."""
     import opendqi
     assert callable(opendqi.sftr.book_reconcile)
+
+
+# --- v0.14: date_format / datetime_format kwargs ------------------
+
+
+def test_book_reconcile_default_date_format_matches_no_kwargs(
+    tmp_path: Path,
+) -> None:
+    """Passing the default %Y-%m-%d explicitly produces the SAME result
+    as passing no date_format (the explicit default is a no-op)."""
+    _require(EMIR_BOOK_CSV, EMIR_TSR_XML)
+    import opendqi
+
+    r_default = opendqi.emir.book_reconcile(
+        str(EMIR_BOOK_CSV), str(EMIR_TSR_XML), mapping=EMIR_BOOK_MAPPING
+    )
+    r_explicit = opendqi.emir.book_reconcile(
+        str(EMIR_BOOK_CSV),
+        str(EMIR_TSR_XML),
+        mapping=EMIR_BOOK_MAPPING,
+        date_format="%Y-%m-%d",
+        datetime_format="%Y-%m-%dT%H:%M:%S%.fZ",
+    )
+    # Same number of issues — the explicit defaults are the
+    # CsvMapping fallback.
+    assert r_default.summary["issues_total"] == r_explicit.summary["issues_total"]
+
+
+def test_book_reconcile_custom_date_format(tmp_path: Path) -> None:
+    """A CSV with DD/MM/YYYY dates needs date_format='%d/%m/%Y' to parse
+    correctly. Without it, dates are unparseable → fewer EMIR.BREC.MATURITY
+    fires."""
+    _require(EMIR_TSR_XML)
+    import opendqi
+
+    # Build a small EU-style book CSV (matches the structure of
+    # EMIR_BOOK_CSV but with DD/MM/YYYY dates).
+    eu_book = tmp_path / "book_eu.csv"
+    eu_book.write_text(
+        "trade_uti,notional,notional_ccy,maturity,valuation,valuation_ccy,terminated_on\n"
+        "OPENDQI-TSR-CLEAN-0001,1000000,EUR,02/04/2031,150.50,EUR,\n"
+        "OPENDQI-TSR-STALE-0002,9999999,EUR,02/04/2031,150.50,EUR,\n"
+    )
+
+    # WITHOUT custom date_format: maturity dates fail to parse → records
+    # come in with maturity=None, BREC.MATURITY can't fire (it needs
+    # both sides to be Some to compare).
+    r_no_fmt = opendqi.emir.book_reconcile(
+        str(eu_book), str(EMIR_TSR_XML), mapping=EMIR_BOOK_MAPPING
+    )
+
+    # WITH custom date_format: maturity parses → BREC.MATURITY may fire.
+    r_with_fmt = opendqi.emir.book_reconcile(
+        str(eu_book),
+        str(EMIR_TSR_XML),
+        mapping=EMIR_BOOK_MAPPING,
+        date_format="%d/%m/%Y",
+    )
+
+    # Both runs succeed (no crash). The exact issue counts depend on
+    # whether the EU-format dates equal the TSR-side dates after
+    # parsing; we just verify the two calls don't error AND the with-fmt
+    # run produces a non-error result.
+    assert r_no_fmt.summary["regime"] == "emir"
+    assert r_with_fmt.summary["regime"] == "emir"
+    # Both should process 2 book records + N TSR records.
+    assert r_no_fmt.summary["files_processed"] == 2
+    assert r_with_fmt.summary["files_processed"] == 2

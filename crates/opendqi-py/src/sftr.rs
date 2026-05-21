@@ -304,12 +304,18 @@ pub fn missing_collateral(auth083: &str, tsr: Option<&str>) -> PyResult<PyScanRe
 /// Fires the 5 `SFTR.BREC.*` checks (LOAN_MISMATCH,
 /// LOAN_CURRENCY_MISMATCH, COLLATERAL_MISMATCH,
 /// MATURITY_MISMATCH, STATUS_MISMATCH).
+///
+/// v0.14.0: `date_format` and `datetime_format` kwargs override
+/// the CSV parser defaults (`%Y-%m-%d` + RFC 3339). Ignored
+/// when `book` is a pyarrow.Table/RecordBatch.
 #[pyfunction]
-#[pyo3(signature = (book, tsr, *, mapping = None))]
+#[pyo3(signature = (book, tsr, *, mapping = None, date_format = None, datetime_format = None))]
 pub fn book_reconcile<'py>(
     book: &Bound<'py, PyAny>,
     tsr: &str,
     mapping: Option<HashMap<String, String>>,
+    date_format: Option<String>,
+    datetime_format: Option<String>,
 ) -> PyResult<PyScanResult> {
     let started_at = Utc::now();
 
@@ -333,8 +339,8 @@ pub fn book_reconcile<'py>(
                 })?;
                 let csv_mapping = CsvMapping {
                     fields: mapping.into_iter().collect(),
-                    date_format: None,
-                    datetime_format: None,
+                    date_format: date_format.clone(),
+                    datetime_format: datetime_format.clone(),
                 };
                 opendqi_io::read_sftr_csv(path, &csv_mapping).map_err(to_py_err)?
             }
