@@ -106,10 +106,13 @@ before any graphical layer is added.
 
 ### What a DQI is — and what it is NOT (v0.15+)
 
-The v0.15 Data Quality Pack adds 10 aggregated indicators
-above the 216 granular checks. Each ships with a `status`
-(`green` / `amber` / `red` / `not_applicable`). The
-vocabulary discipline matters :
+The Data Quality Pack adds aggregated indicators above the
+216 granular checks. v0.15 shipped 10 EMIR indicators ;
+v0.16 grew the catalogue to **28 indicators across both
+régimes** (24 EMIR + 4 SFTR T2-layer) and switched the two
+stale-data indicators to **TARGET2 business days**. Each
+indicator ships with a `status` (`green` / `amber` / `red` /
+`not_applicable`). The vocabulary discipline matters :
 
 - **A DQI is an internal data quality indicator** — a
   numerator / denominator / rate triplet bucketed against a
