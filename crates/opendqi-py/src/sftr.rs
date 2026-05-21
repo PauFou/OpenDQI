@@ -9,10 +9,12 @@ use pyo3::prelude::*;
 use pyo3::types::PyAny;
 
 use opendqi_core::dq::{
-    compute_tr_audit_sftr_issues, default_missing_collateral_checks, default_sftr_checks,
-    default_sftr_tr_state_checks, stream_checks_into, CheckContext,
+    compute_sftr_book_reconcile_issues, compute_tr_audit_sftr_issues,
+    default_missing_collateral_checks, default_sftr_checks, default_sftr_tr_state_checks,
+    stream_checks_into, CheckContext,
 };
 use opendqi_core::{Regime, SftrRecord, SortedIssueSink, Thresholds};
+use opendqi_io::CsvMapping;
 
 use crate::convert::{batch_to_sftr_records, Mapping};
 use crate::emir::{pyarrow_to_record_batch, record_batch_to_pyarrow_table};
@@ -291,6 +293,93 @@ pub fn missing_collateral(auth083: &str, tsr: Option<&str>) -> PyResult<PyScanRe
 }
 
 // =================================================================
+// v0.13.0 — cross-message workflow: book_reconcile (SFTR)
+// =================================================================
+
+/// `opendqi.sftr.book_reconcile(book, tsr, *, mapping=None) -> PyScanResult`.
+/// Symmetric to `opendqi.emir.book_reconcile`. See the EMIR
+/// docstring for the dual-input (str path | pyarrow.Table)
+/// contract.
+///
+/// Fires the 5 `SFTR.BREC.*` checks (LOAN_MISMATCH,
+/// LOAN_CURRENCY_MISMATCH, COLLATERAL_MISMATCH,
+/// MATURITY_MISMATCH, STATUS_MISMATCH).
+#[pyfunction]
+#[pyo3(signature = (book, tsr, *, mapping = None))]
+pub fn book_reconcile<'py>(
+    book: &Bound<'py, PyAny>,
+    tsr: &str,
+    mapping: Option<HashMap<String, String>>,
+) -> PyResult<PyScanResult> {
+    let started_at = Utc::now();
+
+    let tsr_records = opendqi_xml::read_sftr_tr_state_xml(Path::new(tsr))
+        .map_err(to_py_err)?
+        .records;
+
+    let book_records: Vec<SftrRecord> = if let Ok(path_str) = book.extract::<String>() {
+        let path = Path::new(&path_str);
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        match ext.as_str() {
+            "csv" => {
+                let mapping = mapping.ok_or_else(|| {
+                    pyo3::exceptions::PyValueError::new_err(
+                        "book_reconcile with a .csv path requires `mapping={...}`.",
+                    )
+                })?;
+                let csv_mapping = CsvMapping {
+                    fields: mapping.into_iter().collect(),
+                    date_format: None,
+                    datetime_format: None,
+                };
+                opendqi_io::read_sftr_csv(path, &csv_mapping).map_err(to_py_err)?
+            }
+            "parquet" => opendqi_io::read_sftr_parquet(path).map_err(to_py_err)?,
+            other => {
+                return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "book_reconcile: unsupported book file extension {:?} \
+                     (expected .csv or .parquet). Path: {}",
+                    other,
+                    path.display()
+                )));
+            }
+        }
+    } else {
+        let mapping = mapping.ok_or_else(|| {
+            pyo3::exceptions::PyValueError::new_err(
+                "book_reconcile with a pyarrow.Table/RecordBatch requires \
+                 `mapping={...}`.",
+            )
+        })?;
+        let batch = pyarrow_to_record_batch(book)?;
+        crate::convert::batch_to_sftr_records(&batch, &mapping as &Mapping).map_err(to_py_err)?
+    };
+
+    let cross = compute_sftr_book_reconcile_issues(&book_records, &tsr_records);
+
+    let thresholds = Thresholds::default();
+    let sink = Mutex::new(SortedIssueSink::new(&thresholds, STREAM_SPILL_MAX_ISSUES));
+    if !cross.is_empty() {
+        sink.lock()
+            .expect("sink mutex not poisoned")
+            .push_batch(cross);
+    }
+
+    let finished_at = Utc::now();
+    let records_total = (book_records.len() + tsr_records.len()) as u32;
+    let (summary, sorted_issues) = sink
+        .into_inner()
+        .expect("sink mutex not poisoned")
+        .finish(Regime::Sftr, 2, records_total, started_at, finished_at);
+    let batch = issues_to_record_batch(sorted_issues).map_err(to_py_err)?;
+    Ok(PyScanResult::new(summary, Some(batch), None))
+}
+
+// =================================================================
 // Module registration
 // =================================================================
 
@@ -310,6 +399,7 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     // Cross-message workflow entry points (v0.13.0).
     m.add_function(wrap_pyfunction!(tr_audit, &m)?)?;
     m.add_function(wrap_pyfunction!(missing_collateral, &m)?)?;
+    m.add_function(wrap_pyfunction!(book_reconcile, &m)?)?;
     parent.add_submodule(&m)?;
     Ok(())
 }

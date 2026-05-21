@@ -26,11 +26,12 @@ use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyList};
 
 use opendqi_core::dq::{
-    compute_collateral_emir_issues, compute_tr_audit_emir_issues, default_checks,
-    default_feedback_checks, default_tr_state_checks, stream_checks_into,
+    compute_book_reconcile_issues, compute_collateral_emir_issues, compute_tr_audit_emir_issues,
+    default_checks, default_feedback_checks, default_tr_state_checks, stream_checks_into,
     stream_emir_checks_into, CheckContext,
 };
 use opendqi_core::{EmirRecord, Regime, SortedIssueSink, Thresholds};
+use opendqi_io::CsvMapping;
 
 use crate::convert::{batch_to_emir_records, Mapping};
 use crate::errors::to_py_err;
@@ -378,6 +379,113 @@ pub fn collateral_audit(tsr: &str, msr: &str) -> PyResult<PyScanResult> {
 }
 
 // =================================================================
+// v0.13.0 — cross-message workflow: book_reconcile
+// =================================================================
+
+/// `opendqi.emir.book_reconcile(book, tsr, *, mapping=None) -> PyScanResult`.
+///
+/// Reconciles a firm's internal book against the TR Trade State
+/// Report. `book` can be either:
+///   - a `str` path to a `.csv` (needs `mapping`) or `.parquet`
+///     (no mapping needed — parquet schema is canonical)
+///   - a `pyarrow.Table` / `pyarrow.RecordBatch` already in
+///     memory (needs `mapping`)
+///
+/// `tsr` is always a path to the auth.107 XML.
+///
+/// Fires the 5 `EMIR.BREC.*` checks (NOTIONAL_MISMATCH,
+/// NOTIONAL_CURRENCY_MISMATCH, VALUATION_MISMATCH,
+/// MATURITY_MISMATCH, STATUS_MISMATCH).
+///
+/// The `mapping` dict direction is `canonical_field_name →
+/// user_column_name` (same as `scan_table` and the existing
+/// CSV mapping YAML format).
+#[pyfunction]
+#[pyo3(signature = (book, tsr, *, mapping = None))]
+pub fn book_reconcile<'py>(
+    book: &Bound<'py, PyAny>,
+    tsr: &str,
+    mapping: Option<HashMap<String, String>>,
+) -> PyResult<PyScanResult> {
+    let started_at = Utc::now();
+
+    // Parse the TSR side (always XML).
+    let tsr_records = opendqi_xml::read_emir_tr_state_xml(Path::new(tsr))
+        .map_err(to_py_err)?
+        .records;
+
+    // Dispatch the `book` input: str → file path (CSV or Parquet);
+    // anything else → assume a pyarrow Table / RecordBatch.
+    let book_records: Vec<EmirRecord> = if let Ok(path_str) = book.extract::<String>() {
+        let path = Path::new(&path_str);
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        match ext.as_str() {
+            "csv" => {
+                let mapping = mapping.ok_or_else(|| {
+                    pyo3::exceptions::PyValueError::new_err(
+                        "book_reconcile with a .csv path requires `mapping={...}` \
+                         (a dict of canonical_field → csv_column_name).",
+                    )
+                })?;
+                let csv_mapping = CsvMapping {
+                    fields: mapping.into_iter().collect(), // HashMap → BTreeMap
+                    date_format: None,
+                    datetime_format: None,
+                };
+                opendqi_io::read_emir_csv(path, &csv_mapping).map_err(to_py_err)?
+            }
+            "parquet" => {
+                // Parquet path uses the canonical schema directly;
+                // `mapping` is ignored (no remapping needed).
+                opendqi_io::read_emir_parquet(path).map_err(to_py_err)?
+            }
+            other => {
+                return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "book_reconcile: unsupported file extension {:?} for book path \
+                     (expected .csv or .parquet). Offending path: {}",
+                    other,
+                    path.display()
+                )));
+            }
+        }
+    } else {
+        // pyarrow.Table / RecordBatch path — needs a mapping.
+        let mapping = mapping.ok_or_else(|| {
+            pyo3::exceptions::PyValueError::new_err(
+                "book_reconcile with a pyarrow.Table/RecordBatch requires \
+                 `mapping={...}` (a dict of canonical_field → arrow_column_name).",
+            )
+        })?;
+        let batch = pyarrow_to_record_batch(book)?;
+        crate::convert::batch_to_emir_records(&batch, &mapping as &Mapping).map_err(to_py_err)?
+    };
+
+    // Run the 5 EMIR.BREC.* checks.
+    let cross = compute_book_reconcile_issues(&book_records, &tsr_records);
+
+    let thresholds = Thresholds::default();
+    let sink = Mutex::new(SortedIssueSink::new(&thresholds, STREAM_SPILL_MAX_ISSUES));
+    if !cross.is_empty() {
+        sink.lock()
+            .expect("sink mutex not poisoned")
+            .push_batch(cross);
+    }
+
+    let finished_at = Utc::now();
+    let records_total = (book_records.len() + tsr_records.len()) as u32;
+    let (summary, sorted_issues) = sink
+        .into_inner()
+        .expect("sink mutex not poisoned")
+        .finish(Regime::Emir, 2, records_total, started_at, finished_at);
+    let batch = issues_to_record_batch(sorted_issues).map_err(to_py_err)?;
+    Ok(PyScanResult::new(summary, Some(batch), None))
+}
+
+// =================================================================
 // Module registration
 // =================================================================
 
@@ -397,6 +505,7 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     // Cross-message workflow entry points (v0.13.0).
     m.add_function(wrap_pyfunction!(tr_audit, &m)?)?;
     m.add_function(wrap_pyfunction!(collateral_audit, &m)?)?;
+    m.add_function(wrap_pyfunction!(book_reconcile, &m)?)?;
     parent.add_submodule(&m)?;
     Ok(())
 }
