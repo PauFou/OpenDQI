@@ -13,6 +13,132 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+## [0.13.0] - 2026-05-21
+
+Python feature expansion — multi-file scans + cross-message
+workflows + experimental Spark interop. **10 new Python entry
+points** on top of the v0.12.0 trio (`scan_parquet`,
+`scan_table`, `parse_xml`), bringing the Python surface to
+feature parity with the high-value CLI subcommands.
+
+The CTO-priority `opendqi.emir.tr_audit(tar=…, tsr=…,
+feedback=…)` is now native — 3 files, 1 call, all 3 layers'
+checks plus the 3 cross-layer `EMIR.AUD.*` coherence checks.
+
+**ZERO Rust core change.** 216 checks remain 216 (151 EMIR +
+65 SFTR). The v1.0 stable Arrow contract for `result.issues`
+(locked v0.12.0 P3) is unchanged. 19/19 goldens byte-identical
+with `UPDATE_GOLDEN` unset. 762/0 workspace tests pass. 59
+pytest cases (30 v0.12 + 29 new v0.13) all green.
+
+### Added
+
+- **`opendqi.{emir,sftr}.scan_directory(path, *, normalize=False)`
+  and `scan_files(paths, *, normalize=False)`** — multi-file
+  aggregator entry points. `scan_directory` reuses
+  `opendqi_io::discover_emir_inputs` (filters `.xml`/`.parquet`,
+  expands `.zip`/`.gz` no zip-slip, sorted output, non-recursive
+  `max_depth=1`); `scan_files` takes an explicit list. Both
+  dispatch each path by extension to the right reader,
+  aggregate records, and run the standard `default_*_checks()`
+  suite. **`.csv` is rejected** in v0.13 (CSV needs a mapping;
+  workaround documented in the error message). `summary.files_
+  processed` reflects the actual number of files contributed
+  records.
+
+- **`opendqi.{emir,sftr}.tr_audit(*, tar, tsr, [feedback])`**
+  — the CTO-priority cross-message workflow. EMIR variant takes
+  3 paths (TAR `auth.030`, TSR `auth.107`, feedback `auth.092`),
+  runs `default_checks` + `default_tr_state_checks` +
+  `default_feedback_checks` per layer, then the 3 cross-layer
+  `EMIR.AUD.*` (`compute_tr_audit_emir_issues`). SFTR variant
+  takes 2 paths (no feedback layer — `SFTR.FBK.*` was retired
+  in M0.4) + 2 cross-layer `SFTR.AUD.*`. All issues merged into
+  one `PyScanResult` with `summary.files_processed = 3` (EMIR)
+  or `2` (SFTR). Keyword-only args enforce explicit naming.
+
+- **`opendqi.emir.collateral_audit(*, tsr, msr)`** — EMIR
+  Article 11 collateral obligation check. Reads `auth.107` +
+  `auth.109`, calls `compute_collateral_emir_issues` →
+  `EMIR.COL.MISSING` (no MSR link, or all IM/VM amounts zero)
+  + `EMIR.COL.STALE` (linked snapshot older than
+  `collateral_max_age_days`). Mirror of the v0.10.0 CLI
+  `emir collateral-audit`. Defaults thresholds (custom
+  thresholds remain CLI-only via `--config`).
+
+- **`opendqi.sftr.missing_collateral(auth083, *, tsr=None)`** —
+  parses `auth.083` (Missing Collateral Request) + runs the 2
+  base `SFTR.MCR.*` checks. If `tsr` is provided, also reads
+  `auth.079` and runs the 3 cross-ref checks
+  (`COLLATERAL_PRESENT_IN_TSR`, `STILL_MISSING_IN_TSR`,
+  `REQUESTED_UTI_NOT_IN_TSR`). Mirror of the CLI's
+  `sftr missing-collateral --tsr ...`. The `--store` CLI flag
+  (looks up persisted SFTR state by UTI) is NOT wrapped in
+  v0.13 — Python doesn't touch the SQLite store yet.
+
+- **`opendqi.{emir,sftr}.book_reconcile(book, tsr, *, mapping=None)`**
+  — internal book ↔ TR state reconciliation. **Dual book
+  input**: `book` can be a `str` path (`.csv` requires
+  `mapping`, `.parquet` doesn't — the parquet schema is
+  canonical) OR a `pyarrow.Table` / `pyarrow.RecordBatch`
+  already in memory (always requires `mapping`). `mapping`
+  direction is the familiar `canonical_field →
+  user_column_name`. Fires the 5 `EMIR.BREC.*` / `SFTR.BREC.*`
+  checks (NOTIONAL/LOAN/COLLATERAL/VALUATION_MISMATCH,
+  currency mismatches, MATURITY_MISMATCH, STATUS_MISMATCH).
+
+- **`opendqi.spark.scan_spark_dataframe(df, *, regime, mapping,
+  normalize=False)`** — **EXPERIMENTAL** pure-Python helper for
+  Spark interop. Round-trips a PySpark DataFrame through
+  pandas → Arrow → `scan_table` → pandas → Spark, returning a
+  Spark DataFrame of the v1.0 stable 11-column issues table.
+  **No PySpark dependency declared** in the wheel (duck-typed
+  import inside the helper) — users `pip install pyspark`
+  themselves. Emits a `FutureWarning` on every call to make the
+  preview status visible. The native `mapInPandas` UDF version
+  (partition-friendly, zero-copy) is on the v0.14 roadmap.
+
+- **`examples/python/04_tr_audit.py`** — runnable demo of the
+  new EMIR tr_audit workflow on the `quickstart-emir` 3-file
+  kit. Prints summary, top-5 check_id frequency, EMIR.AUD.*
+  cross-layer filter (showing what only tr_audit can produce).
+
+### Changed
+
+- **`crates/opendqi-py` refactored to maturin `python-source`
+  layout** (commit `1bbae97`, structurally required for the
+  pure-Python `opendqi/spark.py` to live alongside the compiled
+  cdylib). The compiled lib was renamed `opendqi` → `_opendqi`
+  (`Cargo.toml` `[lib] name = "_opendqi"`, `src/lib.rs`
+  `#[pymodule] fn _opendqi`); a new `python/opendqi/__init__.py`
+  re-exports the compiled extension's surface via `from
+  ._opendqi import *`. `pyproject.toml` gained
+  `python-source = "python"` + `module-name = "opendqi._opendqi"`.
+  A `py.typed` PEP 561 marker also ships. **Zero functional
+  change visible to users**: `import opendqi; opendqi.emir.
+  scan_parquet(...)` keeps working identically. Wheel layout:
+  v0.12.x had `opendqi.<arch>.so` at the wheel root; v0.13.0+
+  has the `opendqi/` package containing `__init__.py`,
+  `_opendqi.<arch>.so`, `py.typed`, and the new `spark.py`.
+  Users who did `import opendqi._opendqi` directly (improbable)
+  would break.
+
+- **`docs/python.md`** restructured for v0.13: status header
+  bumped to v0.13.x, NEW "Multi-file scans" and "Cross-message
+  workflows" sections, API surface table restructured by
+  category, Spark section rewritten to point at the new
+  `opendqi.spark.scan_spark_dataframe` helper.
+
+- **`README.md`** install block: keeps the 5-line minimal
+  Python snippet, adds a second snippet showing
+  `opendqi.emir.tr_audit(...)`. One sentence below names all
+  10 new functions + `opendqi.spark`.
+
+- **`examples/python/README.md`**: `04_tr_audit.py` promoted as
+  the v0.13 highlight in the script table.
+
+### Removed
+
 ## [0.12.3] - 2026-05-21
 
 Adoption polish + race-condition fix. Now that `pip install
@@ -1317,7 +1443,8 @@ sends back, and turns them into reproducible HTML / JSON / CSV
 - No SWIFT-licensed XSDs or real client data are committed; all
   fixtures are synthetic.
 
-[Unreleased]: https://github.com/PauFou/OpenDQI/compare/v0.12.3...HEAD
+[Unreleased]: https://github.com/PauFou/OpenDQI/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/PauFou/OpenDQI/compare/v0.12.3...v0.13.0
 [0.12.3]: https://github.com/PauFou/OpenDQI/compare/v0.12.2...v0.12.3
 [0.12.2]: https://github.com/PauFou/OpenDQI/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/PauFou/OpenDQI/compare/v0.12.0...v0.12.1

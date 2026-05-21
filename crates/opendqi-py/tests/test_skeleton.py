@@ -15,14 +15,21 @@ def test_import_opendqi() -> None:
 
 def test_version_string() -> None:
     import opendqi
-    # P1: version is the one declared in Cargo.toml / pyproject.toml.
-    # Bumped together at release time.
+    # Version is the one declared in Cargo.toml / pyproject.toml.
+    # Bumped together at release time. We only check the SHAPE
+    # (semver-ish triple with a leading "0." for the current 0.x
+    # series) so this test doesn't need to be touched on every
+    # release.
     assert isinstance(opendqi.__version__, str)
-    # Match the Cargo workspace versioning scheme (semver).
     parts = opendqi.__version__.split(".")
-    assert len(parts) >= 2, f"unexpected version shape: {opendqi.__version__!r}"
-    assert opendqi.__version__.startswith("0.12."), (
-        f"P1 expected 0.12.x, got {opendqi.__version__!r}"
+    assert len(parts) >= 3, f"unexpected version shape: {opendqi.__version__!r}"
+    # 0.x series — drop this assertion when we cut v1.0.
+    assert parts[0] == "0", (
+        f"expected 0.x version, got {opendqi.__version__!r}"
+    )
+    # MINOR + PATCH should be parseable ints.
+    assert parts[1].isdigit() and parts[2].split('-')[0].isdigit(), (
+        f"unexpected version triple: {opendqi.__version__!r}"
     )
 
 
