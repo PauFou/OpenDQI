@@ -12,21 +12,25 @@
 
 mod emir_pack;
 mod model;
+mod sftr_pack;
 mod thresholds;
 
 pub mod compute;
 
 pub use compute::{
     compute_dqi_anomaly_rate, compute_dqi_col_all_zero, compute_dqi_col_missing_state,
-    compute_dqi_col_stale_state, compute_dqi_conf_missing, compute_dqi_duplicate_reports,
-    compute_dqi_err_missing, compute_dqi_field_mismatch_rate, compute_dqi_lei_missing,
-    compute_dqi_margin_inconsistent_post_haircut, compute_dqi_margin_inconsistent_pre_haircut,
-    compute_dqi_nature_missing, compute_dqi_notional_inconsistent, compute_dqi_pairing_rate,
-    compute_dqi_rec_status_unpaired, compute_dqi_reconciliation_rate, compute_dqi_rej_rate,
-    compute_dqi_rej_repeat_uti, compute_dqi_sector_missing, compute_dqi_tim_reporting_late,
-    compute_dqi_unpaired_trades_rate, compute_dqi_val_missing, compute_dqi_val_stale,
-    compute_dqi_vm_missing_for_cleared,
+    compute_dqi_col_stale_state, compute_dqi_collateral_value_missing_sftr,
+    compute_dqi_conf_missing, compute_dqi_duplicate_reports, compute_dqi_err_missing,
+    compute_dqi_field_mismatch_rate, compute_dqi_lei_missing, compute_dqi_loan_value_missing_sftr,
+    compute_dqi_loan_value_stale_sftr, compute_dqi_margin_inconsistent_post_haircut,
+    compute_dqi_margin_inconsistent_pre_haircut, compute_dqi_nature_missing,
+    compute_dqi_notional_inconsistent, compute_dqi_pairing_rate, compute_dqi_rec_status_unpaired,
+    compute_dqi_reconciliation_rate, compute_dqi_rej_rate, compute_dqi_rej_repeat_uti,
+    compute_dqi_sector_missing, compute_dqi_tim_reporting_late,
+    compute_dqi_tim_reporting_late_sftr, compute_dqi_unpaired_trades_rate, compute_dqi_val_missing,
+    compute_dqi_val_stale, compute_dqi_vm_missing_for_cleared,
 };
 pub use emir_pack::{compute_emir_dqi_pack, EmirDqiInputs};
 pub use model::{DqiEvidence, DqiIndicator, DqiPackResult, DqiStatus, MappingPresence};
+pub use sftr_pack::{compute_sftr_dqi_pack, SftrDqiInputs};
 pub use thresholds::{compute_status, default_dqi_thresholds, DqiThresholdPair};
