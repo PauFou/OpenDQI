@@ -88,7 +88,9 @@ fn pick_decimal(
     // would fire 1× per row simply because of the Arrow round-trip
     // padding, not because the actual value violated the ESMA
     // `decimal:18.5` precision.
-    Decimal::try_from_i128_with_scale(raw, scale as u32).ok().map(|d| d.normalize())
+    Decimal::try_from_i128_with_scale(raw, scale as u32)
+        .ok()
+        .map(|d| d.normalize())
 }
 
 fn pick_date(

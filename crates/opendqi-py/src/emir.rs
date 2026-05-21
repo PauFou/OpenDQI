@@ -54,7 +54,11 @@ const STREAM_SPILL_MAX_ISSUES: usize = 65_536;
 /// records are also projected back into the canonical Arrow
 /// batch and exposed via `result.normalized` — same `RecordBatch`
 /// the Parquet writer would produce.
-fn scan_emir_records(records: Vec<EmirRecord>, files: u32, normalize: bool) -> PyResult<PyScanResult> {
+fn scan_emir_records(
+    records: Vec<EmirRecord>,
+    files: u32,
+    normalize: bool,
+) -> PyResult<PyScanResult> {
     let started_at = Utc::now();
     let ctx = CheckContext::now_with_defaults();
     let checks = default_checks();
@@ -74,10 +78,13 @@ fn scan_emir_records(records: Vec<EmirRecord>, files: u32, normalize: bool) -> P
         None
     };
 
-    let (summary, sorted_issues) = sink
-        .into_inner()
-        .expect("sink mutex not poisoned")
-        .finish(Regime::Emir, files, n, started_at, finished_at);
+    let (summary, sorted_issues) = sink.into_inner().expect("sink mutex not poisoned").finish(
+        Regime::Emir,
+        files,
+        n,
+        started_at,
+        finished_at,
+    );
     let batch = issues_to_record_batch(sorted_issues).map_err(to_py_err)?;
     Ok(PyScanResult::new(summary, Some(batch), normalized_batch))
 }
@@ -310,7 +317,8 @@ pub fn tr_audit(tar: &str, tsr: &str, feedback: &str) -> PyResult<PyScanResult> 
     // Cross-layer — the 3 EMIR.AUD.* checks that only this
     // command can run (each needs records from at least 2 of the
     // 3 layers).
-    let cross = compute_tr_audit_emir_issues(&tar_records, &tsr_records, &fbk_records, tsr, feedback);
+    let cross =
+        compute_tr_audit_emir_issues(&tar_records, &tsr_records, &fbk_records, tsr, feedback);
     if !cross.is_empty() {
         sink.lock()
             .expect("sink mutex not poisoned")
@@ -319,10 +327,13 @@ pub fn tr_audit(tar: &str, tsr: &str, feedback: &str) -> PyResult<PyScanResult> 
 
     let finished_at = Utc::now();
     let records_total = (tar_records.len() + tsr_records.len() + fbk_records.len()) as u32;
-    let (summary, sorted_issues) = sink
-        .into_inner()
-        .expect("sink mutex not poisoned")
-        .finish(Regime::Emir, 3, records_total, started_at, finished_at);
+    let (summary, sorted_issues) = sink.into_inner().expect("sink mutex not poisoned").finish(
+        Regime::Emir,
+        3,
+        records_total,
+        started_at,
+        finished_at,
+    );
     let batch = issues_to_record_batch(sorted_issues).map_err(to_py_err)?;
     Ok(PyScanResult::new(summary, Some(batch), None))
 }
@@ -374,10 +385,13 @@ pub fn collateral_audit(tsr: &str, msr: &str) -> PyResult<PyScanResult> {
 
     let finished_at = Utc::now();
     let records_total = (tsr_records.len() + msr_records.len()) as u32;
-    let (summary, sorted_issues) = sink
-        .into_inner()
-        .expect("sink mutex not poisoned")
-        .finish(Regime::Emir, 2, records_total, started_at, finished_at);
+    let (summary, sorted_issues) = sink.into_inner().expect("sink mutex not poisoned").finish(
+        Regime::Emir,
+        2,
+        records_total,
+        started_at,
+        finished_at,
+    );
     let batch = issues_to_record_batch(sorted_issues).map_err(to_py_err)?;
     Ok(PyScanResult::new(summary, Some(batch), None))
 }
@@ -490,10 +504,13 @@ pub fn book_reconcile<'py>(
 
     let finished_at = Utc::now();
     let records_total = (book_records.len() + tsr_records.len()) as u32;
-    let (summary, sorted_issues) = sink
-        .into_inner()
-        .expect("sink mutex not poisoned")
-        .finish(Regime::Emir, 2, records_total, started_at, finished_at);
+    let (summary, sorted_issues) = sink.into_inner().expect("sink mutex not poisoned").finish(
+        Regime::Emir,
+        2,
+        records_total,
+        started_at,
+        finished_at,
+    );
     let batch = issues_to_record_batch(sorted_issues).map_err(to_py_err)?;
     Ok(PyScanResult::new(summary, Some(batch), None))
 }
@@ -810,6 +827,8 @@ pub(crate) fn record_batch_to_pyarrow_table<'py>(
     let rb_py = batch.to_pyarrow(py)?;
     let pa = py.import_bound("pyarrow")?;
     let batches = PyList::new_bound(py, [rb_py]);
-    let table = pa.getattr("Table")?.call_method1("from_batches", (batches,))?;
+    let table = pa
+        .getattr("Table")?
+        .call_method1("from_batches", (batches,))?;
     Ok(table)
 }

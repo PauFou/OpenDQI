@@ -75,7 +75,9 @@ impl PyScanResult {
                 let rb_py = batch.to_pyarrow(py)?;
                 let pa = py.import_bound("pyarrow")?;
                 let batches = PyList::new_bound(py, [rb_py]);
-                let table = pa.getattr("Table")?.call_method1("from_batches", (batches,))?;
+                let table = pa
+                    .getattr("Table")?
+                    .call_method1("from_batches", (batches,))?;
                 Ok(table)
             }
         }
@@ -94,14 +96,20 @@ impl PyScanResult {
                 let rb_py = batch.to_pyarrow(py)?;
                 let pa = py.import_bound("pyarrow")?;
                 let batches = PyList::new_bound(py, [rb_py]);
-                let table = pa.getattr("Table")?.call_method1("from_batches", (batches,))?;
+                let table = pa
+                    .getattr("Table")?
+                    .call_method1("from_batches", (batches,))?;
                 Ok(table)
             }
         }
     }
 
     fn __repr__(&self) -> String {
-        let issues_n = self.issues_batch.as_ref().map(|b| b.num_rows()).unwrap_or(0);
+        let issues_n = self
+            .issues_batch
+            .as_ref()
+            .map(|b| b.num_rows())
+            .unwrap_or(0);
         format!(
             "PyScanResult(regime={:?}, files={}, records={}, issues={}, score={:.2})",
             self.summary.regime,
@@ -244,7 +252,9 @@ fn batch_to_pyarrow_table<'py>(
     let rb_py = batch.to_pyarrow(py)?;
     let pa = py.import_bound("pyarrow")?;
     let batches = PyList::new_bound(py, [rb_py]);
-    let table = pa.getattr("Table")?.call_method1("from_batches", (batches,))?;
+    let table = pa
+        .getattr("Table")?
+        .call_method1("from_batches", (batches,))?;
     Ok(table)
 }
 

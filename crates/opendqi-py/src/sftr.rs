@@ -24,7 +24,11 @@ use crate::result::PyScanResult;
 
 const STREAM_SPILL_MAX_ISSUES: usize = 65_536;
 
-fn scan_sftr_records(records: Vec<SftrRecord>, files: u32, normalize: bool) -> PyResult<PyScanResult> {
+fn scan_sftr_records(
+    records: Vec<SftrRecord>,
+    files: u32,
+    normalize: bool,
+) -> PyResult<PyScanResult> {
     let started_at = Utc::now();
     let ctx = CheckContext::now_with_defaults();
     let checks = default_sftr_checks();
@@ -43,10 +47,13 @@ fn scan_sftr_records(records: Vec<SftrRecord>, files: u32, normalize: bool) -> P
     } else {
         None
     };
-    let (summary, sorted_issues) = sink
-        .into_inner()
-        .expect("sink mutex not poisoned")
-        .finish(Regime::Sftr, files, n, started_at, finished_at);
+    let (summary, sorted_issues) = sink.into_inner().expect("sink mutex not poisoned").finish(
+        Regime::Sftr,
+        files,
+        n,
+        started_at,
+        finished_at,
+    );
     let batch = issues_to_record_batch(sorted_issues).map_err(to_py_err)?;
     Ok(PyScanResult::new(summary, Some(batch), normalized_batch))
 }
@@ -216,10 +223,13 @@ pub fn tr_audit(tar: &str, tsr: &str) -> PyResult<PyScanResult> {
 
     let finished_at = Utc::now();
     let records_total = (tar_records.len() + tsr_records.len()) as u32;
-    let (summary, sorted_issues) = sink
-        .into_inner()
-        .expect("sink mutex not poisoned")
-        .finish(Regime::Sftr, 2, records_total, started_at, finished_at);
+    let (summary, sorted_issues) = sink.into_inner().expect("sink mutex not poisoned").finish(
+        Regime::Sftr,
+        2,
+        records_total,
+        started_at,
+        finished_at,
+    );
     let batch = issues_to_record_batch(sorted_issues).map_err(to_py_err)?;
     Ok(PyScanResult::new(summary, Some(batch), None))
 }
@@ -252,8 +262,8 @@ pub fn missing_collateral(auth083: &str, tsr: Option<&str>) -> PyResult<PyScanRe
     let ctx = CheckContext::now_with_defaults();
     let thresholds = Thresholds::default();
 
-    let outcome = opendqi_xml::read_sftr_missing_collateral_xml(Path::new(auth083))
-        .map_err(to_py_err)?;
+    let outcome =
+        opendqi_xml::read_sftr_missing_collateral_xml(Path::new(auth083)).map_err(to_py_err)?;
 
     // Optional companion TSR for the 3 cross-ref checks. The
     // store-backed variant from the CLI is deliberately out of
@@ -284,10 +294,13 @@ pub fn missing_collateral(auth083: &str, tsr: Option<&str>) -> PyResult<PyScanRe
     let finished_at = Utc::now();
     let n = outcome.records.len() as u32;
     let files = if tsr.is_some() { 2 } else { 1 };
-    let (summary, sorted_issues) = sink
-        .into_inner()
-        .expect("sink mutex not poisoned")
-        .finish(Regime::Sftr, files, n, started_at, finished_at);
+    let (summary, sorted_issues) = sink.into_inner().expect("sink mutex not poisoned").finish(
+        Regime::Sftr,
+        files,
+        n,
+        started_at,
+        finished_at,
+    );
     let batch = issues_to_record_batch(sorted_issues).map_err(to_py_err)?;
     Ok(PyScanResult::new(summary, Some(batch), None))
 }
@@ -377,10 +390,13 @@ pub fn book_reconcile<'py>(
 
     let finished_at = Utc::now();
     let records_total = (book_records.len() + tsr_records.len()) as u32;
-    let (summary, sorted_issues) = sink
-        .into_inner()
-        .expect("sink mutex not poisoned")
-        .finish(Regime::Sftr, 2, records_total, started_at, finished_at);
+    let (summary, sorted_issues) = sink.into_inner().expect("sink mutex not poisoned").finish(
+        Regime::Sftr,
+        2,
+        records_total,
+        started_at,
+        finished_at,
+    );
     let batch = issues_to_record_batch(sorted_issues).map_err(to_py_err)?;
     Ok(PyScanResult::new(summary, Some(batch), None))
 }

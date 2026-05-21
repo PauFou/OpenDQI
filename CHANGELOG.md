@@ -13,6 +13,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+## [0.15.1] - 2026-05-21
+
+**Data Quality Pack polish** — pure docs / demo / notebook /
+vocabulary discipline release after the v0.15.0 ship.
+**Zero Rust code change.** All v0.15.0 numbers carry over
+unchanged: 216 checks, 20/20 goldens byte-identical, 831/0
+workspace tests, 88/0 + 3 skipped pytest. Same wheel binary
+(re-tagged at 0.15.1 so `pip install opendqi==0.15.1` ships
+the refreshed README + the new example kit + the extended
+notebook in the source archive).
+
+### Added
+
+- **`examples/emir-data-quality-pack/`** — a self-contained
+  reproducible 5-layer kit (TSR + TAR + MSR + MAR +
+  Feedback) that exercises the full v0.15 EMIR Data Quality
+  Pack. Sister to `examples/quickstart-emir/` (which ships
+  only 3 layers and runs the row-level checks). UTIs in the
+  newly-synthesised `msr.xml` (4 records) and `mar.xml`
+  (3 records) are **deliberately aligned** with the
+  quickstart-emir TSR's UTIs so the cross-table
+  `DQI_COL_MISSING_STATE` indicator has a clear pedagogical
+  case (1/1 = red). Comes with `demo.sh` (pinned `--as-of
+  2026-05-21`), an `expected/` reference snapshot
+  (`indicators.csv` + `summary.json` with timestamps
+  masked), and an extensive `README.md` (UTI alignment
+  table + indicator verdicts + disclaimer link).
+
+- **Pattern 7 — Data Quality Pack** in
+  `examples/python/quickstart.ipynb` : a new section after
+  the existing 3 patterns, runs `data_quality_pack` on the
+  new kit and prints the 10 indicators + top-8 evidence.
+  Notebook regenerated + executed via the existing
+  `_build_notebook.py` authoring script.
+
+- **"Disclaimer — what a DQI is NOT" section** in
+  `docs/data-quality-pack.md` (~30 lines). Anchors the
+  vocabulary discipline : "DQI ≠ validation rule ≠ verdict
+  de non-conformité = internal control indicator". Ends
+  with the canonical phrase :
+
+  > OpenDQI computes internal data quality indicators. It
+  > does not certify regulatory compliance.
+
+- **"What a DQI is — and what it is NOT"** sub-section in
+  `docs/positioning.md`, linking back to the full
+  disclaimer.
+
+- New gitignore entry `examples/emir-data-quality-pack/out/`
+  so `demo.sh` runs leave no staged artefacts.
+
+### Changed
+
+- `README.md` Disclaimer section gains a reinforced
+  paragraph specifically about the v0.15 Data Quality Pack
+  ("DQIs are internal indicators, not regulatory verdicts ;
+  a `red` status is an internal alert, not a declaration of
+  non-compliance").
+
+- Version bumps in lockstep :
+  - root `Cargo.toml`               0.15.0 → 0.15.1
+  - `crates/opendqi-py/Cargo.toml`  0.15.0 → 0.15.1
+  - `crates/opendqi-py/pyproject.toml` 0.15.0 → 0.15.1
+  - `Cargo.lock` + `crates/opendqi-py/Cargo.lock` auto-refreshed
+
+### Honest scope (v0.15.1)
+
+- **ZERO Rust core change.** Not a single line of `crates/*/src/`
+  touched. The 9 commits D1-D8 of v0.15.0 are definitive.
+- **ZERO test change.** 831/0 workspace + 20/20 goldens +
+  88/0 + 3 skipped pytest all unchanged.
+- **ZERO Arrow contract change.** `result.issues` (11 cols),
+  `result.indicators` (11 cols), `result.evidence` (7 cols)
+  all byte-identical between v0.15.0 and v0.15.1.
+- **Same wheel binary** between v0.15.0 and v0.15.1 (only
+  metadata + README rendered on PyPI differ).
+
 ## [0.15.0] - 2026-05-21
 
 **EMIR Data Quality Pack v1** — a new layer above the 216
