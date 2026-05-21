@@ -3,6 +3,7 @@
 //! The formula is intentionally simple and tunable; it will be
 //! refined as more checks come online.
 
+use crate::dq::dqi::{compute_status, DqiStatus, DqiThresholdPair};
 use crate::model::{DqIssue, Severity};
 
 /// Compute the 0–100 quality score for a scan.
@@ -53,6 +54,32 @@ pub fn quality_score_from_counts(
         + 3.0 * (warning as f32 / n)
         + 0.5 * (info as f32 / n);
     (100.0 - penalty).clamp(0.0, 100.0)
+}
+
+/// Safe `numerator / denominator` plus a [`DqiStatus`] derived
+/// from a [`DqiThresholdPair`].
+///
+/// - `denominator == 0` → `(None, NotApplicable)` — by
+///   construction there is no rate to evaluate. Callers that
+///   need a "zero-out-of-zero is fine" semantics should report
+///   `Green` themselves.
+/// - otherwise → `(Some(num/denom), status)` where `status` is
+///   computed via [`compute_status`]: `≤ amber → Green`,
+///   `≤ red → Amber`, else `Red`.
+///
+/// The division is in `f64` to keep precision over large
+/// populations; the caller decides how many decimals to render.
+pub fn rate_with_status(
+    numerator: u64,
+    denominator: u64,
+    thresholds: &DqiThresholdPair,
+) -> (Option<f64>, DqiStatus) {
+    if denominator == 0 {
+        return (None, DqiStatus::NotApplicable);
+    }
+    let rate = numerator as f64 / denominator as f64;
+    let status = compute_status(Some(rate), thresholds);
+    (Some(rate), status)
 }
 
 #[cfg(test)]
@@ -108,5 +135,45 @@ mod tests {
         // records=4, penalty = 25*0.25 + 10*0.25 + 3*0.25 + 0.5*0.25 = 9.625
         let s = quality_score(4, &issues);
         assert!((s - 90.375).abs() < 1e-3, "got {s}");
+    }
+
+    fn dpair(amber: f64, red: f64) -> DqiThresholdPair {
+        DqiThresholdPair { amber, red }
+    }
+
+    #[test]
+    fn rate_with_status_zero_denom_is_not_applicable() {
+        let (rate, status) = rate_with_status(0, 0, &dpair(0.01, 0.05));
+        assert_eq!(rate, None);
+        assert_eq!(status, DqiStatus::NotApplicable);
+    }
+
+    #[test]
+    fn rate_with_status_zero_num_is_green() {
+        let (rate, status) = rate_with_status(0, 100, &dpair(0.01, 0.05));
+        assert_eq!(rate, Some(0.0));
+        assert_eq!(status, DqiStatus::Green);
+    }
+
+    #[test]
+    fn rate_with_status_under_amber_is_green() {
+        // 5/1000 = 0.005 ≤ 0.01 → green
+        let (rate, status) = rate_with_status(5, 1000, &dpair(0.01, 0.05));
+        assert_eq!(rate, Some(0.005));
+        assert_eq!(status, DqiStatus::Green);
+    }
+
+    #[test]
+    fn rate_with_status_between_amber_and_red_is_amber() {
+        // 30/1000 = 0.03 ∈ (0.01, 0.05] → amber
+        let (_rate, status) = rate_with_status(30, 1000, &dpair(0.01, 0.05));
+        assert_eq!(status, DqiStatus::Amber);
+    }
+
+    #[test]
+    fn rate_with_status_above_red_is_red() {
+        // 60/1000 = 0.06 > 0.05 → red
+        let (_rate, status) = rate_with_status(60, 1000, &dpair(0.01, 0.05));
+        assert_eq!(status, DqiStatus::Red);
     }
 }

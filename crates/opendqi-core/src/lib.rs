@@ -18,6 +18,10 @@ pub mod model;
 pub mod scoring;
 
 pub use config::Thresholds;
+pub use dq::dqi::{
+    compute_status, default_dqi_thresholds, DqiEvidence, DqiIndicator, DqiPackResult, DqiStatus,
+    DqiThresholdPair, MappingPresence,
+};
 pub use dq::{
     default_checks, default_sftr_checks, stream_checks_into, stream_emir_checks_into, Check,
     IssueAggregator, SftrCheck, SortedIssueSink, SortedIssues, STREAM_SPILL_MAX_ISSUES,
@@ -29,4 +33,4 @@ pub use model::{
     RepeatedRejection, ScanSummary, Severity, SftrRecord, SftrTrStateRecord, TrActivitySummary,
     TrStateRecord, TradeWarningsRecord, WarningsCounterpartyRecord, WarningsTransactionRecord,
 };
-pub use scoring::{quality_score, quality_score_from_counts};
+pub use scoring::{quality_score, quality_score_from_counts, rate_with_status};

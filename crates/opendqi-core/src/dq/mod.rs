@@ -19,6 +19,8 @@ pub use aggregate::IssueAggregator;
 mod sink;
 pub use sink::{SortedIssueSink, SortedIssues};
 
+pub mod dqi;
+
 mod abnormal_maturity;
 mod action_event_compatibility;
 mod action_type_enum;

@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
+use crate::dq::dqi::DqiThresholdPair;
 use crate::model::Severity;
 
 /// Top-level threshold configuration.
@@ -29,6 +30,14 @@ pub struct Thresholds {
     /// (e.g. `EMIR.COMP.UTI_MISSING`); values replace the check's
     /// default severity at issue-emission time. Empty by default.
     pub severity_overrides: BTreeMap<String, Severity>,
+    /// Per-indicator amber / red thresholds for the v0.15+ Data
+    /// Quality Pack. Keys are stable DQI IDs (e.g.
+    /// `DQI_VAL_MISSING`); values replace the shipped defaults
+    /// from [`crate::dq::dqi::default_dqi_thresholds`]. Empty by
+    /// default — the orchestrator falls back to the shipped map
+    /// per-indicator, then to [`DqiThresholdPair::default`] if
+    /// still missing.
+    pub dqi: BTreeMap<String, DqiThresholdPair>,
 }
 
 /// EMIR auth.091 reconciliation-statistics thresholds.
