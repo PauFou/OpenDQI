@@ -1,18 +1,19 @@
-# Data Quality Pack (v0.15+)
+# Data Quality Pack (v0.16+)
 
 The Data Quality Pack is OpenDQI's **committee-readable**
-view on top of the 216 granular checks. Where the per-row
-`DqIssue` stream is forensic (159 unique check IDs, 6
-dimensions), the DQI pack rolls them up into **10
-regulator-style indicators** with `numerator / denominator /
-rate / threshold / status`, plus drill-down evidence.
+view on top of the granular check catalogue. Where the
+per-row `DqIssue` stream is forensic (216 checks, 6
+dimensions), the DQI pack rolls them up into **28
+regulator-style indicators** — 24 EMIR + 4 SFTR — each with
+`numerator / denominator / rate / threshold / status`, plus
+drill-down evidence.
 
 Same scan, two views — the granular issue stream is
 **co-produced**, never replaced. `issues.csv` keeps carrying
 the per-row defects ; `indicators.csv` + `evidence.csv` are
-new outputs.
+additional outputs.
 
-## 30-second example
+## 30-second example (EMIR)
 
 ```bash
 opendqi emir data-quality-pack \
@@ -30,39 +31,146 @@ Output under `./pack/` :
 | `report.html` | Coloured (green/amber/red) indicator table + the existing Top Issues / by-severity / by-dimension sections. |
 | `summary.json` | Standard `ScanSummary` — unchanged shape since v0.10. |
 | `issues.csv` | v1.0 stable 11-column granular issues (unchanged contract since v0.12). |
-| `indicators.csv` | **NEW** — v1.0 stable 11 columns, one row per shipped DQI. |
-| `evidence.csv` | **NEW** — v1.0 stable 7 columns, ≤ 20 evidence rows per DQI. |
+| `indicators.csv` | v1.0 stable 11 columns, one row per shipped DQI. |
+| `evidence.csv` | v1.0 stable 7 columns, ≤ 20 evidence rows per DQI. |
 
-Stdout summary :
+The `as-of` flag pins the cutoff used by the two stale-data
+indicators so the report is reproducible across calendar days.
 
+## 30-second example (SFTR)
+
+```bash
+opendqi sftr data-quality-pack \
+  --tsr  examples/sftr/tr_state/auth079-sample.xml \
+  --tar  examples/sftr/tr_activity/auth052-tar-sample.xml \
+  --as-of 2026-05-21 \
+  --out  ./sftr-pack/
 ```
-Data Quality Pack: 4/10 indicators computed (3 red, 0 amber).
-Granular: 215 issues, score 46.7/100.
-Report: ./pack/report.html
-```
 
-## The 10 indicators
+Same 5 output files. v0.16 ships 4 SFTR indicators
+(T2 layer of `auth.079` + `auth.052`) ; the T3 margin layer
+and reconciliation/missing-collateral computers are scheduled
+for v0.17.
 
-| ID | Layer(s) | Dimension | Numerator | Denominator | Default thresholds (amber / red) |
-|---|---|---|---|---|---|
-| `DQI_VAL_MISSING` | TSR | completeness | outstanding TSR rows with no / zero valuation | outstanding TSR rows | 0.5 % / 2 % |
-| `DQI_VAL_STALE` | TSR | timeliness | rows with valuation older than `max_valuation_age_business_days` vs `as_of` | rows with `valuation_timestamp` set | 1 % / 5 % |
-| `DQI_COL_MISSING_STATE` | TSR + MSR | completeness | outstanding-collateralised TSR rows with no MSR row | outstanding-collateralised TSR rows | 1 % / 5 % |
-| `DQI_COL_ALL_ZERO` | MSR | accuracy | MSR rows where all 4 margin fields are zero / NULL | MSR rows | 2 % / 10 % |
-| `DQI_COL_STALE_STATE` | MSR | timeliness | rows with `state_as_of` older than `collateral_max_age_days` | rows with `state_as_of` set | 5 % / 20 % |
-| `DQI_REJ_RATE` | Feedback | accuracy | rejected feedback records | total feedback records (proxy) | 1 % / 5 % |
-| `DQI_REJ_REPEAT_UTI` | Feedback | accuracy | distinct UTIs rejected ≥ 2× | distinct rejected UTIs | 0.5 % / 2 % |
-| `DQI_TIM_REPORTING_LATE` | TAR | timeliness | gap > `max_reporting_delay_hours` | rows with both timestamps | 5 % / 20 % |
-| `DQI_CONF_MISSING` | TAR (gated) | completeness | rows with no `confirmation_timestamp` | TAR rows | 5 % / 20 % |
-| `DQI_REC_STATUS_UNPAIRED` | TAR/TSR (gated) | consistency | rows tagged unpaired / unreconciled | rows with status set | 5 % / 20 % |
+## The 24 EMIR indicators
 
-**Status mapping** (common to all 10) :
+Grouped by source layer for readability ; the on-disk
+`indicators.csv` is always sorted alphabetically by
+`indicator_id`.
+
+### TSR-only (5)
+
+| ID | Dimension | Numerator | Denominator | Default thresholds (amber / red) |
+|---|---|---|---|---|
+| `DQI_ANOMALY_RATE` | accuracy | TSR records with ≥ 1 accuracy-flavoured granular issue (negative/abnormal/zero) | total TSR records | 5 % / 20 % |
+| `DQI_DUPLICATE_REPORTS` | uniqueness | distinct UTIs appearing in ≥ 2 TSR rows | total TSR records | 0.5 % / 2 % |
+| `DQI_LEI_MISSING` | completeness | TSR records with ≥ 1 missing/empty counterparty LEI | total TSR records | 1 % / 5 % |
+| `DQI_VAL_MISSING` | completeness | outstanding TSR rows with no / zero valuation | outstanding TSR rows | 0.5 % / 2 % |
+| `DQI_VAL_STALE` | timeliness | rows with valuation older than `max_valuation_age_business_days` vs `as_of` (**TARGET2** business days) | rows with `valuation_timestamp` set | 1 % / 5 % |
+
+### MSR-only (2)
+
+| ID | Dimension | Numerator | Denominator | Default thresholds (amber / red) |
+|---|---|---|---|---|
+| `DQI_COL_ALL_ZERO` | accuracy | MSR rows where all 4 margin fields are zero / NULL | MSR rows | 2 % / 10 % |
+| `DQI_COL_STALE_STATE` | timeliness | rows with `state_as_of` older than `collateral_max_age_days` (**TARGET2** business days) | rows with `state_as_of` set | 5 % / 20 % |
+
+### TSR + MSR cross-layer (2)
+
+| ID | Dimension | Numerator | Denominator | Default thresholds (amber / red) |
+|---|---|---|---|---|
+| `DQI_COL_MISSING_STATE` | completeness | outstanding-collateralised TSR rows with no MSR row | outstanding-collateralised TSR rows | 1 % / 5 % |
+| `DQI_VM_MISSING_FOR_CLEARED` | completeness | FCOL MSR rows reporting no `variation_margin_collected_current` | FCOL MSR rows | 1 % / 5 % |
+
+### TAR-only (4)
+
+| ID | Dimension | Numerator | Denominator | Default thresholds (amber / red) |
+|---|---|---|---|---|
+| `DQI_ERR_MISSING` | completeness | TAR records with no entity-responsible-for-reporting LEI | total TAR records | 1 % / 5 % |
+| `DQI_NATURE_MISSING` | completeness | TAR records with no nature (FC/NFC/NFC+) classifier | total TAR records | 5 % / 20 % |
+| `DQI_SECTOR_MISSING` | completeness | TAR records with no `corporate_sector` classifier | total TAR records | 5 % / 20 % |
+| `DQI_TIM_REPORTING_LATE` | timeliness | gap > `max_reporting_delay_hours` | rows with both timestamps set | 5 % / 20 % |
+
+### TAR — gated (2)
+
+These two read raw_fields that are present in some EMIR
+submissions but optional. They self-report
+`status: not_applicable` when the field isn't mapped or never
+appears non-empty.
+
+| ID | Dimension | Numerator | Denominator | Default thresholds (amber / red) |
+|---|---|---|---|---|
+| `DQI_CONF_MISSING` | completeness | TAR rows with no `confirmation_timestamp` | TAR rows | 5 % / 20 % |
+| `DQI_REC_STATUS_UNPAIRED` | consistency | rows tagged unpaired / unreconciled | rows with status set | 5 % / 20 % |
+
+### Feedback layer — `auth.092` (2)
+
+| ID | Dimension | Numerator | Denominator | Default thresholds (amber / red) |
+|---|---|---|---|---|
+| `DQI_REJ_RATE` | accuracy | rejected feedback records | total feedback records (proxy) | 1 % / 5 % |
+| `DQI_REJ_REPEAT_UTI` | accuracy | distinct UTIs rejected ≥ 2× | distinct rejected UTIs | 0.5 % / 2 % |
+
+### Cross-counterparty reconciliation — `auth.091` (7)
+
+These 7 indicators read the EMIR reconciliation statistical
+report (`auth.091`). They split into two families:
+**aggregate stats** (pairing/reconciliation rates) computed
+from `ReconStatsRecord` rollups, and **per-record
+reconciliation** (field-level mismatch breakdowns) computed
+from the `ReconciliationRecord` detail.
+
+| ID | Dimension | Numerator | Denominator | Default thresholds (amber / red) |
+|---|---|---|---|---|
+| `DQI_PAIRING_RATE` | consistency | counter — *unpaired* records | total outstanding records reported in the stat | 20 % / 40 % |
+| `DQI_RECONCILIATION_RATE` | consistency | unreconciled paired records | paired records | 15 % / 30 % |
+| `DQI_UNPAIRED_TRADES_RATE` | consistency | per-trade records with `pairing_status = UNPAIRED` | total per-trade reconciliation records | 20 % / 40 % |
+| `DQI_FIELD_MISMATCH_RATE` | consistency | reconciliation records with ≥ 1 mismatched field | total reconciliation records | 5 % / 20 % |
+| `DQI_NOTIONAL_INCONSISTENT` | consistency | paired records flagged on the notional-amount criterion | paired records carrying the criterion | 5 % / 20 % |
+| `DQI_MARGIN_INCONSISTENT_PRE_HAIRCUT` | consistency | paired records flagged on any IM/VM pre-haircut criterion | paired records carrying ≥ 1 such criterion | 5 % / 20 % |
+| `DQI_MARGIN_INCONSISTENT_POST_HAIRCUT` | consistency | paired records flagged on any IM/VM post-haircut criterion | paired records carrying ≥ 1 such criterion | 5 % / 20 % |
+
+**Wiring note (v0.16 honest scope)** — the new auth.091-derived
+indicators ship in the core engine, the CLI flag and Python
+keyword to feed `--recon-stats` / `--reconciliation` are
+**not yet wired** on `opendqi emir data-quality-pack` ;
+they self-report `not_applicable` until the follow-up commit
+threads those inputs through both surfaces.
+
+## The 4 SFTR indicators (v0.16)
+
+T2 layer of `auth.079` + `auth.052`. T3 margin layer +
+`auth.080` reconciliation + `auth.083` missing-collateral
+indicators are scheduled for v0.17.
+
+| ID | Dimension | Numerator | Denominator | Default thresholds (amber / red) |
+|---|---|---|---|---|
+| `DQI_COLLATERAL_VALUE_MISSING_SFTR` | completeness | outstanding SFTR TSR rows with portfolio code OR collateral ISIN set but no `collateral_value` | outstanding SFTR TSR rows | 5 % / 20 % |
+| `DQI_LOAN_VALUE_MISSING_SFTR` | completeness | outstanding SFTR TSR rows with no `loan_value` | outstanding SFTR TSR rows | 5 % / 20 % |
+| `DQI_LOAN_VALUE_STALE_SFTR` | timeliness | rows with `state_as_of` older than `max_valuation_age_business_days` (**TARGET2** business days) | rows with `state_as_of` set | 5 % / 20 % |
+| `DQI_TIM_REPORTING_LATE_SFTR` | timeliness | gap > `max_reporting_delay_hours` | TAR rows with both timestamps set | 5 % / 20 % |
+
+## Status mapping (common to all 28)
+
 - `rate ≤ amber_threshold` → **green**
 - `amber_threshold < rate ≤ red_threshold` → **amber**
 - `rate > red_threshold` → **red**
 - `denominator == 0` OR input layer not provided OR gated
   field unmapped → **not_applicable** (`rate = null`, no
   evidence)
+
+## TARGET2 business-day calendar (v0.16+)
+
+The two stale-data indicators (`DQI_VAL_STALE` +
+`DQI_COL_STALE_STATE`) and the SFTR `DQI_LOAN_VALUE_STALE_SFTR`
+compare timestamps against `as_of` using the **TARGET2** ECB
+calendar : weekends are excluded, plus the 6
+Eurosystem-published holidays per year (1 Jan, Good Friday,
+Easter Monday, 1 May, 25 Dec, 26 Dec). The hardcoded calendar
+covers **2025 → 2032** and is bumpable in
+`crates/opendqi-core/src/business_days/target2_holidays.rs` ;
+out-of-range dates fall back to weekend-only semantics with
+an inline note. v0.15 used calendar days as a proxy ; v0.16
+makes the cutoff regulator-aligned.
 
 ## Disclaimer — what a DQI is NOT
 
@@ -96,7 +204,7 @@ team) read each word literally.
 In short: the DQI pack helps a firm *see* its data quality.
 It does **not** *certify* it.
 
-## Indicator details
+## Indicator details — EMIR
 
 ### `DQI_VAL_MISSING`
 
@@ -116,17 +224,12 @@ It does **not** *certify* it.
 
 **Question**: *"How fresh are my valuations relative to today?"*
 
-- **Numerator**: TSR records where
-  `valuation_timestamp < as_of - max_valuation_age_business_days`.
+- **Numerator**: TSR records where the TARGET2 business-day
+  gap from `valuation_timestamp` to `as_of` exceeds
+  `max_valuation_age_business_days` (default `1`).
 - **Denominator**: TSR records with `valuation_timestamp`
   set (rows without are excluded — already counted by
   `DQI_VAL_MISSING`).
-- **Note (honest scope limit)** : v0.15 uses calendar days
-  as a proxy for business days. A business-day-calendar
-  refinement is scheduled for v0.16. The
-  `max_valuation_age_business_days = 1` default thus
-  matches "yesterday or earlier" — close enough on the
-  measured workloads.
 - **Evidence**: oldest timestamps first.
 
 ### `DQI_COL_MISSING_STATE`
@@ -159,11 +262,80 @@ It does **not** *certify* it.
 **Question**: *"Are the margining snapshots up-to-date?"*
 
 - Mirrors `EMIR.COL.STALE` at the indicator level. Same
-  `collateral_max_age_days` threshold (default 1 calendar
-  day).
-- **Numerator**: MSR rows where
-  `state_as_of < as_of - collateral_max_age_days`.
+  `collateral_max_age_days` threshold (default 1 TARGET2
+  business day).
+- **Numerator**: MSR rows where the business-day gap from
+  `state_as_of` to `as_of` exceeds `collateral_max_age_days`.
 - **Denominator**: MSR rows with `state_as_of` set.
+
+### `DQI_VM_MISSING_FOR_CLEARED`
+
+**Question**: *"For fully-collateralised trades, is variation margin actually reported?"*
+
+- **Numerator**: MSR records with
+  `collateralisation_type = FCOL` (fully collateralised) AND
+  no `variation_margin_collected_current` value.
+- **Denominator**: MSR records with `FCOL` collateralisation
+  type.
+- **Rationale**: more specific than `DQI_COL_MISSING_STATE`
+  — focuses on the cleared/FCOL subset where VM reporting
+  is most strictly expected.
+
+### `DQI_ANOMALY_RATE`
+
+**Question**: *"Across all the accuracy-flavoured checks, what share of records exhibit at least one anomaly?"*
+
+- **Numerator**: TSR records where at least one of these
+  fields trips the per-field accuracy heuristics
+  (negative/abnormal/zero) :
+  `notional_amount`, `price`, `maturity_date`,
+  `execution_timestamp`, `event_timestamp`.
+- **Denominator**: total TSR records.
+- **Rationale**: rolls up the noise of multiple per-field
+  `EMIR.ACC.*` granular checks into a single committee-grade
+  number.
+
+### `DQI_DUPLICATE_REPORTS`
+
+**Question**: *"Are some UTIs reported more than once in the same TSR snapshot?"*
+
+- **Numerator**: distinct UTIs that appear in ≥ 2 TSR rows
+  in the snapshot.
+- **Denominator**: total TSR records.
+- **Evidence**: top-20 most-duplicated UTIs first ;
+  `observed_value` carries the count.
+
+### `DQI_LEI_MISSING`
+
+**Question**: *"What share of my TSR records have a missing counterparty LEI?"*
+
+- **Numerator**: TSR records with at least one of
+  `reporting_counterparty`, `other_counterparty`,
+  `entity_responsible_for_reporting` (LEI fields) empty
+  or NULL.
+- **Denominator**: total TSR records.
+
+### `DQI_ERR_MISSING`
+
+**Question**: *"What share of my TAR records carry an entity-responsible-for-reporting?"*
+
+- **Numerator**: TAR records with no
+  `entity_responsible_for_reporting` LEI.
+- **Denominator**: total TAR records.
+
+### `DQI_NATURE_MISSING`
+
+**Question**: *"What share of my TAR records classify the counterparty (FC / NFC / NFC+)?"*
+
+- **Numerator**: TAR records with no `nature` classifier.
+- **Denominator**: total TAR records.
+
+### `DQI_SECTOR_MISSING`
+
+**Question**: *"What share of my TAR records carry a corporate-sector classifier?"*
+
+- **Numerator**: TAR records with no `corporate_sector`.
+- **Denominator**: total TAR records.
 
 ### `DQI_REJ_RATE`
 
@@ -173,9 +345,9 @@ It does **not** *certify* it.
   `feedback_type == Rejected`.
 - **Denominator (honest scope)**: total feedback records.
   The *true* denominator would be "number of submissions",
-  which `auth.092` alone doesn't carry. v0.15 ships the
-  proxy ; a real submission-count denominator is gated on
-  the v0.16 store-backed workflow.
+  which `auth.092` alone doesn't carry. v0.16 still ships
+  the proxy ; a real submission-count denominator is gated
+  on a future store-backed workflow.
 
 ### `DQI_REJ_REPEAT_UTI`
 
@@ -185,7 +357,8 @@ It does **not** *certify* it.
   `auth.092` with `feedback_type == Rejected`.
 - **Denominator**: distinct UTIs with at least one
   rejection.
-- **Evidence**: worst (most-rejected) first ; `observed_value` carries the count.
+- **Evidence**: worst (most-rejected) first ;
+  `observed_value` carries the count.
 
 ### `DQI_TIM_REPORTING_LATE`
 
@@ -217,6 +390,107 @@ It does **not** *certify* it.
   `unrec`, `unreconciled`, `unmatched`.
 - **Gated** like `DQI_CONF_MISSING`.
 
+### `DQI_PAIRING_RATE` (auth.091)
+
+**Question**: *"From the TR's perspective, what share of outstanding records are unpaired with the counterparty?"*
+
+- **Numerator**: aggregate `unpaired` count reported in
+  `auth.091`'s reconciliation statistics.
+- **Denominator**: total outstanding count covered by the
+  stat.
+- **Source**: `ReconStatsRecord` rollups parsed from the
+  reconciliation report.
+
+### `DQI_RECONCILIATION_RATE` (auth.091)
+
+**Question**: *"Of the trades the TR considers paired, what share are NOT reconciled field-by-field?"*
+
+- **Numerator**: unreconciled paired records.
+- **Denominator**: paired records (from `ReconStatsRecord`).
+
+### `DQI_UNPAIRED_TRADES_RATE` (auth.091)
+
+**Question**: *"At the per-trade level, what share are flagged unpaired?"*
+
+- **Numerator**: per-trade `ReconciliationRecord`s where
+  `pairing_status = UNPAIRED`.
+- **Denominator**: total per-trade reconciliation records.
+
+### `DQI_FIELD_MISMATCH_RATE` (auth.091)
+
+**Question**: *"What share of the per-trade reconciliation records have at least one mismatched field?"*
+
+- **Numerator**: `ReconciliationRecord`s with ≥ 1
+  reconciled criterion in the `mismatch_fields` list.
+- **Denominator**: total `ReconciliationRecord`s.
+
+### `DQI_NOTIONAL_INCONSISTENT` (auth.091)
+
+**Question**: *"Of paired records carrying a notional criterion, what share flag it as mismatched?"*
+
+- **Numerator**: `ReconciliationRecord`s flagged on the
+  notional-amount criterion.
+- **Denominator**: `ReconciliationRecord`s carrying the
+  notional criterion.
+- **Evidence**: per-UTI breakdown with the firm-vs-CP
+  notional values.
+
+### `DQI_MARGIN_INCONSISTENT_PRE_HAIRCUT` (auth.091)
+
+**Question**: *"Of paired records carrying pre-haircut IM/VM criteria, what share flag any of them as mismatched?"*
+
+- **Numerator**: `ReconciliationRecord`s flagged on any of
+  the pre-haircut IM/VM (posted/received) criteria.
+- **Denominator**: records carrying ≥ 1 such criterion.
+
+### `DQI_MARGIN_INCONSISTENT_POST_HAIRCUT` (auth.091)
+
+Same shape as `DQI_MARGIN_INCONSISTENT_PRE_HAIRCUT` but on
+the post-haircut IM/VM criteria. Both indicators reuse a
+shared `criterion_mismatch_rate` helper so the
+numerator/denominator semantics never drift.
+
+## Indicator details — SFTR
+
+### `DQI_LOAN_VALUE_MISSING_SFTR`
+
+**Question**: *"What share of my outstanding SFTs report no loan value?"*
+
+- **Numerator**: SFTR TSR records with `loan_value` `None`
+  or `0`.
+- **Denominator**: total SFTR TSR records.
+- **SFTR mirror of `DQI_VAL_MISSING`**.
+
+### `DQI_LOAN_VALUE_STALE_SFTR`
+
+**Question**: *"How fresh is the state of my outstanding SFTs?"*
+
+- **Numerator**: SFTR TSR records where the TARGET2
+  business-day gap from `state_as_of` to `as_of` exceeds
+  `max_valuation_age_business_days` (the same EMIR
+  threshold is reused).
+- **Denominator**: SFTR TSR records with `state_as_of` set.
+
+### `DQI_COLLATERAL_VALUE_MISSING_SFTR`
+
+**Question**: *"For SFTs reporting any collateral identifier, is the collateral value actually populated?"*
+
+- **Numerator**: SFTR TSR records with
+  `collateral_portfolio_code` OR `collateral_isin` set but
+  `collateral_value` `None` or `0`.
+- **Denominator**: SFTR TSR records with at least one
+  collateral identifier set.
+
+### `DQI_TIM_REPORTING_LATE_SFTR`
+
+**Question**: *"Are SFTR TAR submissions arriving within T+1?"*
+
+- **Numerator**: SFTR TAR (`auth.052`) records where the
+  gap from `execution_timestamp` to `reporting_timestamp`
+  exceeds `max_reporting_delay_hours`.
+- **Denominator**: TAR records with both timestamps set.
+- **SFTR mirror of `DQI_TIM_REPORTING_LATE`**.
+
 ## Threshold configuration
 
 Override per-indicator via YAML config :
@@ -230,6 +504,9 @@ dqi:
   DQI_VAL_STALE:
     amber: 0.005
     red:   0.02
+  DQI_LOAN_VALUE_STALE_SFTR:
+    amber: 0.01
+    red:   0.05
   # other indicators inherit the shipped defaults
 ```
 
@@ -237,6 +514,7 @@ Use it :
 
 ```bash
 opendqi emir data-quality-pack ... --config my-thresholds.yml
+opendqi sftr data-quality-pack ... --config my-thresholds.yml
 ```
 
 Missing indicator entries fall back to the shipped
@@ -245,6 +523,8 @@ then to the loose
 `DqiThresholdPair::default { amber: 0.05, red: 0.20 }`.
 
 ## Python API
+
+### EMIR
 
 ```python
 import opendqi
@@ -262,18 +542,34 @@ result = opendqi.emir.data_quality_pack(
 )
 
 # v1.0 stable Arrow tables
-result.indicators   # pyarrow.Table, 10 rows × 11 cols
-result.evidence     # pyarrow.Table, ≤ 200 rows × 7 cols
+result.indicators   # pyarrow.Table, 24 rows × 11 cols
+result.evidence     # pyarrow.Table, ≤ 480 rows × 7 cols
 result.issues       # pyarrow.Table, granular (same contract as v0.12+)
 
 # dict shaped like summary.json
 result.summary
-
-# Write the 5 artefacts the CLI writes
-result.report("./pack/")
 ```
 
-## Spark API (EXPERIMENTAL — v0.15.0)
+### SFTR (v0.16+)
+
+```python
+import opendqi
+
+result = opendqi.sftr.data_quality_pack(
+    tsr="auth079-tsr.xml",
+    tar="auth052-tar.xml",
+    reconciliation="auth080.xml",          # reserved for v0.17 indicators
+    missing_collateral="auth083.xml",      # reserved for v0.17 indicators
+    as_of="2026-05-21",
+)
+result.indicators   # pyarrow.Table, 4 rows × 11 cols
+```
+
+**v0.16 honest scope** — the SFTR DQI pack is **paths-only**.
+Dual-input pyarrow.Table support for SFTR layers is scheduled
+for v0.17 alongside the T3 margin indicators.
+
+## Spark API (EXPERIMENTAL)
 
 ```python
 import opendqi.spark.emir
@@ -289,11 +585,16 @@ result = opendqi.spark.emir.data_quality_pack(
 
 **Honest** :
 - Collect-then-call ; does not scale beyond driver-RAM.
-- Native partition-aware joins = v0.16.
+- Native partition-aware joins = future work.
 - `FutureWarning` emitted on every call.
 - PySpark is optional : `pip install opendqi[spark]`.
 
-## v1.0 Arrow schemas (locked)
+## v1.0 Arrow schemas (locked since v0.15.0)
+
+The 11-column `indicators` schema and 7-column `evidence`
+schema are **frozen** — the v0.16 expansion adds *rows*, not
+*columns*. Any breaking change requires a major version bump
+of the bindings.
 
 ### `indicators` schema (11 cols)
 
@@ -324,11 +625,11 @@ result = opendqi.spark.emir.data_quality_pack(
 | `explanation` | Utf8 | false |
 
 Both contracts are pinned by parity tests in
-`crates/opendqi-py/tests/test_data_quality_pack.py` against
-the on-disk CLI goldens. Any breaking change requires a
-major version bump of the bindings.
+`crates/opendqi-py/tests/test_data_quality_pack.py` (EMIR)
+and `test_sftr_data_quality_pack.py` (SFTR) against the
+on-disk CLI goldens.
 
-## SFTR layer mapping (v0.16+ reference)
+## SFTR layer mapping (T1 / T2 / T3)
 
 SFTR is structured around **3 logical strata** which OpenDQI
 treats as separate layers for DQI purposes, even though they
@@ -337,29 +638,39 @@ EMIR which ships a dedicated message per stratum) :
 
 | Stratum | Content | EMIR equivalent | OpenDQI v0.16 DQI prefix |
 |---|---|---|---|
-| **T1** | Counterparty identification (RC / OC / ERR LEIs, nature, sector, …) | Embedded in `auth.107` TSR | Reused by EMIR-mirror DQIs (`DQI_LEI_MISSING_SFTR`) |
+| **T1** | Counterparty identification (RC / OC / ERR LEIs, nature, sector, …) | Embedded in `auth.107` TSR | Reserved for v0.17 (`DQI_LEI_MISSING_SFTR`) |
 | **T2** | Transaction state — loan value, collateral value, maturity, settlement date, status — both `auth.052` (TAR) and `auth.079` (TSR) | `auth.030` TAR + `auth.107` TSR | `DQI_LOAN_VALUE_*_SFTR`, `DQI_COLLATERAL_VALUE_MISSING_SFTR`, `DQI_TIM_REPORTING_LATE_SFTR` |
-| **T3** | Margin state — IM/VM posted/received, pre/post-haircut. **Logically separate** but **inline** in `auth.079` rather than shipped as a dedicated auth.* message | `auth.108` MAR + `auth.109` MSR | `DQI_T3_MARGIN_MISSING`, `DQI_T3_MARGIN_CONSISTENCY`, `DQI_T3_MARGIN_STALE` |
+| **T3** | Margin state — IM/VM posted/received, pre/post-haircut. **Logically separate** but **inline** in `auth.079` rather than shipped as a dedicated auth.* message | `auth.108` MAR + `auth.109` MSR | Reserved for v0.17 (`DQI_T3_MARGIN_*`) |
 
-This means a single `auth.079` SFTR Trade State Report
-parsed by OpenDQI provides BOTH the T2 (transaction state)
-and the T3 (margin state) input layers — they are projected
-into separate logical record sets at the parsing step. The
-SFTR DQI Pack consumes them as if they were two separate
-files (mirror EMIR's TSR + MSR design), but the CLI / Python
-caller only needs to provide the auth.079 input once.
+A single `auth.079` SFTR Trade State Report parsed by
+OpenDQI carries BOTH the T2 (transaction state) and the T3
+(margin state) input layers — they will be projected into
+separate logical record sets when v0.17 ships the T3
+computers ; the CLI / Python caller only needs to provide
+the auth.079 input once.
 
 See [`docs/dqi-spark-mapping.md`](dqi-spark-mapping.md) for
 the full EMIR + SFTR DQI catalogue + the methodology used
 to derive each indicator.
 
-## What v0.15 deliberately does NOT do
+## What v0.16 deliberately does NOT do
 
-- Mirror SFTR (v0.16).
-- Native partition-aware Spark (v0.16).
-- DQI history / trend tracking via the SQLite store (v0.16).
-- A submission-count-aware `DQI_REJ_RATE` denominator (v0.16+).
-- Business-day calendar awareness for `DQI_VAL_STALE` (v0.16).
-- New ISO 20022 messages, new compression / dispute /
-  IM-cadence indicators (out of scope — see
-  `docs/positioning.md`).
+- **SFTR T3 margin indicators** (v0.17). v0.16 ships the
+  SFTR DQI pack scaffolding + 4 T2-layer indicators ; T3
+  parser extension and indicators are the v0.17 milestone.
+- **SFTR reconciliation (`auth.080`) and missing-collateral
+  (`auth.083`) indicators** (v0.17). The CLI/Python accept
+  the inputs today but no v0.16 computer reads them.
+- **CLI/Python wiring of `auth.091` for the 7 cross-CP EMIR
+  DQIs**. The computers ship but the `--recon-stats` /
+  `--reconciliation` flags are not yet exposed on
+  `data-quality-pack` ; those 7 indicators self-report
+  `not_applicable` until a follow-up commit.
+- **DQI history / trend tracking via the SQLite store**
+  (v0.17+).
+- **A submission-count-aware `DQI_REJ_RATE` denominator**
+  (gated on the store workflow).
+- **Native partition-aware Spark** (Spark stays
+  collect-then-call / experimental).
+- **Threshold profile presets** (one YAML override at a
+  time today).
