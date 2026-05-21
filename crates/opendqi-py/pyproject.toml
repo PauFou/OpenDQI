@@ -34,6 +34,27 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Heavy data-platform extras — keep core `pip install opendqi`
+# minimal (just pyarrow). Users opt in:
+#   pip install opendqi[spark]    # adds pyspark>=3.5
+#   pip install opendqi[polars]   # adds polars>=0.20
+#   pip install opendqi[all]      # both
+# The opendqi.{spark,polars} pure-Python modules use duck-typed
+# imports so plain `import opendqi.spark` works even when
+# PySpark isn't installed (until you actually call into a
+# function that uses it). Tests for these extras
+# `pytest.importorskip("pyspark"|"polars")` so the standard
+# `pytest tests/` run never breaks on a clean venv.
+spark = [
+    "pyspark>=3.5",
+]
+polars = [
+    "polars>=0.20",
+]
+all = [
+    "pyspark>=3.5",
+    "polars>=0.20",
+]
 test = [
     "pytest>=7",
     "pyarrow>=15.0",
