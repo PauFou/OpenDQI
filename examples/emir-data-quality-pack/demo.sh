@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
 #
-# OpenDQI v0.15.1 — emir-data-quality-pack reproducible demo.
+# OpenDQI v0.16.0 — emir-data-quality-pack reproducible demo.
 #
-# Runs the full v0.15 EMIR Data Quality Pack against the 5
+# Runs the full EMIR Data Quality Pack against the 5
 # synthetic ISO 20022 inputs in this directory and writes the
 # 5 artefacts (report.html + summary.json + issues.csv +
 # indicators.csv + evidence.csv) under ./out/.
+#
+# v0.16 ships 24 EMIR indicators (10 v0.15 + 14 new in v0.16).
+# 7 of the new auth.091-derived cross-CP DQIs self-report
+# `not_applicable` here because the CLI flag (--recon-stats /
+# --reconciliation) is not yet wired on `data-quality-pack`
+# — the computers exist in the core engine and will fire once
+# those flags are threaded.
 #
 # `--as-of 2026-05-21` is pinned so the stale-valuation /
 # stale-collateral-state cutoffs are stable across runs and
@@ -36,7 +43,7 @@ rm -rf out/
   --out out/
 
 echo
-echo "=== indicators.csv (10 rows) ==="
+echo "=== indicators.csv (24 rows) ==="
 cat out/indicators.csv
 echo
 echo "Full outputs under $(pwd)/out/  (5 files)"

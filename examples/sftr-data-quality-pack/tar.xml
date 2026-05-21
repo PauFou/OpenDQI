@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic SFTR Trade Activity Report (auth.052.001.02 — TR replay).
+  Hand-authored. Each Rpt block exercises one or more of the 5
+  SFTR.TRA.* checks. The same auth.052 namespace doubles as the TR
+  replay vehicle for the activity layer.
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.052.001.02">
+  <SctiesFincgRptgTxRpt>
+    <TradData>
+
+      <!-- 1. CLEAN NEWT (baseline). -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <NttyRspnsblForRpt><LEI>ABCDEFGHIJKLMNOPQR01</LEI></NttyRspnsblForRpt>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-TAR-NEWT-0001</UnqTxIdr>
+            <EvtTp>NEWT</EvtTp>
+            <ExctnDtTm>2026-05-12T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-05-12T18:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-08-12</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">1000000</Amt></PrncplAmt>
+          </Repo></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">1050000</Amt></CollVal>
+            <Hrcut>0.05</Hrcut>
+            <Sctys><Id>DE0001135275</Id></Sctys>
+          </CollData>
+        </New>
+      </Rpt>
+
+      <!-- 2-4. REPEATED_CORRECTION: three CORRs on the same UTI. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-TAR-CORR-0002</UnqTxIdr>
+            <EvtTp>CORR</EvtTp>
+            <ExctnDtTm>2026-05-12T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-05-12T19:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-08-12</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">500000</Amt></PrncplAmt>
+          </Repo></LnData>
+        </New>
+      </Rpt>
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-TAR-CORR-0002</UnqTxIdr>
+            <EvtTp>CORR</EvtTp>
+            <ExctnDtTm>2026-05-12T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-05-12T20:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-08-12</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">500000</Amt></PrncplAmt>
+          </Repo></LnData>
+        </New>
+      </Rpt>
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-TAR-CORR-0002</UnqTxIdr>
+            <EvtTp>CORR</EvtTp>
+            <ExctnDtTm>2026-05-12T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-05-12T21:00:00Z</RptgDtTm>
+            <MtrtyDt>2026-08-12</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">500000</Amt></PrncplAmt>
+          </Repo></LnData>
+        </New>
+      </Rpt>
+
+      <!-- 5. DUPLICATE_NEWT_IN_BATCH: two NEWTs with the same UTI. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-TAR-DUPNEWT-0003</UnqTxIdr>
+            <EvtTp>NEWT</EvtTp>
+            <ExctnDtTm>2026-05-12T11:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-05-12T18:30:00Z</RptgDtTm>
+            <MtrtyDt>2026-11-30</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">800000</Amt></PrncplAmt>
+          </Repo></LnData>
+        </New>
+      </Rpt>
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-TAR-DUPNEWT-0003</UnqTxIdr>
+            <EvtTp>NEWT</EvtTp>
+            <ExctnDtTm>2026-05-12T11:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-05-12T18:30:00Z</RptgDtTm>
+            <MtrtyDt>2026-11-30</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">800000</Amt></PrncplAmt>
+          </Repo></LnData>
+        </New>
+      </Rpt>
+
+      <!-- 6-9. SPIKE_TERM: 4 ETRMs out of ~12 records → above 25%. -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-TAR-ETRM-0010</UnqTxIdr>
+            <EvtTp>ETRM</EvtTp>
+            <ExctnDtTm>2026-05-12T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-05-12T18:00:00Z</RptgDtTm>
+            <TermntnDt>2026-05-12</TermntnDt>
+            <MtrtyDt>2026-09-30</MtrtyDt>
+          </Repo></LnData>
+        </New>
+      </Rpt>
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-TAR-ETRM-0011</UnqTxIdr>
+            <EvtTp>ETRM</EvtTp>
+            <ExctnDtTm>2026-05-12T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-05-12T18:00:00Z</RptgDtTm>
+            <TermntnDt>2026-05-12</TermntnDt>
+            <MtrtyDt>2026-09-30</MtrtyDt>
+          </Repo></LnData>
+        </New>
+      </Rpt>
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-TAR-ETRM-0012</UnqTxIdr>
+            <EvtTp>ETRM</EvtTp>
+            <ExctnDtTm>2026-05-12T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-05-12T18:00:00Z</RptgDtTm>
+            <TermntnDt>2026-05-12</TermntnDt>
+            <MtrtyDt>2026-09-30</MtrtyDt>
+          </Repo></LnData>
+        </New>
+      </Rpt>
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><Repo>
+            <UnqTxIdr>OPENDQI-SFTR-TAR-ETRM-0013</UnqTxIdr>
+            <EvtTp>ETRM</EvtTp>
+            <ExctnDtTm>2026-05-12T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-05-12T18:00:00Z</RptgDtTm>
+            <TermntnDt>2026-05-12</TermntnDt>
+            <MtrtyDt>2026-09-30</MtrtyDt>
+          </Repo></LnData>
+        </New>
+      </Rpt>
+
+      <!-- 10. MGLD NEWT with no loan_value
+                  (SFTR.MAR.MGLD_NEEDS_LOAN_VALUE). -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><MgnLndg>
+            <UnqTxIdr>OPENDQI-SFTR-TAR-MGLD-0020</UnqTxIdr>
+            <EvtTp>NEWT</EvtTp>
+            <ExctnDtTm>2026-05-12T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-05-12T18:00:00Z</RptgDtTm>
+            <MtrtyDt>2027-05-12</MtrtyDt>
+          </MgnLndg></LnData>
+        </New>
+      </Rpt>
+
+      <!-- 11. MGLD NEWT with loan but no collateral
+                  (SFTR.MAR.MGLD_NEEDS_COLLATERAL). -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><MgnLndg>
+            <UnqTxIdr>OPENDQI-SFTR-TAR-MGLD-0021</UnqTxIdr>
+            <EvtTp>NEWT</EvtTp>
+            <ExctnDtTm>2026-05-12T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-05-12T18:00:00Z</RptgDtTm>
+            <MtrtyDt>2027-05-12</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">500000</Amt></PrncplAmt>
+          </MgnLndg></LnData>
+        </New>
+      </Rpt>
+
+      <!-- 12. MARU action with no updated field and no portfolio
+                  (SFTR.MAR.MARU_REQUIRES_VALUE_OR_HAIRCUT +
+                   SFTR.MAR.MARU_REQUIRES_PORTFOLIO). -->
+      <Rpt>
+        <MrgnUpd>
+          <CtrPtySpcfcData>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><MgnLndg>
+            <UnqTxIdr>OPENDQI-SFTR-TAR-MARU-0022</UnqTxIdr>
+            <EvtTp>MARU</EvtTp>
+            <ExctnDtTm>2026-05-12T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-05-12T18:00:00Z</RptgDtTm>
+            <MtrtyDt>2027-05-12</MtrtyDt>
+          </MgnLndg></LnData>
+        </MrgnUpd>
+      </Rpt>
+
+      <!-- 13. MGLD NEWT with haircut > 1
+                  (SFTR.MAR.MGLD_HAIRCUT_OUT_OF_RANGE). -->
+      <Rpt>
+        <New>
+          <CtrPtySpcfcData>
+            <RptgCtrPty><Id><LEI>ABCDEFGHIJKLMNOPQR02</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Org><LEI>ABCDEFGHIJKLMNOPQR03</LEI></Org></Id></OthrCtrPty>
+          </CtrPtySpcfcData>
+          <LnData><MgnLndg>
+            <UnqTxIdr>OPENDQI-SFTR-TAR-MGLD-0023</UnqTxIdr>
+            <EvtTp>NEWT</EvtTp>
+            <ExctnDtTm>2026-05-12T09:00:00Z</ExctnDtTm>
+            <RptgDtTm>2026-05-12T18:00:00Z</RptgDtTm>
+            <MtrtyDt>2027-05-12</MtrtyDt>
+            <PrncplAmt><Amt Ccy="EUR">800000</Amt></PrncplAmt>
+          </MgnLndg></LnData>
+          <CollData>
+            <CollVal><Amt Ccy="EUR">900000</Amt></CollVal>
+            <Hrcut>1.5</Hrcut>
+            <Sctys><Id>DE0001135275</Id></Sctys>
+          </CollData>
+        </New>
+      </Rpt>
+
+    </TradData>
+  </SctiesFincgRptgTxRpt>
+</Document>

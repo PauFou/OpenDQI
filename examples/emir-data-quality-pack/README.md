@@ -1,9 +1,16 @@
-# `examples/emir-data-quality-pack/` — reproducible 5-layer DQI demo (v0.15.1)
+# `examples/emir-data-quality-pack/` — reproducible 5-layer DQI demo (v0.16+)
 
-A self-contained kit that exercises the full v0.15 EMIR
-**Data Quality Pack** on a 5-layer synthetic input set. Same
-fixtures every time → same outputs every time → diff-friendly
-for sanity-checking after upstream changes.
+A self-contained kit that exercises the EMIR **Data Quality
+Pack** on a 5-layer synthetic input set. Same fixtures every
+time → same outputs every time → diff-friendly for
+sanity-checking after upstream changes.
+
+v0.16 ships **24 EMIR indicators** (10 v0.15 + 14 v0.16).
+7 of the v0.16 indicators are auth.091 cross-CP rollups
+whose CLI wiring (`--recon-stats` / `--reconciliation`) is
+not yet threaded through `data-quality-pack` — they
+self-report `not_applicable` here. The 17 single-layer DQIs
+all compute normally.
 
 Sister kit to [`../quickstart-emir/`](../quickstart-emir/),
 which ships only 3 layers (TSR + TAR + Feedback) and runs
@@ -43,7 +50,7 @@ Writes 5 artefacts under `out/` :
 | `report.html` | Coloured (green / amber / red) Data Quality Pack section + the existing Top Issues / by-severity / by-dimension blocks. |
 | `summary.json` | Standard `ScanSummary` — files_processed, records_processed, quality_score, etc. |
 | `issues.csv` | v1.0 stable 11-column granular issues from the 216 checks. |
-| `indicators.csv` | v1.0 stable 11-column DQI table (10 rows). |
+| `indicators.csv` | v1.0 stable 11-column DQI table (24 rows). |
 | `evidence.csv` | v1.0 stable 7-column drill-down evidence (≤ 20 rows per indicator). |
 
 The script also `cat`s `out/indicators.csv` to stdout so you
@@ -53,7 +60,7 @@ see the indicator table without opening anything.
 
 `expected/` contains the canonical `indicators.csv` +
 `summary.json` (timestamps masked) produced by this kit on
-v0.15.1. **Not** a golden test (not wired into the
+v0.16.0. **Not** a golden test (not wired into the
 `opendqi-cli` harness) — it's a human-readable reference
 that helps you spot upstream changes.
 
@@ -77,7 +84,7 @@ rendered with timestamps).
 - **CSV mapping** — see `../emir/sample.csv` + `../emir/sample_mapping.yml` for the CSV path.
 - **Custom thresholds** — see `docs/data-quality-pack.md` "Threshold configuration".
 - **Spark / Polars / pyarrow.Table inputs** — see `examples/python/07_data_quality_pack.py` + `docs/data-quality-pack.md` "Python API" / "Spark API".
-- **SFTR** — the DQI pack is EMIR-only in v0.15 ; SFTR mirror = v0.16.
+- **SFTR** — see the sister kit [`../sftr-data-quality-pack/`](../sftr-data-quality-pack/) which exercises the 4 T2-layer SFTR indicators v0.16 ships.
 
 ## Disclaimer
 

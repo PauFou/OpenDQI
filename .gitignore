@@ -58,5 +58,6 @@ samples/private/
 # to obtain the official schemas yourself.
 ESMA_docs/
 
-# v0.15.1 — example kit produces ./out/ on each demo.sh run
+# Example kits — each demo.sh run produces a fresh ./out/.
 examples/emir-data-quality-pack/out/
+examples/sftr-data-quality-pack/out/
