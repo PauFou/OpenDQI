@@ -65,7 +65,7 @@ def test_string_paths_passthrough_emits_future_warning(tmp_path: Path) -> None:
             as_of="2026-05-21",
         )
     # Same result type as the core function — same getters work.
-    assert result.indicators.num_rows == 14
+    assert result.indicators.num_rows == 17
     assert result.summary["files_processed"] == 1
 
 

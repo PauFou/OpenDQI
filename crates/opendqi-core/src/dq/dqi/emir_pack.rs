@@ -27,10 +27,12 @@ use chrono::{DateTime, NaiveDate, Utc};
 use crate::dq::aggregate::IssueAggregator;
 use crate::dq::dqi::compute::{
     compute_dqi_col_all_zero, compute_dqi_col_missing_state, compute_dqi_col_stale_state,
-    compute_dqi_conf_missing, compute_dqi_field_mismatch_rate, compute_dqi_pairing_rate,
-    compute_dqi_rec_status_unpaired, compute_dqi_reconciliation_rate, compute_dqi_rej_rate,
-    compute_dqi_rej_repeat_uti, compute_dqi_tim_reporting_late, compute_dqi_unpaired_trades_rate,
-    compute_dqi_val_missing, compute_dqi_val_stale,
+    compute_dqi_conf_missing, compute_dqi_field_mismatch_rate,
+    compute_dqi_margin_inconsistent_post_haircut, compute_dqi_margin_inconsistent_pre_haircut,
+    compute_dqi_notional_inconsistent, compute_dqi_pairing_rate, compute_dqi_rec_status_unpaired,
+    compute_dqi_reconciliation_rate, compute_dqi_rej_rate, compute_dqi_rej_repeat_uti,
+    compute_dqi_tim_reporting_late, compute_dqi_unpaired_trades_rate, compute_dqi_val_missing,
+    compute_dqi_val_stale,
 };
 use crate::dq::dqi::{DqiEvidence, DqiIndicator, DqiPackResult, MappingPresence};
 use crate::dq::{
@@ -227,6 +229,15 @@ pub fn compute_emir_dqi_pack(
         push(ind, ev);
         let (ind, ev) = compute_dqi_field_mismatch_rate(rr, thresholds, mapping_presence);
         push(ind, ev);
+        // v0.16 B2 — per-criterion mismatch DQIs (3).
+        let (ind, ev) = compute_dqi_notional_inconsistent(rr, thresholds, mapping_presence);
+        push(ind, ev);
+        let (ind, ev) =
+            compute_dqi_margin_inconsistent_pre_haircut(rr, thresholds, mapping_presence);
+        push(ind, ev);
+        let (ind, ev) =
+            compute_dqi_margin_inconsistent_post_haircut(rr, thresholds, mapping_presence);
+        push(ind, ev);
     } else {
         push(
             not_applicable(
@@ -238,6 +249,27 @@ pub fn compute_emir_dqi_pack(
         push(
             not_applicable(
                 "DQI_FIELD_MISMATCH_RATE",
+                "auth.091 per-tx reconciliation records not provided",
+            ),
+            Vec::new(),
+        );
+        push(
+            not_applicable(
+                "DQI_NOTIONAL_INCONSISTENT",
+                "auth.091 per-tx reconciliation records not provided",
+            ),
+            Vec::new(),
+        );
+        push(
+            not_applicable(
+                "DQI_MARGIN_INCONSISTENT_PRE_HAIRCUT",
+                "auth.091 per-tx reconciliation records not provided",
+            ),
+            Vec::new(),
+        );
+        push(
+            not_applicable(
+                "DQI_MARGIN_INCONSISTENT_POST_HAIRCUT",
                 "auth.091 per-tx reconciliation records not provided",
             ),
             Vec::new(),
@@ -418,8 +450,8 @@ mod tests {
         );
         assert_eq!(
             result.indicators.len(),
-            14,
-            "always exactly 14 indicators in v0.16 B1 (10 v0.15 + 4 auth.091 cross-CP)"
+            17,
+            "always exactly 17 indicators in v0.16 B2 (10 v0.15 + 4 B1 + 3 B2 per-criterion)"
         );
         for ind in &result.indicators {
             assert_eq!(
@@ -461,6 +493,9 @@ mod tests {
                 "DQI_COL_STALE_STATE",
                 "DQI_CONF_MISSING",
                 "DQI_FIELD_MISMATCH_RATE",
+                "DQI_MARGIN_INCONSISTENT_POST_HAIRCUT",
+                "DQI_MARGIN_INCONSISTENT_PRE_HAIRCUT",
+                "DQI_NOTIONAL_INCONSISTENT",
                 "DQI_PAIRING_RATE",
                 "DQI_RECONCILIATION_RATE",
                 "DQI_REC_STATUS_UNPAIRED",
@@ -493,7 +528,7 @@ mod tests {
         // 10 indicators always; 3 of them computed (VAL_MISSING,
         // VAL_STALE, COL_MISSING_STATE -> still NA because no
         // collateral portfolio code → denominator zero).
-        assert_eq!(result.indicators.len(), 14);
+        assert_eq!(result.indicators.len(), 17);
         let val_missing = result
             .indicators
             .iter()
@@ -534,7 +569,7 @@ mod tests {
             &Thresholds::default(),
             as_of(),
         );
-        assert_eq!(result.indicators.len(), 14);
+        assert_eq!(result.indicators.len(), 17);
         // Feedback indicators must be computed now.
         let rej_rate = result
             .indicators
