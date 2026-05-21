@@ -13,6 +13,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+## [0.12.3] - 2026-05-21
+
+Adoption polish + race-condition fix. Now that `pip install
+opendqi` works (since v0.12.2), this release tightens the
+onboarding path: a 5-line `examples/python/quickstart.py` for
+the copy-paste smoke test, a README install section restructured
+with Python first, and a structural fix that prevents the
+`Release` vs `Python Release` race condition we hit on v0.12.2
+(which required a manual `gh release upload` workaround).
+
+**No new Python API. No Rust core change.** The 6 entry points
+(`opendqi.{emir,sftr}.{scan_parquet, scan_table, parse_xml}`)
+are unchanged. The 216 checks remain 216 (151 EMIR + 65 SFTR).
+The v1.0 stable Arrow contract for `result.issues` (locked in
+v0.12.0 P3) is unchanged. 19/19 goldens byte-identical. 762/0
+workspace tests. 30/30 pytest.
+
+### Added
+
+- **`examples/python/quickstart.py`** — the 5-line "does it
+  work?" check. 3 lines of opendqi + 2 of print. Distinct from
+  the 3 progressively-realistic numbered scripts
+  (`01_scan_parquet.py`, `02_parse_xml_then_scan.py`,
+  `03_custom_mapping.py`) which stay as deeper examples. Path
+  relative to repo root (unlike the numbered scripts which do
+  their own path discovery) — designed to be the most natural
+  thing after a fresh `git clone`. Smoke-tested locally:
+  prints summary `{records_processed: 20, issues_total: 197,
+  quality_score: 27.85}` + first 5 rows of the issues
+  `to_pandas().head()`, matching the existing CLI golden
+  `emir-tr-activity` numbers exactly.
+
+### Changed
+
+- **`README.md` restructured for the `pip install` era.** Three
+  edits:
+  - One-liner (line 6) replaced — `OpenDQI turns... actionable
+    data quality intelligence` → `Turn EMIR/SFTR Trade Repository
+    files into deterministic data quality reports and Arrow
+    tables — locally, reproducibly, from your existing data
+    stack.` More punchy, mentions Arrow, removes the redundant
+    `OpenDQI` prefix (the H1 already says it).
+  - Lead paragraph (line 8) gains a sentence on the 3 channels
+    explicitly: `Use it from your terminal (CLI), your browser
+    (local web UI on http://127.0.0.1:7878), or your Python /
+    PyArrow notebook.`
+  - Install section entirely refondue — order is now **Python
+    (`pip install opendqi`) > CLI installer (`curl -sSL ...
+    installer.sh | sh`) > Rust source (`cargo install --git
+    --tag v0.12.2`)**, each with a one-line "recommended for…"
+    note. Followed by a 5-line code block showing the canonical
+    Python smoke test (matches `examples/python/quickstart.py`
+    exactly). The Python install block now also cross-references
+    `quickstart.py`, the 3 numbered scripts, the Jupyter
+    notebook, `docs/python.md`, and `docs/python-roadmap.md` in
+    one paragraph. Bumped all install-command tag references
+    from `v0.11.0` (4 releases stale) to `v0.12.2`.
+- **`examples/python/README.md`**: `quickstart.py` promoted to
+  the top of the script table ("Start here" / "Your first run
+  30-second smoke test"). The 3 numbered scripts move under
+  "The three deeper patterns".
+
+### Removed
+
+- **`release` job from `.github/workflows/python-release.yml`.**
+  This job used `softprops/action-gh-release@v2` to attach
+  wheels to the GitHub Release; that action CREATES the release
+  if missing, racing with cargo-dist's `host` job. When
+  python-release became faster than cargo-dist (which happened
+  on v0.12.2 once `macos-13` was dropped from the wheel matrix),
+  cargo-dist's `host` failed with `release already exists` and
+  required a manual `gh release upload` of all 13 cargo-dist
+  artefacts to recover. The two workflows are now structurally
+  orthogonal: `release.yml` (cargo-dist) always owns the GitHub
+  Release page; `python-release.yml` always owns PyPI. No race
+  condition possible. Users who want a wheel URL fallback can
+  `pip download opendqi==X.Y.Z --no-deps --dest ./wheels/` or
+  grab the workflow artefacts from the Actions UI (90-day
+  retention). The workflow-level `permissions: contents: write`
+  is also gone (only `release` needed it; `publish` declares
+  `id-token: write` on its own scope). Workflow header comment
+  refondu (3 jobs → 2 jobs + v0.12.3 rationale paragraph
+  documenting the race condition for future maintainers).
+
 ## [0.12.2] - 2026-05-20
 
 CI hotfix — drop `x86_64-apple-darwin` (macOS Intel) from the
@@ -1233,7 +1317,8 @@ sends back, and turns them into reproducible HTML / JSON / CSV
 - No SWIFT-licensed XSDs or real client data are committed; all
   fixtures are synthetic.
 
-[Unreleased]: https://github.com/PauFou/OpenDQI/compare/v0.12.2...HEAD
+[Unreleased]: https://github.com/PauFou/OpenDQI/compare/v0.12.3...HEAD
+[0.12.3]: https://github.com/PauFou/OpenDQI/compare/v0.12.2...v0.12.3
 [0.12.2]: https://github.com/PauFou/OpenDQI/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/PauFou/OpenDQI/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/PauFou/OpenDQI/compare/v0.11.0...v0.12.0
