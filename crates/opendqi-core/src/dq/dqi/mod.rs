@@ -13,5 +13,11 @@
 mod model;
 mod thresholds;
 
+pub mod compute;
+
+pub use compute::{
+    compute_dqi_col_all_zero, compute_dqi_col_stale_state, compute_dqi_tim_reporting_late,
+    compute_dqi_val_missing, compute_dqi_val_stale,
+};
 pub use model::{DqiEvidence, DqiIndicator, DqiPackResult, DqiStatus, MappingPresence};
 pub use thresholds::{compute_status, default_dqi_thresholds, DqiThresholdPair};
