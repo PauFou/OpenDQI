@@ -1,36 +1,51 @@
 """
-OpenDQI Spark interop — experimental (v0.13.0).
+OpenDQI Spark interop (v0.14.0 — native).
 
-Pure-Python helper that round-trips a PySpark DataFrame through
-Arrow into ``opendqi.{emir,sftr}.scan_table``, returning a Spark
-DataFrame of the issues table (v1.0 stable 11-column schema).
+Partition-friendly Spark integration via ``DataFrame.mapInPandas``:
+each Spark partition becomes a pandas chunk, runs through
+``opendqi.{emir,sftr}.scan_table`` independently (so the scan
+stays distributed — no full collect to the driver), and the
+issues stream back as a Spark DataFrame of the **v1.0 stable
+11-column issues schema**.
 
-**No PySpark dependency is declared** in the wheel: this module
-uses duck typing. Users who want to call ``scan_spark_dataframe``
-install ``pyspark`` themselves; users who don't never touch this
-module.
+This is the v0.14.0 replacement for the v0.13.0 experimental
+helper that did a single ``df.toPandas()`` collect at the
+driver. The signature is unchanged; the behaviour is
+distributed-safe, and the ``FutureWarning`` is dropped.
 
-Status
-------
-**EXPERIMENTAL.** This helper does a Spark → pandas → Arrow
-round-trip; on PySpark 3.x that's the only portable path. The
-signature may evolve in v0.14 once a native ``opendqi.spark``
-namespace with ``mapInPandas`` UDFs ships (zero-copy via Arrow
-column batches, partition-friendly). Use at your own risk in
-production pipelines.
+PySpark is **not** declared as a runtime dependency of the
+``opendqi`` wheel — duck-typed import inside the helper. Users
+opt in via:
 
-A ``FutureWarning`` is emitted on every call to make the
-preview status visible in operator logs.
+    pip install opendqi[spark]
 """
 from __future__ import annotations
 
-import warnings
 from typing import TYPE_CHECKING, Mapping
 
 if TYPE_CHECKING:  # pragma: no cover
     from pyspark.sql import DataFrame as SparkDataFrame
 
 import opendqi
+
+
+# The v1.0 issues schema, mirrored as Spark types via the
+# Spark DDL string format. All columns are nullable=true except
+# the required ones (matching `issues_schema()` in
+# crates/opendqi-py/src/issues.rs).
+_SPARK_ISSUES_SCHEMA_DDL = (
+    "check_id STRING NOT NULL, "
+    "regime STRING NOT NULL, "
+    "severity STRING NOT NULL, "
+    "dimension STRING NOT NULL, "
+    "record_id STRING, "
+    "uti STRING, "
+    "field STRING, "
+    "value STRING, "
+    "message STRING NOT NULL, "
+    "source_file STRING, "
+    "evidence_json STRING"
+)
 
 
 def scan_spark_dataframe(
@@ -40,91 +55,78 @@ def scan_spark_dataframe(
     mapping: Mapping[str, str],
     normalize: bool = False,
 ) -> "SparkDataFrame":
-    """Run an opendqi scan on a Spark DataFrame.
+    """Run an opendqi scan on a Spark DataFrame, partition-wise.
+
+    Uses ``DataFrame.mapInPandas`` so each Spark partition is
+    scanned independently — no full collect to the driver, the
+    work stays distributed across executors. Returns a Spark
+    DataFrame of the v1.0 stable 11-column issues schema (all
+    StringType, nullability matches
+    ``opendqi.PyScanResult.issues``).
 
     Parameters
     ----------
     df :
-        A ``pyspark.sql.DataFrame`` whose columns match the
+        A ``pyspark.sql.DataFrame`` whose columns include the
         values of ``mapping``.
     regime :
-        ``"emir"`` or ``"sftr"``. Selects which check pack runs
-        (89 EMIR or 44 SFTR single-batch checks).
+        ``"emir"`` or ``"sftr"``.
     mapping :
-        ``canonical_field`` → ``spark_column_name``. Same direction
-        as :func:`opendqi.emir.scan_table` and the CLI's
-        ``--mapping`` YAML.
+        ``canonical_field`` → ``spark_column_name``. Same
+        direction as :func:`opendqi.emir.scan_table` and the
+        CLI's ``--mapping`` YAML.
     normalize :
-        Passthrough to ``scan_table`` — when True, the result also
-        carries the canonical-model Arrow batch via
-        ``result.normalized`` (here unused since this function
-        returns issues only).
+        Passthrough to ``scan_table`` (ignored here — this
+        function returns issues only, not normalized records).
 
     Returns
     -------
     pyspark.sql.DataFrame
-        The issues table with the v1.0 stable 11-column schema
-        (``check_id``, ``regime``, ``severity``, ``dimension``,
-        ``record_id``, ``uti``, ``field``, ``value``, ``message``,
-        ``source_file``, ``evidence_json``). All columns are
-        Spark ``StringType``.
+        The issues table, ready to be ``.write.parquet(...)``-ed
+        or joined back to the input.
 
     Notes
     -----
-    The round-trip is Spark → pandas → Arrow → opendqi.scan_table
-    → pandas → Spark. On PySpark 3.x that's the only portable
-    path (PySpark 4.0+ has ``df.toArrow()`` for the zero-copy
-    forward direction, but the reverse — ``spark.createDataFrame
-    `` from Arrow — still goes through pandas). The pure round-
-    trip overhead dominates only for very large DataFrames; for
-    those, prefer the CLI handoff pattern:
-
-    .. code-block:: python
-
-        spark_df.write.parquet("/tmp/in")
-        # `opendqi emir scan /tmp/in --out /tmp/out` (CLI)
-        spark.read.csv("/tmp/out/issues.csv", header=True)
+    Schema-of-record is the v1.0 stable contract from
+    :func:`opendqi.PyScanResult.issues` — 11 String columns,
+    same order as the CLI's ``issues.csv``. Mismatches between
+    the input column dtypes and what ``scan_table`` expects
+    (Decimal128(38,10), Date32, Timestamp(μs,UTC), ...) raise
+    inside the executor — cast in PySpark before calling this
+    helper if needed.
     """
-    warnings.warn(
-        "opendqi.spark is experimental in v0.13. Signature may "
-        "evolve in v0.14 once a native mapInPandas UDF ships. "
-        "Use at your own risk in production pipelines.",
-        FutureWarning,
-        stacklevel=2,
-    )
-
-    # Fail-fast on bad inputs BEFORE the expensive Spark →
-    # pandas round-trip (so users with a typo'd regime get a
-    # clean error in milliseconds instead of after the data
-    # collect).
     if regime not in ("emir", "sftr"):
         raise ValueError(
             f"unknown regime: {regime!r} (expected 'emir' or 'sftr')"
         )
 
-    import pyarrow as pa  # imported here so the warning fires
-                          # even if pyarrow is missing (rare)
+    # Capture the args by value so the closure is serializable
+    # across the Spark wire (pickle).
+    mapping_dict = dict(mapping)
+    regime_name = regime
 
-    # Spark DataFrame → pandas → Arrow Table.
-    # On PySpark 4.0+ this could be `df.toArrow()` (zero-copy),
-    # but we target the 3.x baseline most users are still on.
-    pdf = df.toPandas()
-    table = pa.Table.from_pandas(pdf, preserve_index=False)
+    import pyarrow as pa
 
-    if regime == "emir":
-        result = opendqi.emir.scan_table(
-            table, dict(mapping), normalize=normalize
-        )
-    else:  # regime == "sftr" (validated above)
-        result = opendqi.sftr.scan_table(
-            table, dict(mapping), normalize=normalize
-        )
+    def _scan_partition(iter_pdf):
+        """mapInPandas executor body: yields one issues DataFrame
+        per input partition chunk."""
+        for pdf in iter_pdf:
+            # pandas → Arrow (cheap on most dtype combos —
+            # zero-copy for numeric / string / datetime types).
+            table = pa.Table.from_pandas(pdf, preserve_index=False)
+            if regime_name == "emir":
+                result = opendqi.emir.scan_table(
+                    table, mapping_dict, normalize=normalize
+                )
+            else:  # "sftr" — validated above
+                result = opendqi.sftr.scan_table(
+                    table, mapping_dict, normalize=normalize
+                )
+            # Arrow → pandas for the mapInPandas return type.
+            # `to_pandas()` is cheap (mostly string columns).
+            yield result.issues.to_pandas()
 
-    # Issues table → pandas → Spark DataFrame. Uses the
-    # existing SparkSession bound to the input DataFrame.
-    spark = df.sparkSession  # type: ignore[attr-defined]
-    issues_pdf = result.issues.to_pandas()
-    return spark.createDataFrame(issues_pdf)
+    return df.mapInPandas(_scan_partition, schema=_SPARK_ISSUES_SCHEMA_DDL)
 
 
 __all__ = ["scan_spark_dataframe"]
