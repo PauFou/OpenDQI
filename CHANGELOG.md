@@ -13,6 +13,222 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+## [0.16.0] - 2026-05-22
+
+**DQI expansion + SFTR pack v1 + TARGET2 business days** —
+big-bang DQI release : 10 EMIR-only indicators (v0.15) → **28
+indicators across both régimes** (24 EMIR + 4 SFTR T2-layer),
+the two stale-data DQIs switch from a calendar-day proxy to
+**TARGET2 business days** (ECB Eurosystem calendar), and the
+SFTR side gains a full mirror DQI pack (orchestrator + CLI +
+Python). **Additive** : v1.0 Arrow contracts unchanged
+(schemas frozen ; v0.16 adds *rows*, not columns), 10 v0.15
+EMIR DQIs strictly unchanged shape, no schema break.
+
+### Added
+
+- **TARGET2 business-day calendar module** —
+  `opendqi_core::business_days` exposes
+  `is_business_day(NaiveDate) -> bool` and
+  `business_day_diff(from, to) -> i64` (positive for
+  forward, antisymmetric, 0 same-day). Hardcoded ECB
+  Eurosystem holidays for 2025–2032 (6 per year:
+  1 Jan / Good Friday / Easter Monday / 1 May / 25 Dec /
+  26 Dec) in `business_days::target2_holidays`. Out-of-range
+  dates fall back to weekend-only semantics with an inline
+  bumpability note. 15 unit tests.
+
+- **14 new EMIR DQIs** (10 → 24), all on top of the existing
+  10-indicator EMIR pack, alphabetically sorted in the
+  on-disk `indicators.csv`:
+  - `DQI_VM_MISSING_FOR_CLEARED` (TSR + MSR / completeness)
+  - `DQI_ANOMALY_RATE` (TSR / accuracy)
+  - `DQI_DUPLICATE_REPORTS` (TSR / uniqueness)
+  - `DQI_LEI_MISSING` (TSR / completeness)
+  - `DQI_ERR_MISSING` (TAR / completeness)
+  - `DQI_NATURE_MISSING` (TAR / completeness)
+  - `DQI_SECTOR_MISSING` (TAR / completeness)
+  - `DQI_PAIRING_RATE`, `DQI_RECONCILIATION_RATE`,
+    `DQI_UNPAIRED_TRADES_RATE`, `DQI_FIELD_MISMATCH_RATE`
+    (auth.091 / consistency — cross-CP from
+    `ReconStatsRecord` + `ReconciliationRecord`)
+  - `DQI_NOTIONAL_INCONSISTENT`,
+    `DQI_MARGIN_INCONSISTENT_PRE_HAIRCUT`,
+    `DQI_MARGIN_INCONSISTENT_POST_HAIRCUT` (auth.091 /
+    consistency — per-criterion reconciliation flags, share
+    a `criterion_mismatch_rate` helper so the numerator
+    semantics never drift)
+
+  Honest scope note : the 7 auth.091-derived DQIs ship in
+  the core engine but the CLI flag (`--recon-stats` /
+  `--reconciliation`) and Python kwarg are **not yet wired**
+  on `data-quality-pack` ; those 7 self-report
+  `not_applicable` until a follow-up commit threads the
+  inputs through both surfaces.
+
+- **SFTR Data Quality Pack v1** — full mirror of the EMIR
+  pack architecture for SFTR :
+  - `opendqi_core::SftrDqiInputs` struct (4 layer slots :
+    `tsr` / `tar` + reserved `reconciliation` /
+    `missing_collateral` for v0.17 computers).
+  - `opendqi_core::compute_sftr_dqi_pack` orchestrator
+    returning a `DqiPackResult` (re-used type, same
+    `ScanSummary`, same v1.0 Arrow schemas).
+  - 4 SFTR T2-layer DQI computers :
+    - `DQI_LOAN_VALUE_MISSING_SFTR` (TSR / completeness —
+      mirror of `DQI_VAL_MISSING`)
+    - `DQI_LOAN_VALUE_STALE_SFTR` (TSR / timeliness —
+      TARGET2 business days, reuses
+      `max_valuation_age_business_days`)
+    - `DQI_COLLATERAL_VALUE_MISSING_SFTR` (TSR /
+      completeness)
+    - `DQI_TIM_REPORTING_LATE_SFTR` (TAR / timeliness —
+      mirror of `DQI_TIM_REPORTING_LATE`)
+  - **CLI** `opendqi sftr data-quality-pack` — flags
+    `--tsr` / `--tar` / `--reconciliation` /
+    `--missing-collateral` / `--config` / `--as-of` /
+    `--out` / `--email-config`. 5 outputs (report.html +
+    summary.json + issues.csv + indicators.csv +
+    evidence.csv). Friendly stdout prints computed / red /
+    amber counts + granular score. **Golden** test
+    `sftr-data-quality-pack` snapshots all 4 textual
+    artefacts byte-identically.
+  - **Python** `opendqi.sftr.data_quality_pack(*, tsr=,
+    tar=, reconciliation=, missing_collateral=, as_of=)`
+    — paths-only in v0.16 (dual-input pyarrow.Table on the
+    SFTR side scheduled for v0.17 alongside T3 indicators).
+    Returns the same `PyDqiPackResult` shape as the EMIR
+    binding (4 fields, v1.0 stable Arrow schemas).
+    **Parity-tested** against the CLI golden CSV
+    column-by-column. 8 new pytest cases.
+
+- **`examples/sftr-data-quality-pack/`** — new self-contained
+  reproducible demo kit mirroring
+  `emir-data-quality-pack/` : `demo.sh` (pinned
+  `--as-of 2026-05-21`), `README.md` (4-indicator overview),
+  `expected/` reference snapshot (`indicators.csv` +
+  timestamp-masked `summary.json`), and copies of the
+  existing CLI golden fixtures (`auth079-sample.xml` +
+  `auth052-tar-sample.xml`) so the kit output matches the
+  golden by construction.
+
+- **`docs/dqi-spark-mapping.md`** — new ~220-line public
+  matrix describing the methodology used to derive each of
+  the 28 indicators from public ESMA-equivalent business
+  concepts (3 buckets : 🟢 DQI / 🔵 Granular / ⚪ Out of
+  scope).
+
+- **Pattern 8 in `examples/python/quickstart.ipynb`** —
+  SFTR Data Quality Pack section after Pattern 7, runs
+  `opendqi.sftr.data_quality_pack` on the new SFTR demo
+  kit and prints the 4-indicator DataFrame. Notebook
+  rebuilt + re-executed via `_build_notebook.py`.
+
+### Changed
+
+- **`DQI_VAL_STALE` + `DQI_COL_STALE_STATE` use TARGET2
+  business days** instead of the v0.15 calendar-day proxy.
+  Default `max_valuation_age_business_days = 1` still means
+  "yesterday or earlier" on a weekday but now skips weekends
+  + the 6 ECB holidays/year correctly. Rate values on the
+  shipped `quickstart-emir` fixture stayed numerically
+  identical because the valuations are 6–9 business days
+  old either way ; downstream rate values on custom data
+  may shift if dates landed on weekends.
+
+- **`DQI_LOAN_VALUE_STALE_SFTR`** uses the same TARGET2
+  business-day comparator (re-uses the EMIR
+  `TimelinessThresholds.max_valuation_age_business_days`
+  config key).
+
+- **`docs/data-quality-pack.md` full rewrite** (365 → 676
+  lines) : 10 → 28 indicator catalogue grouped by source
+  layer for readability, 18 new "Indicator details"
+  subsections, new "TARGET2 business-day calendar" section,
+  EMIR + SFTR Python API blocks, updated honest-scope list
+  ("What v0.16 deliberately does NOT do").
+
+- **`README.md`** : install tags v0.14.0 → v0.16.0, DQI
+  pitch updated to show both EMIR (24 rows) and SFTR (4
+  rows) `data_quality_pack` calls side by side, Python
+  surface bullet "14 → 15 entry points" (+
+  `opendqi.sftr.data_quality_pack`), "Status & roadmap"
+  table new top row for v0.16.0.
+
+- **`docs/positioning.md`** : "What a DQI is" section
+  updated from v0.15 10-EMIR-only phrasing to v0.16
+  28-both-régimes + TARGET2 mention.
+
+- **`examples/emir-data-quality-pack/`** : `demo.sh` "10 rows"
+  → "24 rows" + v0.16 honest-scope header note ;
+  `README.md` v0.15.1 → v0.16+ ; `expected/indicators.csv`
+  regenerated for the 24-row reality during B1–B4.
+
+- **`opendqi.sftr` Python submodule** : adds the
+  `data_quality_pack` function and imports
+  `compute_sftr_dqi_pack`, `MappingPresence`,
+  `SftrDqiInputs`, `PyDqiPackResult` (no other API change).
+
+### Removed
+
+Nothing. v0.16 is strictly additive ; the 10 v0.15 EMIR
+indicators retain their numerator/denominator/threshold
+shape and continue to ship at the same row positions in
+`indicators.csv` (alphabetical sort moved them around in the
+output as new IDs were introduced, but each individual ID's
+contract is unchanged).
+
+### Honest scope limits (v0.17 work)
+
+- SFTR T3 margin layer (IM/VM posted/received pre/post-
+  haircut) parser extension + 3 T3 DQIs.
+- SFTR auth.080 reconciliation + auth.083 missing-collateral
+  DQI computers (input slots reserved in v0.16,
+  parsed-and-discarded by current computers).
+- CLI/Python wiring of the 7 auth.091-derived EMIR DQIs
+  through `data-quality-pack` (computers ship in v0.16 but
+  self-report `not_applicable` until threaded).
+- Dual-input pyarrow.Table on the SFTR DQI pack side
+  (paths-only in v0.16).
+- Threshold profile presets.
+
+### Known issues (pre-existing on `main`, not introduced by v0.16)
+
+- One internal Rust unit test
+  `opendqi_core::dq::tests::stream_checks_into_equals_finalize_issues`
+  fails (1/924 ; 923 pass). It asserts strict sequence
+  equality between the streaming sink path and the
+  `finalize_issues` path on a synthetic 4-issue fixture
+  where two rows share a `check_id` and only differ on
+  severity ; the two paths disagree on the tie-breaker for
+  that one row pair. **Multiset equality is preserved** —
+  every golden in the repo (21/21) re-runs byte-identical
+  and the EMIR/SFTR data-quality-pack outputs match the
+  CLI ↔ Python parity tests column-by-column. The failure
+  was confirmed present on `origin/main` (v0.15.1) prior to
+  starting v0.16 work and has shipped through v0.10–v0.15.1
+  unfixed. Fixing it requires aligning the within-`check_id`
+  severity tie-breaker between `SortedIssueSink::finish` and
+  `finalize_issues` and is scheduled as a v0.17 follow-up.
+
+### Stats
+
+- **216 checks** (EMIR 151 + SFTR 65) — unchanged.
+- **28 DQI indicators** (24 EMIR + 4 SFTR) — was 10 EMIR
+  in v0.15.
+- **21 CLI goldens** (was 20) — new `sftr-data-quality-pack`
+  golden ; all 21 byte-identical between runs.
+- **924 workspace tests** (was 831) — +93 new unit/integration
+  tests across the 18 new DQI computer modules + the
+  business_days module + the SFTR pack orchestrator.
+- **104 pytest** (was 88, then 96 mid-release) — +16 across
+  `test_data_quality_pack.py` updates (10 → 24 alphabetical
+  assertions) + the new `test_sftr_data_quality_pack.py`
+  (8 cases including parity-vs-CLI-golden).
+- **v1.0 Arrow contracts unchanged** (indicators 11 cols /
+  evidence 7 cols / issues 11 cols, frozen since v0.15.0 /
+  v0.12.0).
+
 ## [0.15.1] - 2026-05-21
 
 **Data Quality Pack polish** — pure docs / demo / notebook /

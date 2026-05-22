@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name            = "opendqi"
-version         = "0.15.1"
+version         = "0.16.0"
 description     = "Local-first EMIR/SFTR data quality engine — Python / Arrow bindings"
 readme          = "README.md"
 requires-python = ">=3.9"
