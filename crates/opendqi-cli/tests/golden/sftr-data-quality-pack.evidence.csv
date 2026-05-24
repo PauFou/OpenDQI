@@ -1,4 +1,18 @@
 indicator_id,uti,counterparty,asset_class,source_file,observed_value,explanation
+DQI_HAIRCUT_ANOMALY_SFTR,OPENDQI-SFTR-TSR-HRCT-0004,,SLEB,<WS>/examples/sftr/tr_state/auth079-sample.xml,1.5,"haircut outside [0.0, 1.0] regulatory range"
+DQI_HAIRCUT_ANOMALY_SFTR,OPENDQI-SFTR-TSR-MGLDHR-0009,,MGLD,<WS>/examples/sftr/tr_state/auth079-sample.xml,1.5,"haircut outside [0.0, 1.0] regulatory range"
+DQI_LEI_MISSING_SFTR,OPENDQI-SFTR-TSR-DUP-0005,,REPO,<WS>/examples/sftr/tr_state/auth079-sample.xml,,both LEIs missing
+DQI_LEI_MISSING_SFTR,OPENDQI-SFTR-TSR-DUP-0005,,REPO,<WS>/examples/sftr/tr_state/auth079-sample.xml,,both LEIs missing
+DQI_LEI_MISSING_SFTR,OPENDQI-SFTR-TSR-HRCT-0004,,SLEB,<WS>/examples/sftr/tr_state/auth079-sample.xml,,both LEIs missing
+DQI_LEI_MISSING_SFTR,OPENDQI-SFTR-TSR-MGLDCM-0012,,MGLD,<WS>/examples/sftr/tr_state/auth079-sample.xml,,both LEIs missing
+DQI_LEI_MISSING_SFTR,OPENDQI-SFTR-TSR-MGLDHR-0009,,MGLD,<WS>/examples/sftr/tr_state/auth079-sample.xml,,both LEIs missing
+DQI_LEI_MISSING_SFTR,OPENDQI-SFTR-TSR-MGLDNI-0013,,MGLD,<WS>/examples/sftr/tr_state/auth079-sample.xml,,both LEIs missing
+DQI_LEI_MISSING_SFTR,OPENDQI-SFTR-TSR-MGLDNOLN-0008,,MGLD,<WS>/examples/sftr/tr_state/auth079-sample.xml,,both LEIs missing
+DQI_LEI_MISSING_SFTR,OPENDQI-SFTR-TSR-MGLDRU-0011,,MGLD,<WS>/examples/sftr/tr_state/auth079-sample.xml,,both LEIs missing
+DQI_LEI_MISSING_SFTR,OPENDQI-SFTR-TSR-MGLDUC-0010,,MGLD,<WS>/examples/sftr/tr_state/auth079-sample.xml,,both LEIs missing
+DQI_LEI_MISSING_SFTR,OPENDQI-SFTR-TSR-NOCOLL-0002,,REPO,<WS>/examples/sftr/tr_state/auth079-sample.xml,,both LEIs missing
+DQI_LEI_MISSING_SFTR,OPENDQI-SFTR-TSR-PASTMAT-0003,,BSBC,<WS>/examples/sftr/tr_state/auth079-sample.xml,,both LEIs missing
+DQI_LEI_MISSING_SFTR,OPENDQI-SFTR-TSR-STALE-0007,,REPO,<WS>/examples/sftr/tr_state/auth079-sample.xml,,both LEIs missing
 DQI_LOAN_VALUE_MISSING_SFTR,OPENDQI-SFTR-TSR-MGLDNOLN-0008,,MGLD,<WS>/examples/sftr/tr_state/auth079-sample.xml,,loan_value is missing or zero on an outstanding SFT
 DQI_LOAN_VALUE_STALE_SFTR,OPENDQI-SFTR-TSR-CLEAN-0001,RPTGCPARTY0000000001,REPO,<WS>/examples/sftr/tr_state/auth079-sample.xml,2026-05-13T08:00:00+00:00,state_as_of older than 1 TARGET2 business day(s) vs as_of 2026-05-21
 DQI_LOAN_VALUE_STALE_SFTR,OPENDQI-SFTR-TSR-DUP-0005,,REPO,<WS>/examples/sftr/tr_state/auth079-sample.xml,2026-05-13T08:00:00+00:00,state_as_of older than 1 TARGET2 business day(s) vs as_of 2026-05-21
@@ -13,3 +27,7 @@ DQI_LOAN_VALUE_STALE_SFTR,OPENDQI-SFTR-TSR-MGLDUC-0010,,MGLD,<WS>/examples/sftr/
 DQI_LOAN_VALUE_STALE_SFTR,OPENDQI-SFTR-TSR-NOCOLL-0002,,REPO,<WS>/examples/sftr/tr_state/auth079-sample.xml,2026-05-13T08:00:00+00:00,state_as_of older than 1 TARGET2 business day(s) vs as_of 2026-05-21
 DQI_LOAN_VALUE_STALE_SFTR,OPENDQI-SFTR-TSR-PASTMAT-0003,,BSBC,<WS>/examples/sftr/tr_state/auth079-sample.xml,2026-05-13T08:00:00+00:00,state_as_of older than 1 TARGET2 business day(s) vs as_of 2026-05-21
 DQI_LOAN_VALUE_STALE_SFTR,OPENDQI-SFTR-TSR-STALE-0007,,REPO,<WS>/examples/sftr/tr_state/auth079-sample.xml,2024-01-01T00:00:00+00:00,state_as_of older than 1 TARGET2 business day(s) vs as_of 2026-05-21
+DQI_UNDER_COLLATERALIZATION_SFTR,OPENDQI-SFTR-TSR-CLEAN-0001,RPTGCPARTY0000000001,REPO,<WS>/examples/sftr/tr_state/auth079-sample.xml,"loan=1000000.00, eff_coll=997500.0000, shortfall=2500.0000",collateral_value × (1 − haircut) < loan_value
+DQI_UNDER_COLLATERALIZATION_SFTR,OPENDQI-SFTR-TSR-HRCT-0004,,SLEB,<WS>/examples/sftr/tr_state/auth079-sample.xml,"loan=250000.00, eff_coll=-130000.000, shortfall=380000.000",collateral_value × (1 − haircut) < loan_value
+DQI_UNDER_COLLATERALIZATION_SFTR,OPENDQI-SFTR-TSR-MGLDHR-0009,,MGLD,<WS>/examples/sftr/tr_state/auth079-sample.xml,"loan=1000000.00, eff_coll=-525000.000, shortfall=1525000.000",collateral_value × (1 − haircut) < loan_value
+DQI_UNDER_COLLATERALIZATION_SFTR,OPENDQI-SFTR-TSR-MGLDUC-0010,,MGLD,<WS>/examples/sftr/tr_state/auth079-sample.xml,"loan=1000000.00, eff_coll=450000.0000, shortfall=550000.0000",collateral_value × (1 − haircut) < loan_value

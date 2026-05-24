@@ -43,8 +43,8 @@ use crate::dq::dqi::compute::{
 };
 use crate::dq::dqi::{DqiEvidence, DqiIndicator, DqiPackResult, DqiStatus, MappingPresence};
 use crate::dq::{
-    default_sftr_checks, default_sftr_tr_state_checks, run_all_sftr, run_all_sftr_tr_state,
-    CheckContext,
+    default_sftr_checks, default_sftr_msr_checks, default_sftr_tr_state_checks, run_all_sftr,
+    run_all_sftr_msr, run_all_sftr_tr_state, CheckContext,
 };
 use crate::model::{
     DqDimension, DqIssue, Regime, SftrMarginStateRecord, SftrRecord, SftrTrStateRecord,
@@ -311,6 +311,11 @@ pub fn compute_sftr_dqi_pack(
             prior,
             &ctx,
         ));
+    }
+    if let Some(msr) = inputs.msr {
+        files_processed += 1;
+        records_processed = records_processed.saturating_add(msr.len() as u32);
+        all_issues.append(&mut run_all_sftr_msr(&default_sftr_msr_checks(), msr, &ctx));
     }
 
     let aggregator = IssueAggregator::from_issues(&all_issues);

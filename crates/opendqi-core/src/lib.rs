@@ -38,8 +38,9 @@ pub use dq::dqi::{
     DqiThresholdPair, EmirDqiInputs, MappingPresence, SftrDqiInputs,
 };
 pub use dq::{
-    default_checks, default_sftr_checks, stream_checks_into, stream_emir_checks_into, Check,
-    IssueAggregator, SftrCheck, SortedIssueSink, SortedIssues, STREAM_SPILL_MAX_ISSUES,
+    default_checks, default_sftr_checks, default_sftr_msr_checks, stream_checks_into,
+    stream_emir_checks_into, Check, IssueAggregator, SftrCheck, SftrMsrCheck, SortedIssueSink,
+    SortedIssues, STREAM_SPILL_MAX_ISSUES,
 };
 pub use model::{
     DqDimension, DqIssue, EmirRecord, EvidenceItem, FeedbackRecord, FeedbackType,

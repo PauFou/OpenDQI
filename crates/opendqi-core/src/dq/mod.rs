@@ -9,8 +9,8 @@ use crate::config::Thresholds;
 use crate::model::{
     DqDimension, DqIssue, EmirRecord, FeedbackRecord, MarginActivityRecord, MarginStateRecord,
     MissingCollateralRecord, ReconStatsRecord, ReconciliationRecord, RejectionProfile, Severity,
-    SftrRecord, SftrTrStateRecord, TrStateRecord, TradeWarningsRecord, WarningsCounterpartyRecord,
-    WarningsTransactionRecord,
+    SftrMarginStateRecord, SftrRecord, SftrTrStateRecord, TrStateRecord, TradeWarningsRecord,
+    WarningsCounterpartyRecord, WarningsTransactionRecord,
 };
 
 mod aggregate;
@@ -1047,6 +1047,38 @@ pub fn run_all_margin_state(
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
     collect_finalize(checks, ctx, |c| c.run(records, prior, ctx))
+}
+
+// ---- SFTR Margin Data Transaction State Report (auth.085) checks ----
+
+mod sftr_msr;
+
+pub use sftr_msr::{
+    SftrMsrCheck, SftrT3ImPostedMissing, SftrT3ImReceivedMissing, SftrT3MarginCurrencyMissing,
+    SftrT3MarginNegative, SftrT3VmPostedMissing, SftrT3VmReceivedMissing,
+};
+
+/// Default SFTR MSR check registry (6 SFTR.T3.* checks).
+pub fn default_sftr_msr_checks() -> Vec<Box<dyn SftrMsrCheck>> {
+    vec![
+        Box::new(SftrT3ImPostedMissing),
+        Box::new(SftrT3VmPostedMissing),
+        Box::new(SftrT3ImReceivedMissing),
+        Box::new(SftrT3VmReceivedMissing),
+        Box::new(SftrT3MarginNegative),
+        Box::new(SftrT3MarginCurrencyMissing),
+    ]
+}
+
+/// Run every SFTR MSR check over the provided records slice.
+/// No `prior` argument — auth.085 is portfolio-level and v0.17
+/// has no MSR lifecycle tracking.
+pub fn run_all_sftr_msr(
+    checks: &[Box<dyn SftrMsrCheck>],
+    records: &[SftrMarginStateRecord],
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    collect_finalize(checks, ctx, |c| c.run(records, ctx))
 }
 
 // ---- SFTR Trade State Report (auth.079) checks ------------------
