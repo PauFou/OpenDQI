@@ -32,10 +32,12 @@ use chrono::{DateTime, NaiveDate, Utc};
 
 use crate::dq::aggregate::IssueAggregator;
 use crate::dq::dqi::compute::{
-    compute_dqi_collateral_value_missing_sftr, compute_dqi_loan_value_missing_sftr,
-    compute_dqi_loan_value_stale_sftr, compute_dqi_t3_excess_collateral_use_sftr,
-    compute_dqi_t3_margin_posted_missing_sftr, compute_dqi_t3_margin_received_missing_sftr,
-    compute_dqi_t3_margin_stale_sftr, compute_dqi_tim_reporting_late_sftr,
+    compute_dqi_collateral_value_missing_sftr, compute_dqi_field_mismatch_rate_sftr,
+    compute_dqi_loan_value_missing_sftr, compute_dqi_loan_value_stale_sftr,
+    compute_dqi_pairing_rate_sftr, compute_dqi_reconciliation_rate_sftr,
+    compute_dqi_t3_excess_collateral_use_sftr, compute_dqi_t3_margin_posted_missing_sftr,
+    compute_dqi_t3_margin_received_missing_sftr, compute_dqi_t3_margin_stale_sftr,
+    compute_dqi_tim_reporting_late_sftr, compute_dqi_unpaired_trades_rate_sftr,
 };
 use crate::dq::dqi::{DqiEvidence, DqiIndicator, DqiPackResult, DqiStatus, MappingPresence};
 use crate::dq::{
@@ -146,6 +148,52 @@ pub fn compute_sftr_dqi_pack(
     } else {
         push(
             not_applicable("DQI_TIM_REPORTING_LATE_SFTR", "SFTR TAR not provided"),
+            Vec::new(),
+        );
+    }
+
+    // Reconciliation-layer indicators (4, v0.17 C1) sourced
+    // from auth.080 → ReconciliationRecord filtered by
+    // regime == Sftr (defensive). All 4 computers iterate the
+    // same input slice; the regime filter keeps any
+    // hypothetical EMIR-regime ReconciliationRecord out of
+    // the SFTR rates.
+    if let Some(recon) = inputs.reconciliation {
+        let (ind, ev) = compute_dqi_pairing_rate_sftr(recon, thresholds, mapping_presence);
+        push(ind, ev);
+        let (ind, ev) = compute_dqi_reconciliation_rate_sftr(recon, thresholds, mapping_presence);
+        push(ind, ev);
+        let (ind, ev) = compute_dqi_unpaired_trades_rate_sftr(recon, thresholds, mapping_presence);
+        push(ind, ev);
+        let (ind, ev) = compute_dqi_field_mismatch_rate_sftr(recon, thresholds, mapping_presence);
+        push(ind, ev);
+    } else {
+        push(
+            not_applicable(
+                "DQI_PAIRING_RATE_SFTR",
+                "SFTR reconciliation (auth.080) not provided",
+            ),
+            Vec::new(),
+        );
+        push(
+            not_applicable(
+                "DQI_RECONCILIATION_RATE_SFTR",
+                "SFTR reconciliation (auth.080) not provided",
+            ),
+            Vec::new(),
+        );
+        push(
+            not_applicable(
+                "DQI_UNPAIRED_TRADES_RATE_SFTR",
+                "SFTR reconciliation (auth.080) not provided",
+            ),
+            Vec::new(),
+        );
+        push(
+            not_applicable(
+                "DQI_FIELD_MISMATCH_RATE_SFTR",
+                "SFTR reconciliation (auth.080) not provided",
+            ),
             Vec::new(),
         );
     }
@@ -384,13 +432,17 @@ mod tests {
             ids,
             vec![
                 "DQI_COLLATERAL_VALUE_MISSING_SFTR",
+                "DQI_FIELD_MISMATCH_RATE_SFTR",
                 "DQI_LOAN_VALUE_MISSING_SFTR",
                 "DQI_LOAN_VALUE_STALE_SFTR",
+                "DQI_PAIRING_RATE_SFTR",
+                "DQI_RECONCILIATION_RATE_SFTR",
                 "DQI_T3_EXCESS_COLLATERAL_USE_SFTR",
                 "DQI_T3_MARGIN_POSTED_MISSING_SFTR",
                 "DQI_T3_MARGIN_RECEIVED_MISSING_SFTR",
                 "DQI_T3_MARGIN_STALE_SFTR",
                 "DQI_TIM_REPORTING_LATE_SFTR",
+                "DQI_UNPAIRED_TRADES_RATE_SFTR",
             ]
         );
     }

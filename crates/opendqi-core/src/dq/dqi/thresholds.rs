@@ -178,6 +178,40 @@ pub fn default_dqi_thresholds() -> BTreeMap<String, DqiThresholdPair> {
             red: 0.20,
         },
     );
+    // v0.17 C1 — SFTR auth.080 reconciliation layer (4 DQIs).
+    // Calibrated against the existing EMIR auth.091 pairing/
+    // reconciliation thresholds — same operational tolerance,
+    // mirror across regimes. Higher amber/red than completeness
+    // metrics since auth.080 sample sizes can be small per
+    // CP-pair (per-day, per-batch).
+    m.insert(
+        "DQI_PAIRING_RATE_SFTR".into(),
+        DqiThresholdPair {
+            amber: 0.05,
+            red: 0.20,
+        },
+    );
+    m.insert(
+        "DQI_RECONCILIATION_RATE_SFTR".into(),
+        DqiThresholdPair {
+            amber: 0.05,
+            red: 0.20,
+        },
+    );
+    m.insert(
+        "DQI_UNPAIRED_TRADES_RATE_SFTR".into(),
+        DqiThresholdPair {
+            amber: 0.05,
+            red: 0.20,
+        },
+    );
+    m.insert(
+        "DQI_FIELD_MISMATCH_RATE_SFTR".into(),
+        DqiThresholdPair {
+            amber: 0.05,
+            red: 0.20,
+        },
+    );
     m
 }
 
@@ -286,13 +320,18 @@ mod tests {
             "DQI_T3_MARGIN_RECEIVED_MISSING_SFTR",
             "DQI_T3_EXCESS_COLLATERAL_USE_SFTR",
             "DQI_T3_MARGIN_STALE_SFTR",
+            // v0.17 C1 — 4 SFTR auth.080 reconciliation indicators
+            "DQI_PAIRING_RATE_SFTR",
+            "DQI_RECONCILIATION_RATE_SFTR",
+            "DQI_UNPAIRED_TRADES_RATE_SFTR",
+            "DQI_FIELD_MISMATCH_RATE_SFTR",
         ] {
             assert!(m.contains_key(id), "missing default threshold for {id}");
         }
         assert_eq!(
             m.len(),
-            14,
-            "v0.17 B1': 10 v0.15 + 4 T3 = 14 baked-in defaults"
+            18,
+            "v0.17 C1: 10 v0.15 + 4 T3 + 4 SFTR-recon = 18 baked-in defaults"
         );
     }
 
