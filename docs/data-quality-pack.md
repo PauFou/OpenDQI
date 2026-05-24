@@ -1,10 +1,10 @@
-# Data Quality Pack (v0.16+)
+# Data Quality Pack (v0.17+)
 
 The Data Quality Pack is OpenDQI's **committee-readable**
 view on top of the granular check catalogue. Where the
-per-row `DqIssue` stream is forensic (216 checks, 6
-dimensions), the DQI pack rolls them up into **28
-regulator-style indicators** — 24 EMIR + 4 SFTR — each with
+per-row `DqIssue` stream is forensic (222 checks, 6
+dimensions), the DQI pack rolls them up into **40
+regulator-style indicators** — 24 EMIR + 16 SFTR — each with
 `numerator / denominator / rate / threshold / status`, plus
 drill-down evidence.
 
@@ -43,14 +43,18 @@ indicators so the report is reproducible across calendar days.
 opendqi sftr data-quality-pack \
   --tsr  examples/sftr/tr_state/auth079-sample.xml \
   --tar  examples/sftr/tr_activity/auth052-tar-sample.xml \
+  --reconciliation       examples/sftr/reconciliation/auth080-sample.xml \
+  --missing-collateral   examples/sftr/missing_collateral/auth083-sample.xml \
+  --msr                  examples/sftr/margin_state/auth085-sample.xml \
   --as-of 2026-05-21 \
   --out  ./sftr-pack/
 ```
 
-Same 5 output files. v0.16 ships 4 SFTR indicators
-(T2 layer of `auth.079` + `auth.052`) ; the T3 margin layer
-and reconciliation/missing-collateral computers are scheduled
-for v0.17.
+Same 5 output files. v0.17 ships **16 SFTR indicators** across
+the 5 input layers — TSR (`auth.079`) + TAR (`auth.052`) +
+reconciliation (`auth.080`) + missing-collateral (`auth.083`)
++ MSR (`auth.085`). Each layer flag is optional ; indicators
+whose source layer isn't provided self-report `not_applicable`.
 
 ## The 24 EMIR indicators
 
@@ -136,20 +140,83 @@ keyword to feed `--recon-stats` / `--reconciliation` are
 they self-report `not_applicable` until the follow-up commit
 threads those inputs through both surfaces.
 
-## The 4 SFTR indicators (v0.16)
+## The 16 SFTR indicators (v0.17)
 
-T2 layer of `auth.079` + `auth.052`. T3 margin layer +
-`auth.080` reconciliation + `auth.083` missing-collateral
-indicators are scheduled for v0.17.
+Grouped by source layer for readability ; the on-disk
+`indicators.csv` is always sorted alphabetically by
+`indicator_id`. Every layer is optional ; missing layers
+produce `not_applicable` placeholders so downstream
+consumers always see the same 16 rows.
+
+### TSR — `auth.079` (6)
+
+3 v0.16 T2-layer indicators + 3 v0.17 SFTR-specific TSR
+indicators.
 
 | ID | Dimension | Numerator | Denominator | Default thresholds (amber / red) |
 |---|---|---|---|---|
 | `DQI_COLLATERAL_VALUE_MISSING_SFTR` | completeness | outstanding SFTR TSR rows with portfolio code OR collateral ISIN set but no `collateral_value` | outstanding SFTR TSR rows | 5 % / 20 % |
 | `DQI_LOAN_VALUE_MISSING_SFTR` | completeness | outstanding SFTR TSR rows with no `loan_value` | outstanding SFTR TSR rows | 5 % / 20 % |
 | `DQI_LOAN_VALUE_STALE_SFTR` | timeliness | rows with `state_as_of` older than `max_valuation_age_business_days` (**TARGET2** business days) | rows with `state_as_of` set | 5 % / 20 % |
+| `DQI_HAIRCUT_ANOMALY_SFTR` | accuracy | rows where `haircut` is outside `[0.0, 1.0]` (regulatory bound per ESMA RTS 2019/356 Art. 4) | rows with `haircut` set | 0.5 % / 2 % |
+| `DQI_LEI_MISSING_SFTR` | completeness | rows with ≥ 1 counterparty LEI missing/empty | total SFTR TSR rows | 1 % / 5 % |
+| `DQI_UNDER_COLLATERALIZATION_SFTR` | accuracy | rows where `collateral_value × (1 − haircut) < loan_value` strictly | rows with `loan_value` + `collateral_value` + `haircut` all set | 0.5 % / 2 % |
+
+### TAR — `auth.052` (1)
+
+| ID | Dimension | Numerator | Denominator | Default thresholds (amber / red) |
+|---|---|---|---|---|
 | `DQI_TIM_REPORTING_LATE_SFTR` | timeliness | gap > `max_reporting_delay_hours` | TAR rows with both timestamps set | 5 % / 20 % |
 
-## Status mapping (common to all 28)
+### Reconciliation — `auth.080` (4)
+
+The 4 SFTR reconciliation DQIs read the SFTR Reconciliation
+Status Advice (`auth.080`) projected onto `ReconciliationRecord`
+filtered defensively by `regime == Sftr`. v0.17 is per-trade
+only — SFTR's `auth.080` doesn't ship per-CP cohort stats like
+EMIR's `auth.091`.
+
+| ID | Dimension | Numerator | Denominator | Default thresholds (amber / red) |
+|---|---|---|---|---|
+| `DQI_PAIRING_RATE_SFTR` | consistency | SFTR records flagged UNPAIRED / NOT_PAIRED / UNPR | SFTR records with `pairing_status` set | 5 % / 20 % |
+| `DQI_RECONCILIATION_RATE_SFTR` | consistency | paired SFTR records flagged UNRECONCILED / NOT_RECONCILED / UNREC | SFTR records with `pairing_status == PAIRED` | 5 % / 20 % |
+| `DQI_UNPAIRED_TRADES_RATE_SFTR` | consistency | SFTR records with `pairing_status` UNPAIRED | all SFTR records (None included as non-unpaired) | 5 % / 20 % |
+| `DQI_FIELD_MISMATCH_RATE_SFTR` | consistency | SFTR records with `mismatched_fields` non-empty | SFTR records with `reconciliation_status` set | 5 % / 20 % |
+
+`PAIRING_RATE_SFTR` excludes None-status records from the
+denominator ; `UNPAIRED_TRADES_RATE_SFTR` counts them as
+non-unpaired in the denominator. The two diverge when a
+non-trivial subset lacks a pairing status — operational
+signal that `auth.080` coverage is poor.
+
+### Missing-collateral — `auth.083` (1)
+
+| ID | Dimension | Numerator | Denominator | Default thresholds (amber / red) |
+|---|---|---|---|---|
+| `DQI_MCR_OPEN_REQUESTS_SFTR` | completeness | MCR records whose UTI is **not** in the SFTR TSR snapshot (or **all** MCR records when no TSR companion is provided — degraded mode) | MCR records with UTI populated | 5 % / 20 % |
+
+### MSR — `auth.085` T3 margin (4)
+
+The SFTR Margin Data Transaction State Report (`auth.085`) is
+portfolio-level (indexed by `collateral_portfolio_code`, **not**
+UTI) and restricted to **CCP-cleared SFTs** per ESMA scope. The
+6 amount fields per portfolio (IM/VM posted/received + excess
+collateral posted/received) drive the following 4 DQIs.
+
+| ID | Dimension | Numerator | Denominator | Default thresholds (amber / red) |
+|---|---|---|---|---|
+| `DQI_T3_MARGIN_POSTED_MISSING_SFTR` | completeness | MSR records with **no** posted amount set (IM / VM / XcssColl posted all None) | MSR records with `collateral_portfolio_code` set | 5 % / 20 % |
+| `DQI_T3_MARGIN_RECEIVED_MISSING_SFTR` | completeness | MSR records with **no** received amount set | MSR records with `collateral_portfolio_code` set | 5 % / 20 % |
+| `DQI_T3_EXCESS_COLLATERAL_USE_SFTR` | accuracy | MSR records with `excess_collateral_posted > 0` OR `excess_collateral_received > 0` (SFTR-specific — flags TR-side reporting inflation or operational over-collateralisation) | MSR records with ≥ 1 amount set | 20 % / 50 % |
+| `DQI_T3_MARGIN_STALE_SFTR` | timeliness | MSR records with `state_as_of` older than `max_valuation_age_business_days` (**TARGET2** business days) | MSR records with `state_as_of` AND ≥ 1 amount set | 5 % / 20 % |
+
+The MSR layer also triggers 6 granular `SFTR.T3.*` per-record
+checks (`IM/VM_POSTED/RECEIVED_MISSING` for partial-side
+reporting, `MARGIN_NEGATIVE`, `MARGIN_CURRENCY_MISSING`) that
+are co-produced into `issues.csv` alongside the aggregated
+DQIs.
+
+## Status mapping (common to all 40)
 
 - `rate ≤ amber_threshold` → **green**
 - `amber_threshold < rate ≤ red_threshold` → **amber**
@@ -491,6 +558,156 @@ numerator/denominator semantics never drift.
 - **Denominator**: TAR records with both timestamps set.
 - **SFTR mirror of `DQI_TIM_REPORTING_LATE`**.
 
+### `DQI_HAIRCUT_ANOMALY_SFTR`
+
+**Question**: *"What share of my SFTs report a haircut outside the regulatory range?"*
+
+- **Numerator**: SFTR TSR records where `haircut < 0` OR
+  `haircut > 1` (strict). The `[0, 1]` bound is regulatory
+  (ESMA RTS 2019/356 Art. 4) — only the **rate** threshold
+  on the DQI is configurable.
+- **Denominator**: SFTR TSR records with `haircut` set.
+- Rolls up the granular `SFTR.COMP.HAIRCUT_OUT_OF_RANGE`
+  check.
+
+### `DQI_LEI_MISSING_SFTR`
+
+**Question**: *"What share of my SFTR records have a missing counterparty LEI?"*
+
+- **Numerator**: SFTR TSR records where
+  `reporting_counterparty` OR `other_counterparty` is empty
+  / None. Both LEIs are mandatory in the SFTR XSD
+  (`Counterparty39__1` requires `RptgCtrPty` + `OthrCtrPty`)
+  so misses signal a parsing failure, a non-LEI natural
+  person on the other-CP side, or a corrupt feed.
+- **Denominator**: total SFTR TSR records.
+- **SFTR mirror of `DQI_LEI_MISSING`**.
+
+### `DQI_UNDER_COLLATERALIZATION_SFTR`
+
+**Question**: *"Are some SFTs reporting collateral that — once the haircut is applied — doesn't cover the loan?"*
+
+- **Numerator**: SFTR TSR records where
+  `collateral_value × (1 − haircut) < loan_value` strictly.
+- **Denominator**: SFTR TSR records with all 3 inputs
+  (`loan_value`, `collateral_value`, `haircut`) populated ;
+  records missing any of the 3 are out of scope (their gaps
+  are flagged by the granular `SFTR.COMP.*_MISSING` checks).
+- Flags either a mis-reported value (DQ defect — the
+  intended signal) or a genuine under-collateralisation
+  (credit-risk anomaly, worth surfacing nonetheless).
+- Evidence includes the computed shortfall
+  (`loan − effective_collateral`) for triage.
+
+### `DQI_PAIRING_RATE_SFTR` (auth.080)
+
+**Question**: *"Of SFTR records whose pairing status the TR sent us, what share are unpaired?"*
+
+- **Numerator**: SFTR `ReconciliationRecord`s with
+  `pairing_status` ∈ `{UNPAIRED, NOT_PAIRED, UNPR}`
+  (case-insensitive).
+- **Denominator**: SFTR `ReconciliationRecord`s with
+  `pairing_status` populated (excludes None).
+- Sister to `DQI_UNPAIRED_TRADES_RATE_SFTR` which uses
+  **total records** (including None) as denominator —
+  divergence between the two signals poor `auth.080`
+  coverage.
+
+### `DQI_RECONCILIATION_RATE_SFTR` (auth.080)
+
+**Question**: *"Of paired SFTs, what share are flagged unreconciled at the field level?"*
+
+- **Numerator**: SFTR `ReconciliationRecord`s with
+  `reconciliation_status` ∈ `{UNRECONCILED, NOT_RECONCILED,
+  UNREC}`.
+- **Denominator**: SFTR `ReconciliationRecord`s with
+  `pairing_status == PAIRED` — field-level reconciliation
+  is meaningless without a pair.
+
+### `DQI_UNPAIRED_TRADES_RATE_SFTR` (auth.080)
+
+**Question**: *"At the per-trade level, what share of all SFTs flagged unpaired?"*
+
+- **Numerator**: SFTR records with `pairing_status` UNPAIRED.
+- **Denominator**: **all** SFTR `ReconciliationRecord`s
+  (None-status counted as non-unpaired).
+- Sister to `DQI_PAIRING_RATE_SFTR` ; see that DQI for the
+  denominator-floor difference and the operational signal.
+
+### `DQI_FIELD_MISMATCH_RATE_SFTR` (auth.080)
+
+**Question**: *"What share of paired SFTR records carry at least one mismatched field?"*
+
+- **Numerator**: SFTR `ReconciliationRecord`s with
+  `mismatched_fields` non-empty.
+- **Denominator**: SFTR `ReconciliationRecord`s with
+  `reconciliation_status` populated.
+- Per-criterion EMIR DQIs (`DQI_NOTIONAL_INCONSISTENT`,
+  `DQI_MARGIN_INCONSISTENT_*`) are not mirrored —
+  `auth.080`'s `MsmtchFlds` is a flat list, not split by
+  criterion family.
+
+### `DQI_MCR_OPEN_REQUESTS_SFTR` (auth.083)
+
+**Question**: *"For each Missing Collateral Request the TR sends us, has the requested UTI shown up with collateral in the latest TSR snapshot?"*
+
+- **Numerator**:
+  - With TSR companion (`--tsr` + `--missing-collateral`) :
+    MCR records whose UTI is NOT in the TSR snapshot.
+  - **Without** TSR companion (`--missing-collateral`
+    alone) : **all** MCR records (degraded mode → 100 %
+    red). The `description` field surfaces this mode.
+- **Denominator**: MCR records with UTI populated (records
+  without UTI are out of scope ; the granular
+  `SFTR.MCR.REQUEST_WITHOUT_UTI` check covers them).
+
+### `DQI_T3_MARGIN_POSTED_MISSING_SFTR` (auth.085)
+
+**Question**: *"What share of CCP-cleared portfolios report no margin posted at all?"*
+
+- **Numerator**: SFTR MSR records where **all 3** posted-side
+  amounts (`initial_margin_posted`, `variation_margin_posted`,
+  `excess_collateral_posted`) are None.
+- **Denominator**: MSR records with `collateral_portfolio_code`
+  set (the mandatory portfolio identifier in `auth.085`).
+
+### `DQI_T3_MARGIN_RECEIVED_MISSING_SFTR` (auth.085)
+
+Symmetric to `DQI_T3_MARGIN_POSTED_MISSING_SFTR` on the
+received side. Numerator counts MSR records with **all 3**
+received-side amounts None.
+
+### `DQI_T3_EXCESS_COLLATERAL_USE_SFTR` (auth.085)
+
+**Question**: *"What share of CCP-cleared portfolios are reporting any excess collateral on either side?"*
+
+- **Numerator**: MSR records with
+  `excess_collateral_posted > 0` OR
+  `excess_collateral_received > 0`.
+- **Denominator**: MSR records with ≥ 1 amount populated.
+- **SFTR-specific** — `XcssColl*` has no EMIR auth.109
+  equivalent. A high rate flags either TR-side reporting
+  inflation (excess reported on every portfolio
+  regardless of actual margining) or operational
+  over-collateralisation (capital tied up in excess
+  collateral above the requirement). Threshold defaults are
+  looser than the strict completeness DQIs (20 % / 50 %).
+
+### `DQI_T3_MARGIN_STALE_SFTR` (auth.085)
+
+**Question**: *"How fresh is the CCP-cleared margin state vs `as_of`?"*
+
+- **Numerator**: MSR records where the TARGET2 business-day
+  gap from `state_as_of` to `as_of` exceeds
+  `max_valuation_age_business_days`.
+- **Denominator**: MSR records with `state_as_of` set AND
+  ≥ 1 amount populated (records without amounts are out
+  of scope ; their completeness gaps are flagged by the
+  posted/received MISSING DQIs above).
+- Reuses the same threshold key as
+  `DQI_LOAN_VALUE_STALE_SFTR` /
+  `DQI_VAL_STALE` / `DQI_COL_STALE_STATE`.
+
 ## Threshold configuration
 
 Override per-indicator via YAML config :
@@ -550,24 +767,29 @@ result.issues       # pyarrow.Table, granular (same contract as v0.12+)
 result.summary
 ```
 
-### SFTR (v0.16+)
+### SFTR (v0.17+)
 
 ```python
 import opendqi
 
 result = opendqi.sftr.data_quality_pack(
-    tsr="auth079-tsr.xml",
-    tar="auth052-tar.xml",
-    reconciliation="auth080.xml",          # reserved for v0.17 indicators
-    missing_collateral="auth083.xml",      # reserved for v0.17 indicators
+    tsr="auth079-tsr.xml",                 # 6 TSR DQIs
+    tar="auth052-tar.xml",                 # 1 TAR DQI
+    reconciliation="auth080.xml",          # 4 recon DQIs (v0.17)
+    missing_collateral="auth083.xml",      # 1 MCR DQI (v0.17)
+    msr="auth085.xml",                     # 4 T3 DQIs + 6 SFTR.T3.* granular checks (v0.17)
     as_of="2026-05-21",
 )
-result.indicators   # pyarrow.Table, 4 rows × 11 cols
+result.indicators   # pyarrow.Table, 16 rows × 11 cols
+result.issues       # includes SFTR.T3.* granular checks when --msr provided
 ```
 
-**v0.16 honest scope** — the SFTR DQI pack is **paths-only**.
-Dual-input pyarrow.Table support for SFTR layers is scheduled
-for v0.17 alongside the T3 margin indicators.
+**v0.17 honest scope** — the SFTR DQI pack is still
+**paths-only**. Arrow converters for `SftrTrStateRecord` /
+`SftrMarginStateRecord` / `ReconciliationRecord` /
+`MissingCollateralRecord` are scheduled for v0.18 ;
+`opendqi.emir.data_quality_pack`'s dual `pyarrow.Table`
+support has no equivalent on the SFTR side yet.
 
 ## Spark API (EXPERIMENTAL)
 
@@ -592,9 +814,10 @@ result = opendqi.spark.emir.data_quality_pack(
 ## v1.0 Arrow schemas (locked since v0.15.0)
 
 The 11-column `indicators` schema and 7-column `evidence`
-schema are **frozen** — the v0.16 expansion adds *rows*, not
-*columns*. Any breaking change requires a major version bump
-of the bindings.
+schema are **frozen** — every expansion since v0.15.0
+(v0.16's 14 new EMIR DQIs, v0.17's 12 new SFTR DQIs) adds
+*rows*, not *columns*. Any breaking change requires a major
+version bump of the bindings.
 
 ### `indicators` schema (11 cols)
 
@@ -629,48 +852,58 @@ Both contracts are pinned by parity tests in
 and `test_sftr_data_quality_pack.py` (SFTR) against the
 on-disk CLI goldens.
 
-## SFTR layer mapping (T1 / T2 / T3)
+## SFTR message-to-layer mapping (v0.17 corrected)
 
-SFTR is structured around **3 logical strata** which OpenDQI
-treats as separate layers for DQI purposes, even though they
-are all carried inline within the same auth.* message (unlike
-EMIR which ships a dedicated message per stratum) :
+OpenDQI v0.17 ships the **full SFTR DQI surface** across 5
+ISO 20022 messages. The earlier v0.16 docs mistakenly treated
+T3 margin as "inline in `auth.079`" — verification against
+the real ESMA XSDs (March 2023 release, v1.1.0–v1.2.0)
+proved this wrong : T3 margin amounts live in a **separate**
+message `auth.085` (a dedicated CCP-cleared-only MSR).
 
-| Stratum | Content | EMIR equivalent | OpenDQI v0.16 DQI prefix |
+| Message | Official ESMA name | Direction | Powers (v0.17 DQI prefix) |
 |---|---|---|---|
-| **T1** | Counterparty identification (RC / OC / ERR LEIs, nature, sector, …) | Embedded in `auth.107` TSR | Reserved for v0.17 (`DQI_LEI_MISSING_SFTR`) |
-| **T2** | Transaction state — loan value, collateral value, maturity, settlement date, status — both `auth.052` (TAR) and `auth.079` (TSR) | `auth.030` TAR + `auth.107` TSR | `DQI_LOAN_VALUE_*_SFTR`, `DQI_COLLATERAL_VALUE_MISSING_SFTR`, `DQI_TIM_REPORTING_LATE_SFTR` |
-| **T3** | Margin state — IM/VM posted/received, pre/post-haircut. **Logically separate** but **inline** in `auth.079` rather than shipped as a dedicated auth.* message | `auth.108` MAR + `auth.109` MSR | Reserved for v0.17 (`DQI_T3_MARGIN_*`) |
+| `auth.052` | `SecuritiesFinancingReportingTransactionReport` | Firm → TR | `DQI_TIM_REPORTING_LATE_SFTR` |
+| `auth.079` | `SecuritiesFinancingReportingTransactionStateReport` | TR → firm / NCA | `DQI_LOAN_VALUE_*_SFTR`, `DQI_COLLATERAL_VALUE_MISSING_SFTR`, `DQI_HAIRCUT_ANOMALY_SFTR`, `DQI_LEI_MISSING_SFTR`, `DQI_UNDER_COLLATERALIZATION_SFTR` (6 TSR DQIs total) |
+| `auth.080` | `SecuritiesFinancingReportingReconciliationStatusAdvice` | TR → firm | `DQI_PAIRING_RATE_SFTR`, `DQI_RECONCILIATION_RATE_SFTR`, `DQI_UNPAIRED_TRADES_RATE_SFTR`, `DQI_FIELD_MISMATCH_RATE_SFTR` (4 recon DQIs) |
+| `auth.083` | `SecuritiesFinancingReportingMissingCollateralRequest` | TR → firm | `DQI_MCR_OPEN_REQUESTS_SFTR` |
+| `auth.085` | `SecuritiesFinancingReportingMarginDataTransactionStateReport` | TR → firm / NCA | `DQI_T3_MARGIN_POSTED_MISSING_SFTR`, `DQI_T3_MARGIN_RECEIVED_MISSING_SFTR`, `DQI_T3_EXCESS_COLLATERAL_USE_SFTR`, `DQI_T3_MARGIN_STALE_SFTR` (4 T3 margin DQIs) + 6 SFTR.T3.* granular checks |
 
-A single `auth.079` SFTR Trade State Report parsed by
-OpenDQI carries BOTH the T2 (transaction state) and the T3
-(margin state) input layers — they will be projected into
-separate logical record sets when v0.17 ships the T3
-computers ; the CLI / Python caller only needs to provide
-the auth.079 input once.
+`auth.085` is **portfolio-level** (indexed by
+`collateral_portfolio_code`, not UTI) and **restricted to
+CCP-cleared SFTs** per ESMA scope, exposing 6 amount fields
+per portfolio : IM / VM / excess collateral × posted /
+received. SFTR does NOT have a pre-haircut vs post-haircut
+split on margin amounts (unlike EMIR auth.109 which carries
+both), so the v0.17 SFTR T3 indicator family is intentionally
+narrower than its EMIR counterpart.
 
-See [`docs/dqi-spark-mapping.md`](dqi-spark-mapping.md) for
-the full EMIR + SFTR DQI catalogue + the methodology used
-to derive each indicator.
+See [`docs/iso20022-sftr.md`](iso20022-sftr.md) for per-message
+XSD path documentation, and [`docs/auth-messages/`](auth-messages/)
+for per-message reference pages.
 
-## What v0.16 deliberately does NOT do
+## What v0.17 deliberately does NOT do
 
-- **SFTR T3 margin indicators** (v0.17). v0.16 ships the
-  SFTR DQI pack scaffolding + 4 T2-layer indicators ; T3
-  parser extension and indicators are the v0.17 milestone.
-- **SFTR reconciliation (`auth.080`) and missing-collateral
-  (`auth.083`) indicators** (v0.17). The CLI/Python accept
-  the inputs today but no v0.16 computer reads them.
 - **CLI/Python wiring of `auth.091` for the 7 cross-CP EMIR
   DQIs**. The computers ship but the `--recon-stats` /
-  `--reconciliation` flags are not yet exposed on
-  `data-quality-pack` ; those 7 indicators self-report
-  `not_applicable` until a follow-up commit.
+  `--reconciliation` flags are not yet exposed on `opendqi
+  emir data-quality-pack` ; those 7 indicators self-report
+  `not_applicable` until a follow-up commit (carry-over
+  from v0.16 honest scope — not blocking v0.17 ship).
+- **`pyarrow.Table` dual-input on the SFTR DQI pack**
+  (v0.18+). The Arrow converters for `SftrTrStateRecord` /
+  `SftrMarginStateRecord` / `ReconciliationRecord` /
+  `MissingCollateralRecord` are not yet implemented — the
+  SFTR side stays **paths-only** vs EMIR which accepts
+  `pyarrow.Table` on `tsr` / `tar` / `msr` / `feedback`.
 - **DQI history / trend tracking via the SQLite store**
-  (v0.17+).
+  (v0.18+).
 - **A submission-count-aware `DQI_REJ_RATE` denominator**
   (gated on the store workflow).
 - **Native partition-aware Spark** (Spark stays
-  collect-then-call / experimental).
+  collect-then-call / experimental). The Polars LazyFrame
+  fast path has a documented dtype round-trip caveat on
+  the SFTR side (see `crates/opendqi-py/tests/
+  test_sftr_polars.py`).
 - **Threshold profile presets** (one YAML override at a
   time today).
