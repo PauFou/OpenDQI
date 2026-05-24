@@ -1,24 +1,32 @@
-//! SFTR Data Quality Pack orchestrator (v0.16 C).
+//! SFTR Data Quality Pack orchestrator.
 //!
 //! Mirror of the EMIR pack architecture
 //! ([`crate::dq::dqi::compute_emir_dqi_pack`]) for SFTR
-//! inputs. v0.16 ships **4 SFTR DQIs** drawn from the T2
-//! (transaction state) layer of the auth.079 message :
+//! inputs.
+//!
+//! v0.16 shipped **4 T2-layer SFTR DQIs** drawn from
+//! `auth.079` + `auth.052` :
 //!
 //! - `DQI_LOAN_VALUE_MISSING_SFTR`
 //! - `DQI_LOAN_VALUE_STALE_SFTR`
 //! - `DQI_COLLATERAL_VALUE_MISSING_SFTR`
 //! - `DQI_TIM_REPORTING_LATE_SFTR`
 //!
-//! **Deferred to v0.17** (documented limitation) :
-//! - T3-layer margin DQIs (IM/VM posted/received pre/post-
-//!   haircut) — requires extending `SftrTrStateRecord` +
-//!   the `auth.079` parser to project T3 fields. The T3
-//!   stratum is described in
-//!   `docs/data-quality-pack.md` "SFTR layer mapping".
-//! - SFTR-specific DQIs (haircut anomaly, reuse untracked,
-//!   per-CP LEI rollups, reconciliation-status from
-//!   `auth.080`) — orthogonal to T3, scope-shaped for v0.17.
+//! v0.17 expands to **16 SFTR DQIs** by adding the T3 margin
+//! layer (4 DQIs sourced from the new `msr` input slot,
+//! parsed from `auth.085`), the reconciliation layer (4 DQIs
+//! sourced from the now-consumed `reconciliation` slot,
+//! parsed from `auth.080`), the missing-collateral layer (1
+//! DQI sourced from the now-consumed `missing_collateral`
+//! slot, parsed from `auth.083`), and 3 SFTR-specific TSR
+//! DQIs (haircut anomaly, LEI missing, under-
+//! collateralization).
+//!
+//! The MSR (margin state) layer landed at A4 of v0.17 ; the
+//! 4 T3 computers that read it are added in B1'. Until then
+//! the `msr` slot is plumbed through the struct but unused
+//! by any computer — providing it today is parsed-and-stored,
+//! ready for B1'.
 
 use chrono::{DateTime, NaiveDate, Utc};
 
@@ -32,14 +40,31 @@ use crate::dq::{
     default_sftr_checks, default_sftr_tr_state_checks, run_all_sftr, run_all_sftr_tr_state,
     CheckContext,
 };
-use crate::model::{DqDimension, DqIssue, Regime, SftrRecord, SftrTrStateRecord};
+use crate::model::{
+    DqDimension, DqIssue, Regime, SftrMarginStateRecord, SftrRecord, SftrTrStateRecord,
+};
 use crate::Thresholds;
 
-/// All SFTR DQI inputs, each optional. v0.16 ships 4
-/// indicators on top of the TSR + TAR layers ; reconciliation
-/// (auth.080) and missing-collateral (auth.083) inputs are
-/// **reserved** on the struct for v0.17 indicators (no
-/// computer reads them yet).
+/// All SFTR DQI inputs, each optional.
+///
+/// Layer mapping :
+/// - `tsr` + `tar` are read by 4 v0.16 T2-layer DQIs (loan
+///   missing/stale, collateral missing, reporting timeliness)
+///   and remain unchanged in v0.17.
+/// - `reconciliation` powers the 4 v0.17 SFTR reconciliation
+///   DQIs (`DQI_PAIRING_RATE_SFTR`,
+///   `DQI_RECONCILIATION_RATE_SFTR`,
+///   `DQI_UNPAIRED_TRADES_RATE_SFTR`,
+///   `DQI_FIELD_MISMATCH_RATE_SFTR` — added in C1).
+/// - `missing_collateral` powers the 1 v0.17 MCR rollup DQI
+///   `DQI_MCR_OPEN_REQUESTS_SFTR` (added in D1).
+/// - `msr` powers the 4 v0.17 T3 margin DQIs sourced from
+///   `auth.085` (added in B1').
+///
+/// **A4 status**: the `msr` field is plumbed but no computer
+/// reads it yet — wiring lands in B1'. The same was true of
+/// `reconciliation` and `missing_collateral` in v0.16 ; both
+/// become live in v0.17 C1/D1.
 #[derive(Debug, Default, Clone)]
 pub struct SftrDqiInputs<'a> {
     /// SFTR Trade State Report (`auth.079`) — projected onto
@@ -49,13 +74,16 @@ pub struct SftrDqiInputs<'a> {
     /// onto [`SftrRecord`].
     pub tar: Option<&'a [SftrRecord]>,
     /// SFTR Reconciliation Status Advice (`auth.080`) —
-    /// reserved input slot for v0.17 `DQI_REC_STATUS_*_SFTR`
-    /// indicators. Not read by any v0.16 computer.
+    /// powers the 4 SFTR reconciliation DQIs added in C1.
     pub reconciliation: Option<&'a [crate::ReconciliationRecord]>,
-    /// SFTR Missing-Collateral request (`auth.083`) —
-    /// reserved input slot for v0.17 `DQI_MCR_*` rollups.
-    /// Not read by any v0.16 computer.
+    /// SFTR Missing-Collateral request (`auth.083`) — powers
+    /// the MCR rollup DQI added in D1.
     pub missing_collateral: Option<&'a [crate::MissingCollateralRecord]>,
+    /// SFTR Margin Data Transaction State Report (`auth.085`)
+    /// — projected onto [`SftrMarginStateRecord`]. Portfolio-
+    /// level margin state (CCP-cleared SFTs only). Powers the
+    /// 4 SFTR T3 margin DQIs added in B1'.
+    pub msr: Option<&'a [SftrMarginStateRecord]>,
 }
 
 /// Run the SFTR Data Quality Pack.
@@ -227,6 +255,43 @@ mod tests {
             );
             assert_eq!(ind.regime, Regime::Sftr);
         }
+    }
+
+    #[test]
+    fn default_inputs_have_msr_slot_at_none() {
+        // v0.17 A4 contract: the new msr slot exists and
+        // defaults to None alongside the v0.16 slots. Locks
+        // the public struct shape so B1' (the 4 T3 computers
+        // that read msr) can land without further struct churn.
+        let inputs: SftrDqiInputs = SftrDqiInputs::default();
+        assert!(inputs.tsr.is_none());
+        assert!(inputs.tar.is_none());
+        assert!(inputs.reconciliation.is_none());
+        assert!(inputs.missing_collateral.is_none());
+        assert!(inputs.msr.is_none());
+    }
+
+    #[test]
+    fn providing_msr_without_computers_is_a_noop_in_v0_17_a4() {
+        // Until B1' lands, providing an `msr` slice has no
+        // observable effect: indicator count stays at 4 (the
+        // T2-layer v0.16 set), every DQI is NotApplicable on
+        // empty TSR/TAR, no granular issue is produced. This
+        // mirrors how the `reconciliation` / `missing_collateral`
+        // slots behaved in v0.16 before C1/D1 wired them.
+        let msr: Vec<SftrMarginStateRecord> = vec![];
+        let inputs = SftrDqiInputs {
+            msr: Some(&msr),
+            ..SftrDqiInputs::default()
+        };
+        let result = compute_sftr_dqi_pack(
+            inputs,
+            MappingPresence::default(),
+            &Thresholds::default(),
+            as_of(),
+        );
+        assert_eq!(result.indicators.len(), 4);
+        assert_eq!(result.issues.len(), 0);
     }
 
     #[test]

@@ -514,6 +514,10 @@ pub fn data_quality_pack(
         tar: tar.map(|_| tar_records.as_slice()),
         reconciliation: reconciliation.map(|_| reconciliation_records.as_slice()),
         missing_collateral: missing_collateral.map(|_| missing_collateral_records.as_slice()),
+        // v0.17 A4: `msr` slot exists but B1' wires the 4 T3
+        // DQIs that consume it ; until then it stays `None`.
+        // Python `msr=` kwarg arrives in G2'.
+        msr: None,
     };
 
     let pack = compute_sftr_dqi_pack(inputs, MappingPresence::default(), &thresholds, as_of_date);

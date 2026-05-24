@@ -1881,6 +1881,10 @@ fn run_data_quality_pack(
     };
 
     let inputs = SftrDqiInputs {
+        // v0.17 A4: `msr` slot exists but B1' wires the 4 T3
+        // DQIs that consume it ; until then it stays `None`
+        // here. CLI `--msr` flag arrives in G1'.
+        msr: None,
         tsr: if tsr_path.is_some() {
             Some(&tsr_records)
         } else {
