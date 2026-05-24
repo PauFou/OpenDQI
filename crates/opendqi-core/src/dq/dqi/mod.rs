@@ -26,7 +26,9 @@ pub use compute::{
     compute_dqi_margin_inconsistent_pre_haircut, compute_dqi_nature_missing,
     compute_dqi_notional_inconsistent, compute_dqi_pairing_rate, compute_dqi_rec_status_unpaired,
     compute_dqi_reconciliation_rate, compute_dqi_rej_rate, compute_dqi_rej_repeat_uti,
-    compute_dqi_sector_missing, compute_dqi_tim_reporting_late,
+    compute_dqi_sector_missing, compute_dqi_t3_excess_collateral_use_sftr,
+    compute_dqi_t3_margin_posted_missing_sftr, compute_dqi_t3_margin_received_missing_sftr,
+    compute_dqi_t3_margin_stale_sftr, compute_dqi_tim_reporting_late,
     compute_dqi_tim_reporting_late_sftr, compute_dqi_unpaired_trades_rate, compute_dqi_val_missing,
     compute_dqi_val_stale, compute_dqi_vm_missing_for_cleared,
 };

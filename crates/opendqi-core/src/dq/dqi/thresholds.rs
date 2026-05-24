@@ -144,6 +144,40 @@ pub fn default_dqi_thresholds() -> BTreeMap<String, DqiThresholdPair> {
             red: 0.20,
         },
     );
+    // v0.17 — SFTR T3 margin layer (auth.085 portfolio-level).
+    // Completeness-style margins missing are tighter (~5 % amber
+    // / 20 % red) since CCP-cleared SFTs must report margin per
+    // RTS 2019/356. The excess-collateral-use rate is set higher
+    // (operational-flag, not strict failure) — anything past 50 %
+    // of portfolios reporting any XcssColl > 0 is unusual.
+    m.insert(
+        "DQI_T3_MARGIN_POSTED_MISSING_SFTR".into(),
+        DqiThresholdPair {
+            amber: 0.05,
+            red: 0.20,
+        },
+    );
+    m.insert(
+        "DQI_T3_MARGIN_RECEIVED_MISSING_SFTR".into(),
+        DqiThresholdPair {
+            amber: 0.05,
+            red: 0.20,
+        },
+    );
+    m.insert(
+        "DQI_T3_EXCESS_COLLATERAL_USE_SFTR".into(),
+        DqiThresholdPair {
+            amber: 0.20,
+            red: 0.50,
+        },
+    );
+    m.insert(
+        "DQI_T3_MARGIN_STALE_SFTR".into(),
+        DqiThresholdPair {
+            amber: 0.05,
+            red: 0.20,
+        },
+    );
     m
 }
 
@@ -228,9 +262,15 @@ mod tests {
     }
 
     #[test]
-    fn defaults_cover_all_v015_indicators() {
+    fn defaults_cover_all_shipped_indicators() {
+        // Locks: every shipped DQI (v0.15 + v0.17) has a baked-in
+        // threshold default. Listing each id explicitly is the
+        // simplest way to keep the doc-and-test in sync as the
+        // catalogue grows ; if you add a new computer, add its
+        // id here.
         let m = default_dqi_thresholds();
         for id in [
+            // v0.15 — 10 EMIR/feedback indicators
             "DQI_VAL_MISSING",
             "DQI_VAL_STALE",
             "DQI_COL_MISSING_STATE",
@@ -241,10 +281,19 @@ mod tests {
             "DQI_TIM_REPORTING_LATE",
             "DQI_CONF_MISSING",
             "DQI_REC_STATUS_UNPAIRED",
+            // v0.17 B1' — 4 SFTR T3 margin indicators
+            "DQI_T3_MARGIN_POSTED_MISSING_SFTR",
+            "DQI_T3_MARGIN_RECEIVED_MISSING_SFTR",
+            "DQI_T3_EXCESS_COLLATERAL_USE_SFTR",
+            "DQI_T3_MARGIN_STALE_SFTR",
         ] {
             assert!(m.contains_key(id), "missing default threshold for {id}");
         }
-        assert_eq!(m.len(), 10, "shipping exactly 10 indicators in v0.15");
+        assert_eq!(
+            m.len(),
+            14,
+            "v0.17 B1': 10 v0.15 + 4 T3 = 14 baked-in defaults"
+        );
     }
 
     #[test]

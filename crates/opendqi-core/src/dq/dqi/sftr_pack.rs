@@ -33,7 +33,9 @@ use chrono::{DateTime, NaiveDate, Utc};
 use crate::dq::aggregate::IssueAggregator;
 use crate::dq::dqi::compute::{
     compute_dqi_collateral_value_missing_sftr, compute_dqi_loan_value_missing_sftr,
-    compute_dqi_loan_value_stale_sftr, compute_dqi_tim_reporting_late_sftr,
+    compute_dqi_loan_value_stale_sftr, compute_dqi_t3_excess_collateral_use_sftr,
+    compute_dqi_t3_margin_posted_missing_sftr, compute_dqi_t3_margin_received_missing_sftr,
+    compute_dqi_t3_margin_stale_sftr, compute_dqi_tim_reporting_late_sftr,
 };
 use crate::dq::dqi::{DqiEvidence, DqiIndicator, DqiPackResult, DqiStatus, MappingPresence};
 use crate::dq::{
@@ -148,6 +150,54 @@ pub fn compute_sftr_dqi_pack(
         );
     }
 
+    // MSR-only T3-layer indicators (4, v0.17 B1'):
+    // - DQI_T3_MARGIN_POSTED_MISSING_SFTR
+    // - DQI_T3_MARGIN_RECEIVED_MISSING_SFTR
+    // - DQI_T3_EXCESS_COLLATERAL_USE_SFTR
+    // - DQI_T3_MARGIN_STALE_SFTR
+    if let Some(msr) = inputs.msr {
+        let (ind, ev) =
+            compute_dqi_t3_margin_posted_missing_sftr(msr, thresholds, mapping_presence);
+        push(ind, ev);
+        let (ind, ev) =
+            compute_dqi_t3_margin_received_missing_sftr(msr, thresholds, mapping_presence);
+        push(ind, ev);
+        let (ind, ev) =
+            compute_dqi_t3_excess_collateral_use_sftr(msr, thresholds, mapping_presence);
+        push(ind, ev);
+        let (ind, ev) = compute_dqi_t3_margin_stale_sftr(msr, thresholds, as_of, mapping_presence);
+        push(ind, ev);
+    } else {
+        push(
+            not_applicable(
+                "DQI_T3_MARGIN_POSTED_MISSING_SFTR",
+                "SFTR MSR (auth.085) not provided",
+            ),
+            Vec::new(),
+        );
+        push(
+            not_applicable(
+                "DQI_T3_MARGIN_RECEIVED_MISSING_SFTR",
+                "SFTR MSR (auth.085) not provided",
+            ),
+            Vec::new(),
+        );
+        push(
+            not_applicable(
+                "DQI_T3_EXCESS_COLLATERAL_USE_SFTR",
+                "SFTR MSR (auth.085) not provided",
+            ),
+            Vec::new(),
+        );
+        push(
+            not_applicable(
+                "DQI_T3_MARGIN_STALE_SFTR",
+                "SFTR MSR (auth.085) not provided",
+            ),
+            Vec::new(),
+        );
+    }
+
     // Stable order: sort by indicator_id ascending.
     indicators.sort_by(|a, b| a.indicator_id.cmp(&b.indicator_id));
 
@@ -234,17 +284,16 @@ mod tests {
     }
 
     #[test]
-    fn empty_inputs_yield_4_not_applicable_indicators() {
+    fn empty_inputs_yield_all_not_applicable_indicators() {
+        // v0.17 B1' bumps the count from 4 → 8 (added 4 T3
+        // computers). The exact-count assertion is removed from
+        // this test (covered by `indicators_alphabetical_sftr`
+        // which lists every ID).
         let result = compute_sftr_dqi_pack(
             SftrDqiInputs::default(),
             MappingPresence::default(),
             &Thresholds::default(),
             as_of(),
-        );
-        assert_eq!(
-            result.indicators.len(),
-            4,
-            "always exactly 4 SFTR indicators in v0.16"
         );
         for ind in &result.indicators {
             assert_eq!(
@@ -259,10 +308,8 @@ mod tests {
 
     #[test]
     fn default_inputs_have_msr_slot_at_none() {
-        // v0.17 A4 contract: the new msr slot exists and
-        // defaults to None alongside the v0.16 slots. Locks
-        // the public struct shape so B1' (the 4 T3 computers
-        // that read msr) can land without further struct churn.
+        // v0.17 A4 contract: the msr slot exists and defaults
+        // to None alongside the other slots.
         let inputs: SftrDqiInputs = SftrDqiInputs::default();
         assert!(inputs.tsr.is_none());
         assert!(inputs.tar.is_none());
@@ -272,13 +319,14 @@ mod tests {
     }
 
     #[test]
-    fn providing_msr_without_computers_is_a_noop_in_v0_17_a4() {
-        // Until B1' lands, providing an `msr` slice has no
-        // observable effect: indicator count stays at 4 (the
-        // T2-layer v0.16 set), every DQI is NotApplicable on
-        // empty TSR/TAR, no granular issue is produced. This
-        // mirrors how the `reconciliation` / `missing_collateral`
-        // slots behaved in v0.16 before C1/D1 wired them.
+    fn providing_empty_msr_keeps_t3_indicators_in_set() {
+        // v0.17 B1': an empty msr slice is observably distinct
+        // from msr=None. The 4 T3 indicators compute on an
+        // empty slice and report NotApplicable (denominator=0)
+        // — they are *present* in the output. With msr=None
+        // (covered by `empty_inputs_*`) they also report
+        // NotApplicable but with a different `description`
+        // string ("SFTR MSR (auth.085) not provided").
         let msr: Vec<SftrMarginStateRecord> = vec![];
         let inputs = SftrDqiInputs {
             msr: Some(&msr),
@@ -290,8 +338,30 @@ mod tests {
             &Thresholds::default(),
             as_of(),
         );
-        assert_eq!(result.indicators.len(), 4);
-        assert_eq!(result.issues.len(), 0);
+        let t3_ids: Vec<&str> = result
+            .indicators
+            .iter()
+            .map(|i| i.indicator_id.as_str())
+            .filter(|s| s.starts_with("DQI_T3_"))
+            .collect();
+        assert_eq!(t3_ids.len(), 4);
+        for ind in result
+            .indicators
+            .iter()
+            .filter(|i| i.indicator_id.starts_with("DQI_T3_"))
+        {
+            assert_eq!(ind.status, DqiStatus::NotApplicable);
+            // Description does NOT say "not provided" when msr
+            // is provided-but-empty — the upstream computer
+            // returns its own NotApplicable from the empty
+            // denominator path.
+            assert!(
+                !ind.description.contains("not provided"),
+                "{} with empty msr should not say 'not provided': {}",
+                ind.indicator_id,
+                ind.description
+            );
+        }
     }
 
     #[test]
@@ -316,6 +386,10 @@ mod tests {
                 "DQI_COLLATERAL_VALUE_MISSING_SFTR",
                 "DQI_LOAN_VALUE_MISSING_SFTR",
                 "DQI_LOAN_VALUE_STALE_SFTR",
+                "DQI_T3_EXCESS_COLLATERAL_USE_SFTR",
+                "DQI_T3_MARGIN_POSTED_MISSING_SFTR",
+                "DQI_T3_MARGIN_RECEIVED_MISSING_SFTR",
+                "DQI_T3_MARGIN_STALE_SFTR",
                 "DQI_TIM_REPORTING_LATE_SFTR",
             ]
         );
