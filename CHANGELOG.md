@@ -13,6 +13,238 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+## [0.17.0] - 2026-05-24
+
+**SFTR completeness pass** — mandate from the user was
+*"attarde-toi sur SFTR pour suivre toute la doc ESMA et être
+totalement aligné sans faute"* (focus on SFTR to follow all
+the ESMA documentation and be totally aligned without
+mistakes). v0.16 had shipped only 4 SFTR T2-layer DQIs as a
+documented scaffolding ; v0.17 grows the SFTR DQI surface to
+the full **16 indicators across 5 ESMA messages**
+(`auth.052` / `079` / `080` / `083` / `085`) — the SFTR
+mirror of the EMIR DQI pack, sized to the real ESMA SFTR
+message set.
+
+**Architectural pivot** : the v0.17 plan initially assumed
+T3 margin amounts lived inline in `auth.079` (per a v0.16
+docstring that turned out to be wrong). XSD verification
+against the real ESMA SFTR bundle (March 2023 release,
+v1.1.0–v1.2.0) showed `auth.079` carries **no** margin
+posted/received fields ; the T3 margin layer is the
+**separate** `auth.085` message
+(`SecuritiesFinancingReportingMarginDataTransactionStateReportV02`,
+portfolio-level, CCP-cleared only, 6 amounts/portfolio with
+no pre/post-haircut split — narrower than EMIR auth.109). A
+first A1 attempt was reverted locally pre-push ; the second
+A1' shipped the correct architecture. See the inline
+"Plan V2 — pivot post-A1" note in
+`/Users/paul/.claude/plans/le-code-a-plant-hazy-trinket.md`
+(developer notes, not redistributed) for the full delta.
+
+### Added
+
+- **`SftrMarginStateRecord`** — new canonical domain type for
+  the auth.085 MSR. 14 fields : portfolio_code (mandatory) +
+  reporting_counterparty + other_counterparty + state_as_of +
+  event_date + action_type + 6 amount fields
+  (`initial_margin_posted`, `variation_margin_posted`,
+  `excess_collateral_posted`, `initial_margin_received`,
+  `variation_margin_received`, `excess_collateral_received`)
+  + `margin_currency` + standard metadata. `XcssColl*` is
+  SFTR-specific (no EMIR auth.109 equivalent).
+- **`opendqi_xml::read_sftr_margin_state_xml`** — streaming
+  NsReader parser for `auth.085.001.02` envelope with full
+  `Stat` / `CollateralMarginNew10__1` mapping, namespace
+  dispatch, well-formedness gate, and synthetic fixture
+  `examples/sftr/margin_state/auth085-sample.xml` (5 records
+  exercising every reachable path : full / posted-only /
+  received-only / excess-collateral-signature /
+  natural-person-other-CP + negative IM).
+- **`SftrDqiInputs.msr`** — new optional input slot wired
+  through `compute_sftr_dqi_pack` ; consumed by the 4 T3 DQI
+  computers and the 6 SFTR.T3.* granular checks.
+- **12 new SFTR DQI computers** (v0.16's 4 T2-layer kept
+  unchanged ; v0.17 adds 12) :
+  - **4 T3 margin DQIs** (auth.085) :
+    `DQI_T3_MARGIN_POSTED_MISSING_SFTR` (completeness),
+    `DQI_T3_MARGIN_RECEIVED_MISSING_SFTR` (completeness),
+    `DQI_T3_EXCESS_COLLATERAL_USE_SFTR` (accuracy,
+    SFTR-specific), `DQI_T3_MARGIN_STALE_SFTR` (timeliness,
+    TARGET2 business days)
+  - **4 reconciliation DQIs** (auth.080) :
+    `DQI_PAIRING_RATE_SFTR`,
+    `DQI_RECONCILIATION_RATE_SFTR`,
+    `DQI_UNPAIRED_TRADES_RATE_SFTR`,
+    `DQI_FIELD_MISMATCH_RATE_SFTR` (all consistency).
+    Defensive `regime == Regime::Sftr` filter on input slice
+    so mixing EMIR auth.091 `ReconciliationRecord`s doesn't
+    leak EMIR counts into SFTR rates.
+  - **1 MCR rollup DQI** (auth.083) :
+    `DQI_MCR_OPEN_REQUESTS_SFTR` (completeness). With
+    `--tsr` companion : numerator = MCR records whose UTI
+    isn't in TSR. Without : degraded mode → 100 % red, the
+    `description` field surfaces this honestly.
+  - **3 SFTR-specific TSR DQIs** :
+    `DQI_HAIRCUT_ANOMALY_SFTR` (accuracy ; haircut outside
+    `[0, 1]` regulatory bound per ESMA RTS 2019/356 Art. 4),
+    `DQI_LEI_MISSING_SFTR` (completeness ; mirror EMIR
+    `DQI_LEI_MISSING`), `DQI_UNDER_COLLATERALIZATION_SFTR`
+    (accuracy ; `collateral × (1 - haircut) < loan` strictly,
+    flags mis-reporting OR genuine under-collateralisation).
+- **6 new `SFTR.T3.*` granular checks** (new
+  `SftrMsrCheck` trait + `default_sftr_msr_checks()`
+  registry) — `IM_POSTED_MISSING`, `VM_POSTED_MISSING`,
+  `IM_RECEIVED_MISSING`, `VM_RECEIVED_MISSING` (partial-side
+  reporting, High severity), `MARGIN_NEGATIVE` (any of 6
+  amounts < 0, Critical severity), `MARGIN_CURRENCY_MISSING`
+  (amount populated but `@Ccy` lost upstream, High severity).
+  Wired into `compute_sftr_dqi_pack`'s granular issues
+  pipeline when `inputs.msr` is provided.
+- **CLI `opendqi sftr data-quality-pack --msr` flag** — 5th
+  input layer alongside the existing `--tsr`/`--tar`/
+  `--reconciliation`/`--missing-collateral` flags. The 'at
+  least one input' precondition extends to cover all 5.
+- **Python `opendqi.sftr.data_quality_pack(msr=...)` kwarg**
+  — symmetric Python side. Paths-only on the SFTR side in
+  v0.17 (the dual `pyarrow.Table` input that EMIR side has
+  is deferred to v0.18 — no SFTR-side Arrow converters yet).
+- **New CLI golden `sftr-data-quality-pack-full`** — 5-layer
+  variant snapshotting all 4 artefacts (indicators / evidence
+  / issues / summary) on the full input set. The 2-layer
+  `sftr-data-quality-pack` golden keeps testing the partial-
+  input degraded case.
+- **8 new SFTR pytest files** — closes the v0.16 EMIR/Python
+  asymmetry (1 SFTR pytest file → 9 dedicated SFTR pytest
+  files) : `test_sftr_scan.py`,
+  `test_sftr_scan_directory.py`, `test_sftr_tr_audit.py`,
+  `test_sftr_missing_collateral.py`,
+  `test_sftr_book_reconcile.py`, `test_sftr_normalized.py`,
+  `test_sftr_issues_schema.py`, `test_sftr_polars.py`. Every
+  EMIR Python test pattern now has its SFTR mirror,
+  including the v1.0 11-col Arrow contract parity test vs the
+  on-disk CLI golden.
+- **New doc page** `docs/auth-messages/sftr-auth085.md` —
+  full per-message reference for the SFTR MSR : business
+  meaning, scope (CCP-cleared only), structural differences
+  vs EMIR auth.109, complete envelope tree with XSD paths, 4
+  aggregate DQIs + 6 granular checks the layer drives,
+  v0.17 limitations.
+
+### Changed
+
+- **SFTR DQI count : 4 → 16** (28 → 40 indicators total
+  across both régimes).
+- **SFTR granular checks : 65 → 71** (216 → 222 total).
+- **`compute_sftr_dqi_pack` orchestrator** extended : new
+  `msr` input slot, 12 new computers dispatched, granular
+  pipeline runs `default_sftr_msr_checks()` when MSR is
+  provided. The v0.16 4 DQIs keep their numerator/
+  denominator/threshold contract unchanged.
+- **`SftrDqiInputs.reconciliation` and `.missing_collateral`
+  are now LIVE** (v0.16 documented them as
+  "reserved-for-v0.17 ; parsed-and-discarded"). The CLI/
+  Python `--reconciliation` / `--missing-collateral` /
+  `missing_collateral=` / `reconciliation=` flags now
+  actually feed the 4 reconciliation DQIs + the MCR DQI.
+- **Threshold defaults registry** : 14 → 22 entries (added
+  the 4 T3 + 4 reconciliation + 1 MCR + 3 SFTR-specific
+  DQIs). Tight thresholds for completeness/accuracy
+  (0.5%/2% to 5%/20%) ; looser 20%/50% for
+  `DQI_T3_EXCESS_COLLATERAL_USE_SFTR` (operational pattern,
+  not strict completeness defect).
+- **`docs/data-quality-pack.md`** SFTR section fully
+  rewritten : '4 SFTR indicators' → '16 SFTR indicators by
+  layer' table + 12 new 'Indicator details — SFTR'
+  subsections + corrected SFTR message-to-layer mapping
+  (replacing the v0.16 erroneous "T3 inline in auth.079"
+  narrative with the real 5-message map). Python API
+  example bumped to show all 5 inputs. 'What v0.16 does NOT
+  do' → 'v0.17' with honest carry-over (auth.091 EMIR
+  wiring still deferred, MSR pyarrow.Table dual-input
+  deferred to v0.18, Polars dtype caveat noted with test
+  reference).
+- **`docs/iso20022-sftr.md`** : header now lists all 5
+  SFTR messages with directions + commands + per-message
+  reference page links. Detailed auth.052 firm-submission
+  adapter section preserved below.
+- **`docs/sftr-checks.md`** : 65 → 71 checks header ; new
+  SFTR.T3.* section at end of catalog.
+- **`docs/auth-messages/sftr-auth080.md`** +
+  **`sftr-auth083.md`** : each gains a 'DQI consumption
+  (v0.17+)' section cross-referencing the new DQIs the
+  parsed records feed.
+- **`examples/sftr-data-quality-pack/`** kit : 2-layer →
+  5-layer (3 new fixture copies for reconciliation/MCR/MSR),
+  demo.sh updated, expected/ regenerated (16 rows), README
+  rewritten with 5-input table + 16-DQI-by-layer overview.
+- **Notebook Pattern 8** (examples/python/quickstart.ipynb) :
+  v0.16 4-indicator-only narrative → v0.17 16-indicator
+  5-layer ; code cell now passes all 5 paths and surfaces
+  the first few SFTR.T3.* granular checks from
+  result.issues. Notebook rebuilt + re-executed cleanly.
+
+### Removed
+
+Nothing. v0.17 is strictly additive ; every v0.16 DQI /
+granular check / Arrow schema / CLI flag / Python kwarg
+retained byte-identical behaviour.
+
+### v1.0 Arrow contracts — unchanged
+
+The `indicators` (11 cols), `evidence` (7 cols), and
+`issues` (11 cols) schemas are **frozen** since v0.15.0 /
+v0.12.0. v0.17's 12 new DQIs + 6 new granular checks add
+*rows*, never *columns*. Parity tests
+`test_data_quality_pack.py` (EMIR) and
+`test_sftr_data_quality_pack.py` (SFTR) + the new
+`test_sftr_issues_schema.py` (H7) lock the contract.
+
+### Honest scope limits (v0.18 carry-over)
+
+- **CLI/Python wiring of auth.091 for the 7 cross-CP EMIR
+  DQIs** — same v0.16 carry-over (computers ship but the
+  `--recon-stats` / `--reconciliation` flags are not yet on
+  `opendqi emir data-quality-pack` ; those 7 self-report
+  `not_applicable` until threaded). Not blocking v0.17.
+- **`pyarrow.Table` dual-input on SFTR side** — Arrow
+  converters for `SftrTrStateRecord` /
+  `SftrMarginStateRecord` / `ReconciliationRecord` /
+  `MissingCollateralRecord` are not yet implemented. SFTR
+  Python DQI pack stays **paths-only**.
+- **No Parquet schema for `SftrMarginStateRecord`** —
+  consistent with EMIR `MarginStateRecord` which has none
+  either (scope decision). MSR flows XML → in-memory slice
+  → DQI computers.
+- **No MSR lifecycle tracking** — v0.17 has no history
+  store for `auth.085` (would need cross-snapshot drift
+  detection ; deferred).
+- **Single-file `--msr`** — multi-file directory
+  aggregation not wired for the MSR layer (matches the rest
+  of `data-quality-pack`'s single-path-per-layer contract).
+- **Pre-existing tie-order test failure** — same
+  `stream_checks_into_equals_finalize_issues` carry-over
+  from v0.16 (1 unit test fails on synthetic tie-order
+  fixture ; multiset equality preserved so all goldens
+  byte-identical and DQI Pack parity tests pass). v0.18
+  follow-up.
+
+### Stats
+
+- **222 checks** (EMIR 151 + SFTR 71). Was 216 in v0.16
+  (EMIR 151 + SFTR 65).
+- **40 DQI indicators** (24 EMIR + 16 SFTR). Was 28 (24
+  EMIR + 4 SFTR) in v0.16.
+- **22 CLI goldens** (was 21 ; new
+  `sftr-data-quality-pack-full`).
+- **1014 workspace tests** (was 924 ; +90 new across the
+  v0.17 work).
+- **142 pytest** (was 96 ; +46 across the 9 SFTR pytest
+  files — 1 v0.16 + 8 v0.17).
+- **v1.0 Arrow contracts unchanged** (frozen since v0.15.0).
+- **ZERO Spark catalogue leak** (sanity grep clean on
+  every commit of the 22-commit branch).
+
 ## [0.16.0] - 2026-05-22
 
 **DQI expansion + SFTR pack v1 + TARGET2 business days** —
