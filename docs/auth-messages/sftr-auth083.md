@@ -146,3 +146,23 @@ nesting and cardinalities were used.
    xsd_conformance auth083_missing_collateral` — the
    `examples/sftr/conformance/auth083-valid.xml` instance validates
    against the real `auth.083` XSD and the parser round-trips it.
+
+## DQI consumption (v0.17+)
+
+The same parsed `MissingCollateralRecord` slice is consumed by
+`DQI_MCR_OPEN_REQUESTS_SFTR` (completeness, 5 % / 20 %) when you
+run `opendqi sftr data-quality-pack --missing-collateral
+<auth083.xml>`. Two modes :
+
+- **With `--tsr` companion** : numerator = MCR records whose UTI
+  is NOT in the SFTR TSR snapshot — meaningful "how many requests
+  are still unresolved" rate.
+- **Without `--tsr`** : numerator degenerates to **all** MCR
+  records (100 % red, degraded mode) ; the `description` field on
+  the indicator surfaces this honestly to downstream consumers.
+
+MCR records without a UTI are out of scope of the DQI denominator
+— the granular `SFTR.MCR.MISSING_UTI_ON_REQUEST` check covers
+them at row level. See
+[`../data-quality-pack.md`](../data-quality-pack.md) for full
+numerator/denominator detail.

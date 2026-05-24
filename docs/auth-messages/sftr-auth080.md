@@ -125,3 +125,23 @@ nesting and cardinalities were used.
 4. Optional strict check against a locally-held official XSD (not
    committed): `xmllint --noout --schema <local auth.080 xsd> <file>`
    (fixtures are schema-shaped subsets).
+
+## DQI consumption (v0.17+)
+
+The same parsed `ReconciliationRecord` slice is consumed by 4
+SFTR reconciliation DQIs when you run `opendqi sftr
+data-quality-pack --reconciliation <auth080.xml>` :
+
+| Indicator | Dimension | Defaults (amber/red) |
+|---|---|---|
+| `DQI_PAIRING_RATE_SFTR` | consistency | 5 % / 20 % |
+| `DQI_RECONCILIATION_RATE_SFTR` | consistency | 5 % / 20 % |
+| `DQI_UNPAIRED_TRADES_RATE_SFTR` | consistency | 5 % / 20 % |
+| `DQI_FIELD_MISMATCH_RATE_SFTR` | consistency | 5 % / 20 % |
+
+All 4 computers apply a defensive `regime == Regime::Sftr`
+filter on the input slice — so mixing EMIR `auth.091`
+ReconciliationRecord objects in the same slice (an upstream
+bug) doesn't leak EMIR counts into the SFTR rates. See
+[`../data-quality-pack.md`](../data-quality-pack.md) for full
+numerator/denominator detail.

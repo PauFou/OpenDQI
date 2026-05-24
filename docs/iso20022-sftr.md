@@ -1,8 +1,32 @@
-# ISO 20022 auth.052 (SFTR) support
+# ISO 20022 SFTR support — 5 supported messages
 
-OpenDQI reads SFTR (Securities Financing Transactions Regulation)
-reports in the official ISO 20022 format `auth.052.001.02`
-(`SecuritiesFinancingReportingTransactionReport`).
+OpenDQI parses 5 ISO 20022 messages for SFTR (Securities Financing
+Transactions Regulation) reporting. The adapter dispatches by root
+namespace ; firm-submission ingestion is auth.052, and the four
+TR-output reports (TSR / reconciliation / missing-collateral /
+MSR) each feed dedicated layers of the DQI pack.
+
+| Message | Official ESMA name | Direction | OpenDQI consumer |
+|---|---|---|---|
+| `auth.052.001.02` | `SecuritiesFinancingReportingTransactionReport` | Firm → TR | `opendqi sftr scan`, `--tar` on `data-quality-pack` |
+| `auth.079.001.02` | `SecuritiesFinancingReportingTransactionStateReport` | TR → firm / NCA | `opendqi sftr tr-state-scan`, `--tsr` on `data-quality-pack` |
+| `auth.080.001.02` | `SecuritiesFinancingReportingReconciliationStatusAdvice` | TR → firm | `opendqi sftr reconcile`, `--reconciliation` on `data-quality-pack` |
+| `auth.083.001.02` | `SecuritiesFinancingReportingMissingCollateralRequest` | TR → firm | `opendqi sftr missing-collateral`, `--missing-collateral` on `data-quality-pack` |
+| `auth.085.001.02` | `SecuritiesFinancingReportingMarginDataTransactionStateReport` | TR → firm / NCA | `--msr` on `data-quality-pack` (v0.17+) — portfolio-level, CCP-cleared only |
+
+Per-message reference pages with XSD path mapping, the canonical
+projected record, and the DQIs/checks each one powers :
+
+- [`auth-messages/sftr-auth079.md`](auth-messages/sftr-auth079.md) — TSR
+- [`auth-messages/sftr-auth080.md`](auth-messages/sftr-auth080.md) — reconciliation
+- [`auth-messages/sftr-auth083.md`](auth-messages/sftr-auth083.md) — missing-collateral
+- [`auth-messages/sftr-auth085.md`](auth-messages/sftr-auth085.md) — MSR (new in v0.17)
+
+The remainder of this page documents the **auth.052 firm-submission
+adapter** in detail — the canonical entry point for `opendqi sftr
+scan`. For the other 4 messages, follow the per-message page above.
+
+## auth.052 — firm-submission adapter
 
 ```bash
 opendqi sftr scan ./real-sftr-auth052.xml --out ./report/

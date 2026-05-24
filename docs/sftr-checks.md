@@ -1,25 +1,32 @@
 # SFTR data-quality checks
 
-OpenDQI ships **44 single-batch SFTR checks** (this document —
-including `SFTR.COMP.SECURITY_ID_MISSING`), plus **19 post-TR
-checks** (6 TSR + 5 TAR + 3 reconciliation + 5 missing-collateral),
-plus **2 `SFTR.PSC.*` pre-submission checks** (rejection-profile-driven;
-see [`pre-submission-checks.md`](pre-submission-checks.md)) — live
-total of **65 SFTR checks**, plus
-SFTR post-TR intelligence layers — `auth.080` reconciliation,
-`auth.083` missing-collateral, `auth.079` TSR, `auth.052` TAR,
-`auth.052 + auth.079` audit, and CSV-vs-TSR book-reconcile. (SFTR has
-**no** feedback message — the synthetic `SFTR.FBK.*` layer was removed
-in Milestone 0.4.) The
-single-batch catalog below covers
-`opendqi sftr scan`; see
+OpenDQI ships **71 SFTR checks** in v0.17 :
+- **44 single-batch SFTR checks** (this document — including
+  `SFTR.COMP.SECURITY_ID_MISSING`)
+- **19 post-TR checks** (6 TSR + 5 TAR + 3 reconciliation + 5
+  missing-collateral)
+- **2 `SFTR.PSC.*` pre-submission checks** (rejection-profile-driven ;
+  see [`pre-submission-checks.md`](pre-submission-checks.md))
+- **6 `SFTR.T3.*` MSR margin checks** (v0.17 ; auth.085
+  portfolio-level — see [`auth-messages/sftr-auth085.md`](auth-messages/sftr-auth085.md))
+
+…across the SFTR post-TR intelligence layers — `auth.080`
+reconciliation, `auth.083` missing-collateral, `auth.079` TSR,
+`auth.052` TAR, **`auth.085` MSR (v0.17)**, `auth.052 +
+auth.079` audit, and CSV-vs-TSR book-reconcile. (SFTR has
+**no** feedback message — the synthetic `SFTR.FBK.*` layer was
+removed in Milestone 0.4.) The single-batch catalog below covers
+`opendqi sftr scan` ; see
 [`tr-state-checks.md`](tr-state-checks.md),
 [`tr-activity-checks.md`](tr-activity-checks.md),
 [`tr-audit.md`](tr-audit.md),
 [`tr-feedback.md`](tr-feedback.md),
 [`tr-reconciliation.md`](tr-reconciliation.md),
 [`sftr-missing-collateral.md`](sftr-missing-collateral.md), and
-[`book-reconcile.md`](book-reconcile.md) for the post-TR layers.
+[`book-reconcile.md`](book-reconcile.md) for the existing post-TR
+layers, and
+[`auth-messages/sftr-auth085.md`](auth-messages/sftr-auth085.md)
+for the new MSR layer.
 
 The catalog mirrors the EMIR check coverage — same dimensions,
 similar logic, SFTR-specific field semantics (loan / collateral /
@@ -71,6 +78,30 @@ Severity scale: `info` < `warning` < `high` < `critical`.
 | `SFTR.CON.ETRM_REQUIRES_TERMINATION_DATE` | Consistency | High | ETRM action lacks a termination date |
 | `SFTR.CON.COLU_REQUIRES_PORTFOLIO` | Consistency | High | COLU action lacks a collateral portfolio code |
 | `SFTR.CON.REUU_REQUIRES_REUSE_INDICATOR` | Consistency | High | REUU action lacks the reuse indicator |
+
+## SFTR.T3.* — MSR margin checks (v0.17, auth.085)
+
+The 6 SFTR.T3.* checks run on `SftrMarginStateRecord` projected
+from `auth.085` (portfolio-level, CCP-cleared SFTs). Registered
+in `default_sftr_msr_checks()` ; dispatched by
+`compute_sftr_dqi_pack` when the `msr` input slot is populated
+(via CLI `--msr` or Python `msr=`). See
+[`auth-messages/sftr-auth085.md`](auth-messages/sftr-auth085.md)
+for full XSD-path documentation.
+
+| Check ID | Dimension | Severity | What it detects |
+|---|---|---|---|
+| `SFTR.T3.IM_POSTED_MISSING` | Completeness | High | Portfolio has variation-margin posted OR excess-collateral posted, but no initial-margin posted (partial posted-side reporting). |
+| `SFTR.T3.VM_POSTED_MISSING` | Completeness | High | Portfolio has IM posted OR XcssColl posted, but no VM posted. |
+| `SFTR.T3.IM_RECEIVED_MISSING` | Completeness | High | Symmetric on the received side. |
+| `SFTR.T3.VM_RECEIVED_MISSING` | Completeness | High | Symmetric on the received side. |
+| `SFTR.T3.MARGIN_NEGATIVE` | Accuracy | Critical | Any of the 6 amounts (IM/VM/XcssColl × posted/received) is strictly < 0 — structural reporting defect. |
+| `SFTR.T3.MARGIN_CURRENCY_MISSING` | Completeness | High | At least one amount reported but `margin_currency` is None (XSD violation upstream — every `Amt` element must carry `@Ccy`). |
+
+The 4 _MISSING checks fire only on **partial-side reporting** ;
+fully-empty sides are aggregated by the corresponding
+`DQI_T3_MARGIN_{POSTED,RECEIVED}_MISSING_SFTR` DQI rather than
+flagged per-record.
 
 ## XSD validation
 
