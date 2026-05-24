@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SFTR Margin Data Transaction State Report (auth.085) — synthetic
+  schema-shaped fixture, 5 Stat records exercising every reachable
+  T3 DQI / SFTR.T3.* granular check on the SftrMarginStateRecord
+  model (model.rs::SftrMarginStateRecord).
+
+  All values are synthetic. ESMA paths follow auth.085.001.02
+  =SecuritiesFinancingReportingMarginDataTransactionStateReportV02.
+
+  Record map:
+    PORTFOLIO-001 (REC-1)  full / clean — IM/VM/Xcss posted & received
+    PORTFOLIO-002 (REC-2)  posted-only  (RcvdMrgnOrColl block absent)
+    PORTFOLIO-003 (REC-3)  received-only (PstdMrgnOrColl block absent)
+    PORTFOLIO-004 (REC-4)  excess-collateral signature: large XcssColl posted
+    PORTFOLIO-005 (REC-5)  negative amount + natural-person other counterparty
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.085.001.02">
+  <SctiesFincgRptgMrgnDataTxStatRpt>
+    <TradData>
+
+      <Stat>
+        <TechRcrdId>REC-1</TechRcrdId>
+        <RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm>
+        <EvtDt>2026-05-12</EvtDt>
+        <CtrPty>
+          <RptgCtrPty><Id><LEI>RPTGCPARTY0000000001</LEI></Id></RptgCtrPty>
+          <OthrCtrPty><Id><Lgl><LEI>OTHRCPARTY0000000002</LEI></Lgl></Id></OthrCtrPty>
+        </CtrPty>
+        <CollPrtflId>PORTFOLIO-001</CollPrtflId>
+        <PstdMrgnOrColl>
+          <InitlMrgnPstd><Amt Ccy="EUR">1000000.00</Amt></InitlMrgnPstd>
+          <VartnMrgnPstd><Amt Ccy="EUR">50000.00</Amt></VartnMrgnPstd>
+          <XcssCollPstd><Amt Ccy="EUR">25000.00</Amt></XcssCollPstd>
+        </PstdMrgnOrColl>
+        <RcvdMrgnOrColl>
+          <InitlMrgnRcvd><Amt Ccy="EUR">980000.00</Amt></InitlMrgnRcvd>
+          <VartnMrgnRcvd><Amt Ccy="EUR">48000.00</Amt></VartnMrgnRcvd>
+          <XcssCollRcvd><Amt Ccy="EUR">20000.00</Amt></XcssCollRcvd>
+        </RcvdMrgnOrColl>
+        <CtrctMod><ActnTp>MARU</ActnTp></CtrctMod>
+      </Stat>
+
+      <Stat>
+        <TechRcrdId>REC-2</TechRcrdId>
+        <RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm>
+        <EvtDt>2026-05-12</EvtDt>
+        <CtrPty>
+          <RptgCtrPty><Id><LEI>RPTGCPARTY0000000001</LEI></Id></RptgCtrPty>
+          <OthrCtrPty><Id><Lgl><LEI>OTHRCPARTY0000000003</LEI></Lgl></Id></OthrCtrPty>
+        </CtrPty>
+        <CollPrtflId>PORTFOLIO-002</CollPrtflId>
+        <PstdMrgnOrColl>
+          <InitlMrgnPstd><Amt Ccy="USD">500000.00</Amt></InitlMrgnPstd>
+          <VartnMrgnPstd><Amt Ccy="USD">10000.00</Amt></VartnMrgnPstd>
+        </PstdMrgnOrColl>
+        <CtrctMod><ActnTp>NEWT</ActnTp></CtrctMod>
+      </Stat>
+
+      <Stat>
+        <TechRcrdId>REC-3</TechRcrdId>
+        <RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm>
+        <EvtDt>2026-05-12</EvtDt>
+        <CtrPty>
+          <RptgCtrPty><Id><LEI>RPTGCPARTY0000000001</LEI></Id></RptgCtrPty>
+          <OthrCtrPty><Id><Lgl><LEI>OTHRCPARTY0000000004</LEI></Lgl></Id></OthrCtrPty>
+        </CtrPty>
+        <CollPrtflId>PORTFOLIO-003</CollPrtflId>
+        <RcvdMrgnOrColl>
+          <InitlMrgnRcvd><Amt Ccy="GBP">300000.00</Amt></InitlMrgnRcvd>
+          <VartnMrgnRcvd><Amt Ccy="GBP">5000.00</Amt></VartnMrgnRcvd>
+        </RcvdMrgnOrColl>
+        <CtrctMod><ActnTp>MARU</ActnTp></CtrctMod>
+      </Stat>
+
+      <Stat>
+        <TechRcrdId>REC-4</TechRcrdId>
+        <RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm>
+        <EvtDt>2026-05-12</EvtDt>
+        <CtrPty>
+          <RptgCtrPty><Id><LEI>RPTGCPARTY0000000001</LEI></Id></RptgCtrPty>
+          <OthrCtrPty><Id><Lgl><LEI>OTHRCPARTY0000000005</LEI></Lgl></Id></OthrCtrPty>
+        </CtrPty>
+        <CollPrtflId>PORTFOLIO-004</CollPrtflId>
+        <PstdMrgnOrColl>
+          <InitlMrgnPstd><Amt Ccy="EUR">100000.00</Amt></InitlMrgnPstd>
+          <VartnMrgnPstd><Amt Ccy="EUR">2000.00</Amt></VartnMrgnPstd>
+          <XcssCollPstd><Amt Ccy="EUR">500000.00</Amt></XcssCollPstd>
+        </PstdMrgnOrColl>
+        <RcvdMrgnOrColl>
+          <InitlMrgnRcvd><Amt Ccy="EUR">98000.00</Amt></InitlMrgnRcvd>
+          <VartnMrgnRcvd><Amt Ccy="EUR">1800.00</Amt></VartnMrgnRcvd>
+        </RcvdMrgnOrColl>
+        <CtrctMod><ActnTp>MARU</ActnTp></CtrctMod>
+      </Stat>
+
+      <Stat>
+        <TechRcrdId>REC-5</TechRcrdId>
+        <RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm>
+        <EvtDt>2026-05-12</EvtDt>
+        <CtrPty>
+          <RptgCtrPty><Id><LEI>RPTGCPARTY0000000001</LEI></Id></RptgCtrPty>
+          <OthrCtrPty><Id><Ntrl><Id>NATURAL-PERSON-ID-42</Id></Ntrl></Id></OthrCtrPty>
+        </CtrPty>
+        <CollPrtflId>PORTFOLIO-005</CollPrtflId>
+        <PstdMrgnOrColl>
+          <InitlMrgnPstd><Amt Ccy="EUR">-50.00</Amt></InitlMrgnPstd>
+          <VartnMrgnPstd><Amt Ccy="EUR">1000.00</Amt></VartnMrgnPstd>
+        </PstdMrgnOrColl>
+        <CtrctMod><ActnTp>NEWT</ActnTp></CtrctMod>
+      </Stat>
+
+    </TradData>
+  </SctiesFincgRptgMrgnDataTxStatRpt>
+</Document>
