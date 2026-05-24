@@ -1,6 +1,8 @@
 indicator_id,regime,dimension,table_scope,numerator,denominator,rate,threshold_amber,threshold_red,status,description
 DQI_COLLATERAL_VALUE_MISSING_SFTR,sftr,completeness,SFTR-TSR,0,10,0.000000,0.050000,0.200000,green,"Outstanding collateralised SFTR records (collateral_portfolio_code OR collateral_isin set) with no collateral_value reported (or zero, treated as not reported)."
 DQI_FIELD_MISMATCH_RATE_SFTR,sftr,completeness,n/a,0,0,,,,not_applicable,SFTR reconciliation (auth.080) not provided
+DQI_HAIRCUT_ANOMALY_SFTR,sftr,accuracy,SFTR-TSR,2,4,0.500000,0.005000,0.020000,red,"Share of SFTR TSR records with haircut outside the regulatory range [0.0, 1.0] (ESMA RTS 2019/356 Art. 4). Counts only records with haircut populated. Rolls up the granular SFTR.COMP.HAIRCUT_OUT_OF_RANGE per-record check."
+DQI_LEI_MISSING_SFTR,sftr,completeness,SFTR-TSR,12,13,0.923077,0.010000,0.050000,red,Share of SFTR TSR records with at least one counterparty LEI missing (reporting_counterparty OR other_counterparty None/empty). SFTR mirror of DQI_LEI_MISSING.
 DQI_LOAN_VALUE_MISSING_SFTR,sftr,completeness,SFTR-TSR,1,13,0.076923,0.050000,0.200000,amber,"Outstanding SFTR TSR records with no loan_value reported (or zero, treated as not reported). SFTR mirror of DQI_VAL_MISSING."
 DQI_LOAN_VALUE_STALE_SFTR,sftr,timeliness,SFTR-TSR,13,13,1.000000,0.050000,0.200000,red,SFTR TSR records whose state_as_of is older than the configured threshold (TARGET2 business days). Reuses the EMIR TimelinessThresholds.max_valuation_age_business_days config.
 DQI_MCR_OPEN_REQUESTS_SFTR,sftr,completeness,n/a,0,0,,,,not_applicable,SFTR missing-collateral (auth.083) not provided
@@ -11,4 +13,5 @@ DQI_T3_MARGIN_POSTED_MISSING_SFTR,sftr,completeness,n/a,0,0,,,,not_applicable,SF
 DQI_T3_MARGIN_RECEIVED_MISSING_SFTR,sftr,completeness,n/a,0,0,,,,not_applicable,SFTR MSR (auth.085) not provided
 DQI_T3_MARGIN_STALE_SFTR,sftr,completeness,n/a,0,0,,,,not_applicable,SFTR MSR (auth.085) not provided
 DQI_TIM_REPORTING_LATE_SFTR,sftr,timeliness,SFTR-TAR,0,14,0.000000,0.050000,0.200000,green,SFTR TAR records whose reporting_timestamp lags execution_timestamp by more than the configured max_reporting_delay_hours.
+DQI_UNDER_COLLATERALIZATION_SFTR,sftr,accuracy,SFTR-TSR,4,4,1.000000,0.005000,0.020000,red,Share of SFTR TSR records where collateral_value × (1 − haircut) is strictly less than loan_value. Counts only records with all 3 inputs populated. Flags either mis-reporting (DQ defect) or genuine under-collateralisation (credit-risk signal).
 DQI_UNPAIRED_TRADES_RATE_SFTR,sftr,completeness,n/a,0,0,,,,not_applicable,SFTR reconciliation (auth.080) not provided

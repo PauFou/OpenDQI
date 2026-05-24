@@ -33,12 +33,13 @@ use chrono::{DateTime, NaiveDate, Utc};
 use crate::dq::aggregate::IssueAggregator;
 use crate::dq::dqi::compute::{
     compute_dqi_collateral_value_missing_sftr, compute_dqi_field_mismatch_rate_sftr,
+    compute_dqi_haircut_anomaly_sftr, compute_dqi_lei_missing_sftr,
     compute_dqi_loan_value_missing_sftr, compute_dqi_loan_value_stale_sftr,
     compute_dqi_mcr_open_requests_sftr, compute_dqi_pairing_rate_sftr,
     compute_dqi_reconciliation_rate_sftr, compute_dqi_t3_excess_collateral_use_sftr,
     compute_dqi_t3_margin_posted_missing_sftr, compute_dqi_t3_margin_received_missing_sftr,
     compute_dqi_t3_margin_stale_sftr, compute_dqi_tim_reporting_late_sftr,
-    compute_dqi_unpaired_trades_rate_sftr,
+    compute_dqi_under_collateralization_sftr, compute_dqi_unpaired_trades_rate_sftr,
 };
 use crate::dq::dqi::{DqiEvidence, DqiIndicator, DqiPackResult, DqiStatus, MappingPresence};
 use crate::dq::{
@@ -117,8 +118,10 @@ pub fn compute_sftr_dqi_pack(
         evidence.append(&mut ev);
     };
 
-    // TSR-only indicators (3): LOAN_VALUE_MISSING_SFTR,
-    // LOAN_VALUE_STALE_SFTR, COLLATERAL_VALUE_MISSING_SFTR.
+    // TSR-only indicators (3 v0.16 T2 + 3 v0.17 E1 SFTR-specific):
+    // LOAN_VALUE_MISSING_SFTR, LOAN_VALUE_STALE_SFTR,
+    // COLLATERAL_VALUE_MISSING_SFTR, HAIRCUT_ANOMALY_SFTR,
+    // LEI_MISSING_SFTR, UNDER_COLLATERALIZATION_SFTR.
     if let Some(tsr) = inputs.tsr {
         let (ind, ev) = compute_dqi_loan_value_missing_sftr(tsr, thresholds, mapping_presence);
         push(ind, ev);
@@ -126,6 +129,12 @@ pub fn compute_sftr_dqi_pack(
         push(ind, ev);
         let (ind, ev) =
             compute_dqi_collateral_value_missing_sftr(tsr, thresholds, mapping_presence);
+        push(ind, ev);
+        let (ind, ev) = compute_dqi_haircut_anomaly_sftr(tsr, thresholds, mapping_presence);
+        push(ind, ev);
+        let (ind, ev) = compute_dqi_lei_missing_sftr(tsr, thresholds, mapping_presence);
+        push(ind, ev);
+        let (ind, ev) = compute_dqi_under_collateralization_sftr(tsr, thresholds, mapping_presence);
         push(ind, ev);
     } else {
         push(
@@ -138,6 +147,18 @@ pub fn compute_sftr_dqi_pack(
         );
         push(
             not_applicable("DQI_COLLATERAL_VALUE_MISSING_SFTR", "SFTR TSR not provided"),
+            Vec::new(),
+        );
+        push(
+            not_applicable("DQI_HAIRCUT_ANOMALY_SFTR", "SFTR TSR not provided"),
+            Vec::new(),
+        );
+        push(
+            not_applicable("DQI_LEI_MISSING_SFTR", "SFTR TSR not provided"),
+            Vec::new(),
+        );
+        push(
+            not_applicable("DQI_UNDER_COLLATERALIZATION_SFTR", "SFTR TSR not provided"),
             Vec::new(),
         );
     }
@@ -453,6 +474,8 @@ mod tests {
             vec![
                 "DQI_COLLATERAL_VALUE_MISSING_SFTR",
                 "DQI_FIELD_MISMATCH_RATE_SFTR",
+                "DQI_HAIRCUT_ANOMALY_SFTR",
+                "DQI_LEI_MISSING_SFTR",
                 "DQI_LOAN_VALUE_MISSING_SFTR",
                 "DQI_LOAN_VALUE_STALE_SFTR",
                 "DQI_MCR_OPEN_REQUESTS_SFTR",
@@ -463,6 +486,7 @@ mod tests {
                 "DQI_T3_MARGIN_RECEIVED_MISSING_SFTR",
                 "DQI_T3_MARGIN_STALE_SFTR",
                 "DQI_TIM_REPORTING_LATE_SFTR",
+                "DQI_UNDER_COLLATERALIZATION_SFTR",
                 "DQI_UNPAIRED_TRADES_RATE_SFTR",
             ]
         );

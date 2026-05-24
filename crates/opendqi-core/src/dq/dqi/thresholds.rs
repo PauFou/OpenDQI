@@ -224,6 +224,34 @@ pub fn default_dqi_thresholds() -> BTreeMap<String, DqiThresholdPair> {
             red: 0.20,
         },
     );
+    // v0.17 E1 — 3 SFTR-specific TSR DQIs. HAIRCUT_ANOMALY
+    // is tight because [0, 1] is a hard regulatory bound per
+    // RTS 2019/356 Art. 4 — any out-of-range value is a
+    // structural defect. LEI_MISSING is mirror of EMIR
+    // DQI_LEI_MISSING tolerance. UNDER_COLLATERALIZATION is
+    // tighter still (0.5% / 2%) since it surfaces direct
+    // credit-risk anomalies on top of DQ defects.
+    m.insert(
+        "DQI_HAIRCUT_ANOMALY_SFTR".into(),
+        DqiThresholdPair {
+            amber: 0.005,
+            red: 0.02,
+        },
+    );
+    m.insert(
+        "DQI_LEI_MISSING_SFTR".into(),
+        DqiThresholdPair {
+            amber: 0.01,
+            red: 0.05,
+        },
+    );
+    m.insert(
+        "DQI_UNDER_COLLATERALIZATION_SFTR".into(),
+        DqiThresholdPair {
+            amber: 0.005,
+            red: 0.02,
+        },
+    );
     m
 }
 
@@ -339,13 +367,17 @@ mod tests {
             "DQI_FIELD_MISMATCH_RATE_SFTR",
             // v0.17 D1 — 1 SFTR auth.083 MCR rollup indicator
             "DQI_MCR_OPEN_REQUESTS_SFTR",
+            // v0.17 E1 — 3 SFTR-specific TSR indicators
+            "DQI_HAIRCUT_ANOMALY_SFTR",
+            "DQI_LEI_MISSING_SFTR",
+            "DQI_UNDER_COLLATERALIZATION_SFTR",
         ] {
             assert!(m.contains_key(id), "missing default threshold for {id}");
         }
         assert_eq!(
             m.len(),
-            19,
-            "v0.17 D1: 10 v0.15 + 4 T3 + 4 SFTR-recon + 1 SFTR-MCR = 19 baked-in defaults"
+            22,
+            "v0.17 E1: 10 v0.15 + 4 T3 + 4 SFTR-recon + 1 SFTR-MCR + 3 SFTR-specific = 22"
         );
     }
 
