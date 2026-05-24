@@ -212,6 +212,18 @@ pub fn default_dqi_thresholds() -> BTreeMap<String, DqiThresholdPair> {
             red: 0.20,
         },
     );
+    // v0.17 D1 — auth.083 MCR open-requests rollup. Tighter
+    // amber/red than reconciliation rates : an open MCR
+    // request not visible in TSR is a direct operational
+    // failure (counterparty asked for collateral, we have no
+    // record of it being posted in the TSR snapshot).
+    m.insert(
+        "DQI_MCR_OPEN_REQUESTS_SFTR".into(),
+        DqiThresholdPair {
+            amber: 0.05,
+            red: 0.20,
+        },
+    );
     m
 }
 
@@ -325,13 +337,15 @@ mod tests {
             "DQI_RECONCILIATION_RATE_SFTR",
             "DQI_UNPAIRED_TRADES_RATE_SFTR",
             "DQI_FIELD_MISMATCH_RATE_SFTR",
+            // v0.17 D1 — 1 SFTR auth.083 MCR rollup indicator
+            "DQI_MCR_OPEN_REQUESTS_SFTR",
         ] {
             assert!(m.contains_key(id), "missing default threshold for {id}");
         }
         assert_eq!(
             m.len(),
-            18,
-            "v0.17 C1: 10 v0.15 + 4 T3 + 4 SFTR-recon = 18 baked-in defaults"
+            19,
+            "v0.17 D1: 10 v0.15 + 4 T3 + 4 SFTR-recon + 1 SFTR-MCR = 19 baked-in defaults"
         );
     }
 

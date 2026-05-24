@@ -34,10 +34,11 @@ use crate::dq::aggregate::IssueAggregator;
 use crate::dq::dqi::compute::{
     compute_dqi_collateral_value_missing_sftr, compute_dqi_field_mismatch_rate_sftr,
     compute_dqi_loan_value_missing_sftr, compute_dqi_loan_value_stale_sftr,
-    compute_dqi_pairing_rate_sftr, compute_dqi_reconciliation_rate_sftr,
-    compute_dqi_t3_excess_collateral_use_sftr, compute_dqi_t3_margin_posted_missing_sftr,
-    compute_dqi_t3_margin_received_missing_sftr, compute_dqi_t3_margin_stale_sftr,
-    compute_dqi_tim_reporting_late_sftr, compute_dqi_unpaired_trades_rate_sftr,
+    compute_dqi_mcr_open_requests_sftr, compute_dqi_pairing_rate_sftr,
+    compute_dqi_reconciliation_rate_sftr, compute_dqi_t3_excess_collateral_use_sftr,
+    compute_dqi_t3_margin_posted_missing_sftr, compute_dqi_t3_margin_received_missing_sftr,
+    compute_dqi_t3_margin_stale_sftr, compute_dqi_tim_reporting_late_sftr,
+    compute_dqi_unpaired_trades_rate_sftr,
 };
 use crate::dq::dqi::{DqiEvidence, DqiIndicator, DqiPackResult, DqiStatus, MappingPresence};
 use crate::dq::{
@@ -193,6 +194,25 @@ pub fn compute_sftr_dqi_pack(
             not_applicable(
                 "DQI_FIELD_MISMATCH_RATE_SFTR",
                 "SFTR reconciliation (auth.080) not provided",
+            ),
+            Vec::new(),
+        );
+    }
+
+    // Missing-collateral rollup (1, v0.17 D1) sourced from
+    // auth.083 → MissingCollateralRecord. The computer takes
+    // the MCR slice plus the optional TSR slice (cross-ref by
+    // UTI) ; when TSR is absent the rate degenerates to 100 %
+    // open (degraded mode flagged in description).
+    if let Some(mcr) = inputs.missing_collateral {
+        let (ind, ev) =
+            compute_dqi_mcr_open_requests_sftr(mcr, inputs.tsr, thresholds, mapping_presence);
+        push(ind, ev);
+    } else {
+        push(
+            not_applicable(
+                "DQI_MCR_OPEN_REQUESTS_SFTR",
+                "SFTR missing-collateral (auth.083) not provided",
             ),
             Vec::new(),
         );
@@ -435,6 +455,7 @@ mod tests {
                 "DQI_FIELD_MISMATCH_RATE_SFTR",
                 "DQI_LOAN_VALUE_MISSING_SFTR",
                 "DQI_LOAN_VALUE_STALE_SFTR",
+                "DQI_MCR_OPEN_REQUESTS_SFTR",
                 "DQI_PAIRING_RATE_SFTR",
                 "DQI_RECONCILIATION_RATE_SFTR",
                 "DQI_T3_EXCESS_COLLATERAL_USE_SFTR",
