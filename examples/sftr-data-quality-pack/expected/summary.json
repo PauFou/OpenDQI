@@ -1,22 +1,22 @@
 {
   "regime": "sftr",
-  "files_processed": 2,
-  "records_processed": 27,
-  "issues_total": 82,
+  "files_processed": 3,
+  "records_processed": 32,
+  "issues_total": 83,
   "issues_by_severity": {
     "info": 13,
     "warning": 26,
     "high": 36,
-    "critical": 7
+    "critical": 8
   },
   "issues_by_dimension": {
     "completeness": 29,
     "uniqueness": 7,
     "validity": 7,
-    "accuracy": 19,
+    "accuracy": 20,
     "consistency": 20
   },
-  "quality_score": 77.05556,
+  "quality_score": 79.859375,
   "started_at": "1970-01-01T00:00:00Z",
   "finished_at": "1970-01-01T00:00:00Z"
 }

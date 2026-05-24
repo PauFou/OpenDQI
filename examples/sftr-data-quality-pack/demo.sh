@@ -1,19 +1,29 @@
 #!/usr/bin/env bash
 #
-# OpenDQI v0.16.0 — sftr-data-quality-pack reproducible demo.
+# OpenDQI v0.17.0 — sftr-data-quality-pack reproducible demo.
 #
-# Runs the SFTR Data Quality Pack against the 2 synthetic
-# ISO 20022 inputs in this directory (auth.079 TSR +
-# auth.052 TAR) and writes the 5 artefacts under ./out/.
+# Runs the SFTR Data Quality Pack against the 5 synthetic
+# ISO 20022 inputs in this directory and writes the 5
+# artefacts under ./out/.
 #
-# v0.16 ships 4 SFTR indicators on the T2 layer of
-# auth.079 + auth.052. T3 margin + auth.080 reconciliation +
-# auth.083 missing-collateral are scheduled for v0.17 and
-# would expand this output once those computers ship.
+# v0.17 ships 16 SFTR indicators across the 5 input layers :
 #
-# `--as-of 2026-05-21` is pinned so the stale-loan-value
-# cutoff is stable across runs and the diff vs ./expected/
-# stays meaningful.
+#   auth.079 (TSR)                6 DQIs (loan/collateral
+#                                 missing/stale + 3 SFTR-specific:
+#                                 HAIRCUT_ANOMALY, LEI_MISSING,
+#                                 UNDER_COLLATERALIZATION)
+#   auth.052 (TAR)                1 DQI  (TIM_REPORTING_LATE)
+#   auth.080 (reconciliation)     4 DQIs (PAIRING_RATE,
+#                                 RECONCILIATION_RATE,
+#                                 UNPAIRED_TRADES_RATE,
+#                                 FIELD_MISMATCH_RATE)
+#   auth.083 (missing-collateral) 1 DQI  (MCR_OPEN_REQUESTS)
+#   auth.085 (MSR T3 margin)      4 DQIs (T3_MARGIN_*) + 6
+#                                 granular SFTR.T3.* checks
+#
+# `--as-of 2026-05-21` is pinned so the stale-loan-value /
+# stale-margin cutoffs are stable across runs and the diff
+# vs ./expected/ stays meaningful.
 #
 # Re-run after upstream Rust changes:
 #   diff out/indicators.csv expected/indicators.csv
@@ -31,13 +41,16 @@ fi
 
 rm -rf out/
 ../../target/debug/opendqi sftr data-quality-pack \
-  --tsr tsr.xml \
-  --tar tar.xml \
+  --tsr                  tsr.xml \
+  --tar                  tar.xml \
+  --reconciliation       reconciliation.xml \
+  --missing-collateral   missing_collateral.xml \
+  --msr                  msr.xml \
   --as-of 2026-05-21 \
   --out out/
 
 echo
-echo "=== indicators.csv (4 rows) ==="
+echo "=== indicators.csv (16 rows) ==="
 cat out/indicators.csv
 echo
 echo "Full outputs under $(pwd)/out/  (5 files)"
