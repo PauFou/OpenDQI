@@ -29,8 +29,9 @@ use opendqi_report::{
     write_report_html, write_report_html_with_dqi, write_summary_json, TopIssues,
 };
 use opendqi_xml::{
-    check_wellformedness, read_sftr_missing_collateral_xml, read_sftr_reconciliation_xml,
-    read_sftr_tr_state_xml, read_sftr_xml, ExternalXmllintValidator, XsdValidator, XsdViolation,
+    check_wellformedness, read_sftr_margin_state_xml, read_sftr_missing_collateral_xml,
+    read_sftr_reconciliation_xml, read_sftr_tr_state_xml, read_sftr_xml, ExternalXmllintValidator,
+    XsdValidator, XsdViolation,
 };
 use tracing::{info, warn};
 
@@ -241,26 +242,41 @@ pub enum SftrAction {
     /// See `docs/data-quality-pack.md`.
     ///
     /// All input flags are optional ; at least one is required.
-    /// `--reconciliation` (auth.080) and `--missing-collateral`
-    /// (auth.083) are RESERVED slots for v0.17 indicators that
-    /// do not yet exist — they are silently ignored in v0.16.
+    ///
+    /// v0.17 ships **16 SFTR DQIs** total spanning 5 input
+    /// layers — TSR (auth.079), TAR (auth.052), reconciliation
+    /// (auth.080), missing-collateral (auth.083) and MSR
+    /// (auth.085). Indicators whose source layer isn't
+    /// provided self-report `not_applicable`.
     DataQualityPack {
-        /// Path to the SFTR TSR `auth.079` XML file.
+        /// Path to the SFTR TSR `auth.079` XML file. Powers 6
+        /// TSR-layer DQIs (loan/collateral missing/stale,
+        /// haircut anomaly, LEI missing, under-collateralization).
         #[arg(long)]
         tsr: Option<PathBuf>,
         /// Path to the SFTR TAR `auth.052` XML file (or directory).
+        /// Powers DQI_TIM_REPORTING_LATE_SFTR.
         #[arg(long)]
         tar: Option<PathBuf>,
-        /// Reserved for v0.17 indicators — path to the
-        /// `auth.080` reconciliation status advice. Parsed but
-        /// not yet consumed by any v0.16 indicator.
+        /// Path to the `auth.080` SFTR Reconciliation Status
+        /// Advice. Powers 4 reconciliation DQIs (PAIRING_RATE,
+        /// RECONCILIATION_RATE, UNPAIRED_TRADES_RATE,
+        /// FIELD_MISMATCH_RATE).
         #[arg(long)]
         reconciliation: Option<PathBuf>,
-        /// Reserved for v0.17 indicators — path to the
-        /// `auth.083` missing-collateral request. Parsed but
-        /// not yet consumed by any v0.16 indicator.
+        /// Path to the `auth.083` SFTR Missing-Collateral
+        /// request. Powers DQI_MCR_OPEN_REQUESTS_SFTR (best
+        /// paired with --tsr for portfolio cross-ref).
         #[arg(long)]
         missing_collateral: Option<PathBuf>,
+        /// Path to the `auth.085` SFTR Margin Data Transaction
+        /// State Report (MSR). Powers 4 T3 margin DQIs
+        /// (MARGIN_POSTED/RECEIVED_MISSING, EXCESS_COLL_USE,
+        /// MARGIN_STALE) AND 6 granular SFTR.T3.* per-record
+        /// checks. CCP-cleared SFT portfolios only per the
+        /// ESMA scope.
+        #[arg(long)]
+        msr: Option<PathBuf>,
         /// Optional YAML thresholds configuration (overrides
         /// the shipped DQI defaults via the `dqi:` block).
         #[arg(long)]
@@ -395,6 +411,7 @@ pub fn run(action: SftrAction) -> Result<ExitCode> {
             tar,
             reconciliation,
             missing_collateral,
+            msr,
             config,
             as_of,
             out,
@@ -405,6 +422,7 @@ pub fn run(action: SftrAction) -> Result<ExitCode> {
                 tar.as_deref(),
                 reconciliation.as_deref(),
                 missing_collateral.as_deref(),
+                msr.as_deref(),
                 config.as_deref(),
                 as_of.as_deref(),
                 &out,
@@ -1795,6 +1813,7 @@ fn run_data_quality_pack(
     tar_path: Option<&Path>,
     reconciliation_path: Option<&Path>,
     missing_collateral_path: Option<&Path>,
+    msr_path: Option<&Path>,
     config_path: Option<&Path>,
     as_of_str: Option<&str>,
     out: &Path,
@@ -1804,10 +1823,11 @@ fn run_data_quality_pack(
         && tar_path.is_none()
         && reconciliation_path.is_none()
         && missing_collateral_path.is_none()
+        && msr_path.is_none()
     {
         return Err(anyhow!(
             "sftr data-quality-pack: at least one of --tsr / --tar / \
-             --reconciliation / --missing-collateral is required"
+             --reconciliation / --missing-collateral / --msr is required"
         ));
     }
 
@@ -1852,16 +1872,16 @@ fn run_data_quality_pack(
         }
         info!(records = tar_records.len(), "loaded SFTR TAR");
     }
-    // reconciliation + missing_collateral are reserved for v0.17
-    // indicators ; parsed for input-validation but the v0.16
-    // computers don't read them.
+    // v0.17 C1+D1: reconciliation + missing_collateral are now
+    // consumed by the 4 reconciliation DQIs and the MCR rollup
+    // DQI respectively.
     let reconciliation_records = match reconciliation_path {
         Some(p) => {
             let outcome = read_sftr_reconciliation_xml(p)
                 .with_context(|| format!("reading SFTR reconciliation {}", p.display()))?;
             info!(
                 records = outcome.records.len(),
-                "loaded SFTR reconciliation (reserved for v0.17 indicators)"
+                "loaded SFTR reconciliation"
             );
             outcome.records
         }
@@ -1873,7 +1893,22 @@ fn run_data_quality_pack(
                 .with_context(|| format!("reading SFTR missing-collateral {}", p.display()))?;
             info!(
                 records = outcome.records.len(),
-                "loaded SFTR missing-collateral (reserved for v0.17 indicators)"
+                "loaded SFTR missing-collateral"
+            );
+            outcome.records
+        }
+        None => Vec::new(),
+    };
+    // v0.17 A4 + B1' + F1': SFTR MSR (auth.085) parsed, then
+    // consumed by the 4 T3 margin DQIs (B1') and 6 SFTR.T3.*
+    // granular checks (F1').
+    let msr_records = match msr_path {
+        Some(p) => {
+            let outcome = read_sftr_margin_state_xml(p)
+                .with_context(|| format!("reading SFTR MSR {}", p.display()))?;
+            info!(
+                records = outcome.records.len(),
+                "loaded SFTR MSR (auth.085)"
             );
             outcome.records
         }
@@ -1881,10 +1916,11 @@ fn run_data_quality_pack(
     };
 
     let inputs = SftrDqiInputs {
-        // v0.17 A4: `msr` slot exists but B1' wires the 4 T3
-        // DQIs that consume it ; until then it stays `None`
-        // here. CLI `--msr` flag arrives in G1'.
-        msr: None,
+        msr: if msr_path.is_some() {
+            Some(&msr_records)
+        } else {
+            None
+        },
         tsr: if tsr_path.is_some() {
             Some(&tsr_records)
         } else {
@@ -1916,6 +1952,7 @@ fn run_data_quality_pack(
         ("SFTR-TAR", tar_path),
         ("SFTR-Recon", reconciliation_path),
         ("SFTR-MCR", missing_collateral_path),
+        ("SFTR-MSR", msr_path),
     ] {
         if let Some(path) = p {
             sources.push(format!("{lbl}: {}", path.display()));

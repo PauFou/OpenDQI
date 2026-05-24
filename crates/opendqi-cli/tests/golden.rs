@@ -574,6 +574,74 @@ fn sftr_data_quality_pack() {
     let _ = std::fs::remove_dir_all(&out);
 }
 
+// v0.17 G1': 5-layer variant of the SFTR DQI pack golden that
+// exercises EVERY indicator path (TSR + TAR + auth.080
+// reconciliation + auth.083 missing-collateral + auth.085 MSR).
+// Snapshots all four artefacts. The MSR layer triggers the new
+// SFTR.T3.* granular checks from F1' so the issues stream is
+// observably distinct from the 2-layer golden.
+#[test]
+fn sftr_data_quality_pack_full() {
+    let bin = env!("CARGO_BIN_EXE_opendqi");
+    let out = unique_dir("sftr-data-quality-pack-full-out");
+    let ws = ws_root().to_string_lossy().into_owned();
+    let tmp = std::env::temp_dir()
+        .canonicalize()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+
+    let args: Vec<String> = a(&[
+        "sftr",
+        "data-quality-pack",
+        "--tsr",
+        &ex("examples/sftr/tr_state/auth079-sample.xml"),
+        "--tar",
+        &ex("examples/sftr/tr_activity/auth052-tar-sample.xml"),
+        "--reconciliation",
+        &ex("examples/sftr/reconciliation/auth080-sample.xml"),
+        "--missing-collateral",
+        &ex("examples/sftr/missing_collateral/auth083-sample.xml"),
+        "--msr",
+        &ex("examples/sftr/margin_state/auth085-sample.xml"),
+        "--as-of",
+        "2026-05-21",
+    ])
+    .into_iter()
+    .chain(["--out".to_string(), out.to_string_lossy().into_owned()])
+    .collect();
+
+    let output = Command::new(bin)
+        .args(&args)
+        .output()
+        .expect("spawn opendqi");
+
+    assert!(
+        out.join("summary.json").exists(),
+        "no summary.json produced.\nargs: {args:?}\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    for (rel, ext, is_summary) in [
+        ("summary.json", "summary.json", true),
+        ("issues.csv", "issues.csv", false),
+        ("indicators.csv", "indicators.csv", false),
+        ("evidence.csv", "evidence.csv", false),
+    ] {
+        let path = out.join(rel);
+        assert!(path.exists(), "missing {rel} in SFTR DQI pack full output");
+        let txt = std::fs::read_to_string(&path).unwrap();
+        check_or_update(
+            "sftr-data-quality-pack-full",
+            ext,
+            &normalize(&txt, &ws, &tmp, is_summary),
+        );
+    }
+
+    let _ = std::fs::remove_dir_all(&out);
+}
+
 #[test]
 fn sftr_reconcile() {
     let store = unique_dir("sftr-reconcile-store").join("h.db");
