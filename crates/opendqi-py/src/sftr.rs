@@ -410,58 +410,70 @@ pub fn book_reconcile<'py>(
 // =================================================================
 
 /// `opendqi.sftr.data_quality_pack(*, tsr=None, tar=None,
-/// reconciliation=None, missing_collateral=None, as_of=None) ->
-/// PyDqiPackResult`.
+/// reconciliation=None, missing_collateral=None, msr=None,
+/// as_of=None) -> PyDqiPackResult`.
 ///
-/// SFTR Data Quality Pack (v0.16.0): aggregates the SFTR TR layers
-/// into 4 regulator-style indicators (numerator / denominator /
-/// rate / threshold / status) + ≤ 20 evidence rows per indicator,
-/// AND co-produces the granular issue stream from the existing
-/// SFTR check registries. All inputs are optional ; at least one
-/// must be provided.
+/// SFTR Data Quality Pack (v0.17): aggregates the 5 SFTR TR
+/// layers into 16 regulator-style indicators (numerator /
+/// denominator / rate / threshold / status) + ≤ 20 evidence
+/// rows per indicator, AND co-produces the granular issue
+/// stream from the existing SFTR check registries plus the
+/// new SFTR.T3.* registry (F1'). All inputs are optional ; at
+/// least one must be provided.
 ///
-/// **v0.16 indicators** (T2 layer of `auth.079` + `auth.052`):
-/// - `DQI_COLLATERAL_VALUE_MISSING_SFTR`
-/// - `DQI_LOAN_VALUE_MISSING_SFTR`
-/// - `DQI_LOAN_VALUE_STALE_SFTR` (TARGET2 business days)
-/// - `DQI_TIM_REPORTING_LATE_SFTR`
+/// **v0.17 indicators by source layer:**
+/// - TSR (`auth.079`) — 6 DQIs: LOAN_VALUE_MISSING/STALE,
+///   COLLATERAL_VALUE_MISSING, HAIRCUT_ANOMALY, LEI_MISSING,
+///   UNDER_COLLATERALIZATION (all _SFTR)
+/// - TAR (`auth.052`) — 1 DQI: TIM_REPORTING_LATE_SFTR
+/// - reconciliation (`auth.080`) — 4 DQIs: PAIRING_RATE,
+///   RECONCILIATION_RATE, UNPAIRED_TRADES_RATE,
+///   FIELD_MISMATCH_RATE (all _SFTR)
+/// - missing_collateral (`auth.083`) — 1 DQI:
+///   MCR_OPEN_REQUESTS_SFTR (best paired with tsr= for the
+///   portfolio cross-ref; otherwise degraded mode)
+/// - MSR (`auth.085`) — 4 T3 DQIs: T3_MARGIN_POSTED_MISSING,
+///   T3_MARGIN_RECEIVED_MISSING, T3_EXCESS_COLLATERAL_USE,
+///   T3_MARGIN_STALE (all _SFTR). MSR also triggers the 6
+///   SFTR.T3.* per-record granular checks.
 ///
-/// **Inputs (v0.16): paths-only.** `tsr` / `tar` / `reconciliation`
-/// / `missing_collateral` all accept a `str` file path (XML)
-/// only. The dual-input pyarrow.Table path is on the EMIR side
-/// for v0.16 ; SFTR-side Arrow converters for `TrStateRecord` /
-/// reconciliation / missing-collateral are scheduled for v0.17.
-/// The TAR-side `batch_to_sftr_records` converter exists today
-/// but for symmetry the SFTR DQI pack stays paths-only in v0.16.
-///
-/// `reconciliation` (`auth.080`) and `missing_collateral`
-/// (`auth.083`) are accepted as input slots but **no v0.16
-/// computer reads them** — they are reserved for v0.17
-/// indicators (`DQI_REC_STATUS_*_SFTR`, `DQI_MCR_*`). Providing
-/// them today is parsed-and-discarded.
+/// **Inputs (v0.17): paths-only.** All five accept a `str`
+/// file path (XML) only. Dual-input pyarrow.Table path on
+/// the SFTR side is scheduled for v0.18 (Arrow converters
+/// for SftrTrStateRecord / SftrMarginStateRecord /
+/// ReconciliationRecord / MissingCollateralRecord are not
+/// yet implemented).
 ///
 /// `as_of` defaults to today (UTC). Format: `YYYY-MM-DD`.
-/// Pinning it keeps the stale-loan-value cutoff stable across
+/// Pinning it keeps the stale-data cutoffs stable across
 /// calendar days (same trick as the CLI golden).
 ///
-/// Granular SFTR issues run on each provided layer using
-/// `default_sftr_checks` (TAR) + `default_sftr_tr_state_checks`
-/// (TSR) ; `prior` is the empty slice (lifecycle-needing checks
-/// no-op without a history store — same as the v0.13 SFTR
-/// `tr_audit` binding).
+/// Granular SFTR issues run on each provided layer using the
+/// existing `default_sftr_checks` (TAR) +
+/// `default_sftr_tr_state_checks` (TSR) registries, plus the
+/// new `default_sftr_msr_checks` (MSR — F1'); `prior` is the
+/// empty slice (lifecycle-needing checks no-op without a
+/// history store — same as the v0.13 SFTR `tr_audit`
+/// binding).
 #[pyfunction]
-#[pyo3(signature = (*, tsr = None, tar = None, reconciliation = None, missing_collateral = None, as_of = None))]
+#[pyo3(signature = (*, tsr = None, tar = None, reconciliation = None, missing_collateral = None, msr = None, as_of = None))]
 pub fn data_quality_pack(
     tsr: Option<&str>,
     tar: Option<&str>,
     reconciliation: Option<&str>,
     missing_collateral: Option<&str>,
+    msr: Option<&str>,
     as_of: Option<&str>,
 ) -> PyResult<PyDqiPackResult> {
-    if tsr.is_none() && tar.is_none() && reconciliation.is_none() && missing_collateral.is_none() {
+    if tsr.is_none()
+        && tar.is_none()
+        && reconciliation.is_none()
+        && missing_collateral.is_none()
+        && msr.is_none()
+    {
         return Err(pyo3::exceptions::PyValueError::new_err(
             "data_quality_pack: at least one of tsr / tar / reconciliation / \
-             missing_collateral is required",
+             missing_collateral / msr is required",
         ));
     }
 
@@ -475,7 +487,7 @@ pub fn data_quality_pack(
         None => Utc::now().date_naive(),
     };
 
-    // Load each provided layer (paths-only in v0.16).
+    // Load each provided layer (paths-only in v0.17).
     let tsr_records = match tsr {
         Some(p) => {
             opendqi_xml::read_sftr_tr_state_xml(Path::new(p))
@@ -508,16 +520,21 @@ pub fn data_quality_pack(
         }
         None => Vec::new(),
     };
+    let msr_records = match msr {
+        Some(p) => {
+            opendqi_xml::read_sftr_margin_state_xml(Path::new(p))
+                .map_err(to_py_err)?
+                .records
+        }
+        None => Vec::new(),
+    };
 
     let inputs = SftrDqiInputs {
         tsr: tsr.map(|_| tsr_records.as_slice()),
         tar: tar.map(|_| tar_records.as_slice()),
         reconciliation: reconciliation.map(|_| reconciliation_records.as_slice()),
         missing_collateral: missing_collateral.map(|_| missing_collateral_records.as_slice()),
-        // v0.17 A4: `msr` slot exists but B1' wires the 4 T3
-        // DQIs that consume it ; until then it stays `None`.
-        // Python `msr=` kwarg arrives in G2'.
-        msr: None,
+        msr: msr.map(|_| msr_records.as_slice()),
     };
 
     let pack = compute_sftr_dqi_pack(inputs, MappingPresence::default(), &thresholds, as_of_date);

@@ -1,14 +1,16 @@
 """
-v0.16.0 — `opendqi.sftr.data_quality_pack` Python binding.
+v0.16.0 / v0.17 — `opendqi.sftr.data_quality_pack` Python binding.
 
 Locks the v1.0 stable Arrow contracts for `result.indicators`
 and `result.evidence` against the CLI golden — the same scan run
 two different ways (CLI + Python) must produce identical column
-structure for the 4 SFTR indicators v0.16 ships.
+structure for the 16 SFTR indicators (v0.16 shipped 4, v0.17
+adds 12: 4 T3 + 4 reconciliation + 1 MCR + 3 SFTR-specific).
 
-v0.16 is **paths-only** on the SFTR DQI pack — TSR/TAR Arrow
-converters arrive in v0.17 alongside the T3-layer indicators
-and the reconciliation/missing-collateral computers.
+v0.17 is still **paths-only** on the SFTR DQI pack — Arrow
+converters for SftrTrStateRecord / SftrMarginStateRecord /
+ReconciliationRecord / MissingCollateralRecord are scheduled
+for v0.18.
 """
 from __future__ import annotations
 
@@ -20,6 +22,11 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[3]
 TSR_FIXTURE = REPO_ROOT / "examples" / "sftr" / "tr_state" / "auth079-sample.xml"
 TAR_FIXTURE = REPO_ROOT / "examples" / "sftr" / "tr_activity" / "auth052-tar-sample.xml"
+RECON_FIXTURE = REPO_ROOT / "examples" / "sftr" / "reconciliation" / "auth080-sample.xml"
+MCR_FIXTURE = (
+    REPO_ROOT / "examples" / "sftr" / "missing_collateral" / "auth083-sample.xml"
+)
+MSR_FIXTURE = REPO_ROOT / "examples" / "sftr" / "margin_state" / "auth085-sample.xml"
 
 INDICATORS_GOLDEN = (
     REPO_ROOT
@@ -41,6 +48,15 @@ EVIDENCE_GOLDEN = (
 
 def _all_fixtures_present() -> bool:
     return TSR_FIXTURE.exists() and TAR_FIXTURE.exists()
+
+
+def _all_v017_fixtures_present() -> bool:
+    return (
+        _all_fixtures_present()
+        and RECON_FIXTURE.exists()
+        and MCR_FIXTURE.exists()
+        and MSR_FIXTURE.exists()
+    )
 
 
 def test_at_least_one_input_required() -> None:
@@ -71,10 +87,12 @@ def test_pack_returns_dqi_pack_result() -> None:
     assert "score=" in r
 
 
-def test_indicators_table_is_4_rows() -> None:
-    """v0.16 ships 4 SFTR indicators (T2 layer of auth.079 + auth.052).
-    The T3-layer indicators + reconciliation/missing-collateral DQIs
-    are scheduled for v0.17."""
+def test_indicators_table_is_16_rows() -> None:
+    """v0.17 ships 16 SFTR indicators across 5 input layers : 6 TSR
+    (auth.079) + 1 TAR (auth.052) + 4 reconciliation (auth.080) + 1
+    MCR (auth.083) + 4 MSR T3 (auth.085). Indicators whose source
+    layer isn't provided self-report `not_applicable` but the row
+    is still in the output — the count is fixed at 16."""
     if not _all_fixtures_present():
         pytest.skip("SFTR fixtures missing")
     import opendqi
@@ -84,7 +102,7 @@ def test_indicators_table_is_4_rows() -> None:
         tar=str(TAR_FIXTURE),
         as_of="2026-05-21",
     )
-    assert result.indicators.num_rows == 4
+    assert result.indicators.num_rows == 16
 
 
 def test_indicators_alphabetical_by_indicator_id() -> None:
@@ -102,10 +120,54 @@ def test_indicators_alphabetical_by_indicator_id() -> None:
     assert ids == sorted(ids)
     assert ids == [
         "DQI_COLLATERAL_VALUE_MISSING_SFTR",
+        "DQI_FIELD_MISMATCH_RATE_SFTR",
+        "DQI_HAIRCUT_ANOMALY_SFTR",
+        "DQI_LEI_MISSING_SFTR",
         "DQI_LOAN_VALUE_MISSING_SFTR",
         "DQI_LOAN_VALUE_STALE_SFTR",
+        "DQI_MCR_OPEN_REQUESTS_SFTR",
+        "DQI_PAIRING_RATE_SFTR",
+        "DQI_RECONCILIATION_RATE_SFTR",
+        "DQI_T3_EXCESS_COLLATERAL_USE_SFTR",
+        "DQI_T3_MARGIN_POSTED_MISSING_SFTR",
+        "DQI_T3_MARGIN_RECEIVED_MISSING_SFTR",
+        "DQI_T3_MARGIN_STALE_SFTR",
         "DQI_TIM_REPORTING_LATE_SFTR",
+        "DQI_UNDER_COLLATERALIZATION_SFTR",
+        "DQI_UNPAIRED_TRADES_RATE_SFTR",
     ]
+
+
+def test_full_5_input_pack_computes_all_16_indicators() -> None:
+    """v0.17 G2': feeding all 5 layers makes every DQI compute
+    (no self-reported `not_applicable`). Exercises the full
+    indicator/granular pipeline end-to-end including the MSR
+    layer + SFTR.T3.* granular checks."""
+    if not _all_v017_fixtures_present():
+        pytest.skip("v0.17 fixtures (recon/MCR/MSR) missing")
+    import opendqi
+
+    result = opendqi.sftr.data_quality_pack(
+        tsr=str(TSR_FIXTURE),
+        tar=str(TAR_FIXTURE),
+        reconciliation=str(RECON_FIXTURE),
+        missing_collateral=str(MCR_FIXTURE),
+        msr=str(MSR_FIXTURE),
+        as_of="2026-05-21",
+    )
+    assert result.indicators.num_rows == 16
+    statuses = result.indicators.column("status").to_pylist()
+    assert all(s != "not_applicable" for s in statuses), (
+        f"all 16 DQIs must compute with full 5-input pack ; statuses: {statuses}"
+    )
+    # The MSR layer triggers the F1' SFTR.T3.* granular checks
+    # so the issues stream must contain at least one of them
+    # (the auth.085 fixture has REC-5 negative IM posted +
+    # multiple partial-side records).
+    issues_check_ids = set(result.issues.column("check_id").to_pylist())
+    assert any(
+        cid.startswith("SFTR.T3.") for cid in issues_check_ids
+    ), f"expected SFTR.T3.* granular checks in issues, got {sorted(issues_check_ids)}"
 
 
 def test_tsr_only_pack_marks_tar_indicator_not_applicable() -> None:
