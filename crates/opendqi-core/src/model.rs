@@ -962,6 +962,94 @@ impl Default for SftrReuseActivityRecord {
     }
 }
 
+/// One line from an SFTR Reused Collateral Data Transaction
+/// State Report (ISO 20022 `auth.086`) — the TR-side snapshot
+/// of the latest reuse / reinvestment state for the firm's
+/// portfolios.
+///
+/// Structurally `auth.086` is the **state sister** of `auth.071`
+/// (the activity log) : same content (CollCmpnt/Scty/Csh +
+/// FndgSrc) but packed into the state-shaped `Stat[]` envelope
+/// of `auth.085` (single `ReuseDataReportCorrection15__1` per
+/// `Stat`, with a `CtrctMod/ActnTp` leaf — typically `REUU` —
+/// instead of the 4-way action wrapper).
+///
+/// Field set is intentionally identical to
+/// [`SftrReuseActivityRecord`] (12 fields). The semantic
+/// difference :
+/// - `auth.071` records are **events** (every NEWT/CORR/CRUD
+///   wrapper is a discrete reuse event), produced by the firm.
+/// - `auth.086` records are **state snapshots** (each `Stat` is
+///   the current latest reuse state for a portfolio + event
+///   day), produced by the TR.
+///
+/// The `auth.086` XSD has no `OthrCtrPty` (firm-portfolio-level,
+/// not bilateral) and no UTI cross-reference. Records are keyed
+/// intrinsically by submitter + event day + ISIN.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SftrReuseStateRecord {
+    /// Source file path (or other origin label).
+    pub source_file: Option<String>,
+    /// Stable identifier of the line within the source.
+    /// Maps to `TechRcrdId` (Max140Text).
+    pub record_id: Option<String>,
+    /// Regulatory regime — always `Regime::Sftr` for this record.
+    pub regime: Regime,
+    /// Report submission timestamp from `RptgDtTm`.
+    pub state_as_of: Option<DateTime<Utc>>,
+    /// `EvtDay` — date on which the reportable reuse event for
+    /// which this snapshot is the latest state took place.
+    pub event_day: Option<NaiveDate>,
+    /// LEI of the reporting counterparty
+    /// (`CtrPty/RptgCtrPty/.../LEI`).
+    pub reporting_counterparty: Option<String>,
+    /// LEI of the report-submitting entity, when distinct from
+    /// the reporting counterparty (delegated reporting).
+    /// (`CtrPty/RptSubmitgNtty/.../LEI`).
+    pub report_submitting_entity: Option<String>,
+    /// Action type from `CtrctMod/ActnTp`. Typically `"REUU"`
+    /// (CollateralReuseUpdate) per the
+    /// `TransactionOperationType6Code` enum. Option-wrapped so
+    /// records constructed without the leaf stay representable.
+    pub action_type: Option<String>,
+    /// Aggregate latest-state reuse value across every
+    /// `CollCmpnt/Scty[]` entry observed — sum of all
+    /// `Scty/ReuseVal/Actl` and `Scty/ReuseVal/Estmtd` amounts.
+    /// Absent on cash-only state records.
+    pub total_reuse_value: Option<Decimal>,
+    /// ISO 4217 currency shared by all reuse amounts (promoted
+    /// from the first observed per-amount `@Ccy` attribute).
+    pub reuse_currency: Option<String>,
+    /// Latest-state average interest rate received on cash
+    /// collateral reinvestment
+    /// (`CollCmpnt/Csh/CshRinvstmtRate`, `PercentageRate`).
+    pub cash_reinvestment_rate: Option<Decimal>,
+    /// Catch-all of XML leaves not promoted to typed fields :
+    /// per-ISIN breakdown, individual `FndgSrc/Tp` and
+    /// `FndgSrc/MktVal` entries, `NttyRspnsblForRpt/LEI`, etc.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub raw_fields: BTreeMap<String, String>,
+}
+
+impl Default for SftrReuseStateRecord {
+    fn default() -> Self {
+        Self {
+            source_file: None,
+            record_id: None,
+            regime: Regime::Sftr,
+            state_as_of: None,
+            event_day: None,
+            reporting_counterparty: None,
+            report_submitting_entity: None,
+            action_type: None,
+            total_reuse_value: None,
+            reuse_currency: None,
+            cash_reinvestment_rate: None,
+            raw_fields: BTreeMap::new(),
+        }
+    }
+}
+
 /// One line from an EMIR Margin Activity Report (MAR) — the
 /// history of margin calls / postings / collections for a portfolio
 /// (ISO 20022 `auth.108`). Activity-oriented, mirrors `EmirRecord`
@@ -1858,6 +1946,81 @@ mod tests {
         };
         let j = serde_json::to_string(&r).unwrap();
         let back: SftrReuseActivityRecord = serde_json::from_str(&j).unwrap();
+        assert_eq!(back.source_file, r.source_file);
+        assert_eq!(back.record_id, r.record_id);
+        assert_eq!(back.regime, r.regime);
+        assert_eq!(back.reporting_counterparty, r.reporting_counterparty);
+        assert_eq!(back.report_submitting_entity, r.report_submitting_entity);
+        assert_eq!(back.total_reuse_value, r.total_reuse_value);
+        assert_eq!(back.reuse_currency, r.reuse_currency);
+        assert_eq!(back.cash_reinvestment_rate, r.cash_reinvestment_rate);
+        assert_eq!(back.action_type, r.action_type);
+    }
+
+    // -- v0.18 C1: SftrReuseStateRecord (auth.086) -------------
+
+    #[test]
+    fn sftr_reuse_state_record_default_is_sftr_with_all_options_none() {
+        let r = SftrReuseStateRecord::default();
+        assert_eq!(r.regime, Regime::Sftr);
+        assert!(r.source_file.is_none());
+        assert!(r.record_id.is_none());
+        assert!(r.state_as_of.is_none());
+        assert!(r.event_day.is_none());
+        assert!(r.reporting_counterparty.is_none());
+        assert!(r.report_submitting_entity.is_none());
+        assert!(r.action_type.is_none());
+        assert!(r.total_reuse_value.is_none());
+        assert!(r.reuse_currency.is_none());
+        assert!(r.cash_reinvestment_rate.is_none());
+        assert!(r.raw_fields.is_empty());
+    }
+
+    #[test]
+    fn sftr_reuse_state_record_serde_always_emits_metadata_keys_when_none() {
+        let r = SftrReuseStateRecord::default();
+        let j = serde_json::to_string(&r).unwrap();
+        for required_key in [
+            "source_file",
+            "record_id",
+            "state_as_of",
+            "event_day",
+            "reporting_counterparty",
+            "report_submitting_entity",
+            "action_type",
+            "total_reuse_value",
+            "reuse_currency",
+            "cash_reinvestment_rate",
+        ] {
+            assert!(
+                j.contains(&format!("\"{required_key}\":null")),
+                "key {required_key} should serialise as null on default, json was {j}"
+            );
+        }
+        assert!(
+            !j.contains("\"raw_fields\""),
+            "raw_fields should be skipped when empty"
+        );
+    }
+
+    #[test]
+    fn sftr_reuse_state_record_round_trip_populated() {
+        use rust_decimal::Decimal;
+        use std::str::FromStr;
+        let r = SftrReuseStateRecord {
+            source_file: Some("auth086.xml".into()),
+            record_id: Some("REUSE-STATE-1".into()),
+            regime: Regime::Sftr,
+            reporting_counterparty: Some("549300ABCDEFGH123456".into()),
+            report_submitting_entity: Some("549300SUBMITRPT00001".into()),
+            total_reuse_value: Some(Decimal::from_str("98765.43").unwrap()),
+            reuse_currency: Some("USD".into()),
+            cash_reinvestment_rate: Some(Decimal::from_str("0.0250").unwrap()),
+            action_type: Some("REUU".into()),
+            ..SftrReuseStateRecord::default()
+        };
+        let j = serde_json::to_string(&r).unwrap();
+        let back: SftrReuseStateRecord = serde_json::from_str(&j).unwrap();
         assert_eq!(back.source_file, r.source_file);
         assert_eq!(back.record_id, r.record_id);
         assert_eq!(back.regime, r.regime);
