@@ -34,6 +34,9 @@ DQI_MAR_PARTIAL_SIDES_SFTR,PORTFOLIO-002,RPTGCPARTY0000000001,,<WS>/examples/sft
 DQI_MAR_PARTIAL_SIDES_SFTR,PORTFOLIO-003,RPTGCPARTY0000000001,,<WS>/examples/sftr/margin_activity/auth070-sample.xml,received-only,MAR event reports received-only margin (the other side is entirely None)
 DQI_MCR_OPEN_REQUESTS_SFTR,OPENDQI-SFTR-MCR-0001,RPTGLEI0000000000001,,<WS>/examples/sftr/missing_collateral/auth083-sample.xml,GMRA,requested UTI not present in SFTR TSR snapshot
 DQI_RECONCILIATION_RATE_SFTR,OPENDQI-SFTR-RECON-NOTMTCHD-2,RPTGLEI0000000000001,,<WS>/examples/sftr/reconciliation/auth080-sample.xml,UNRECONCILED,paired SFTR trade flagged UNRECONCILED on at least one field
+DQI_REJ_RATE_SFTR,VR-001,,,<WS>/examples/sftr/tr_status_advice/auth084-sample.xml,20,validation rule VR-001 accounts for 20 rejected report(s) in the batch
+DQI_REJ_RATE_SFTR,VR-002,,,<WS>/examples/sftr/tr_status_advice/auth084-sample.xml,15,validation rule VR-002 accounts for 15 rejected report(s) in the batch
+DQI_REJ_RATE_SFTR,VR-099,,,<WS>/examples/sftr/tr_status_advice/auth084-sample.xml,10,validation rule VR-099 accounts for 10 rejected report(s) in the batch
 DQI_REUSE_ERR_RETRACTION_RATE_SFTR,REUSE-ERR-1,RPTGCPARTY0000000001,,<WS>/examples/sftr/reuse_activity/auth071-sample.xml,ERRT,reuse retraction (Err wrapper) — previously submitted record cancelled
 DQI_REUSE_STATE_STALE_SFTR,R-STATE-1,RPTGCPARTY0000000001,,<WS>/examples/sftr/reuse_state/auth086-sample.xml,2026-05-13T08:00:00+00:00,state_as_of older than 1 TARGET2 business day(s) vs as_of 2026-05-21
 DQI_REUSE_STATE_STALE_SFTR,R-STATE-2,RPTGCPARTY0000000001,,<WS>/examples/sftr/reuse_state/auth086-sample.xml,2026-05-13T08:00:00+00:00,state_as_of older than 1 TARGET2 business day(s) vs as_of 2026-05-21

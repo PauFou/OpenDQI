@@ -618,6 +618,10 @@ fn sftr_data_quality_pack_full() {
         // granular checks.
         "--reuse-state",
         &ex("examples/sftr/reuse_state/auth086-sample.xml"),
+        // v0.18 D3: add auth.084 transaction status advice —
+        // exercises DQI_REJ_RATE_SFTR.
+        "--tr-status-advice",
+        &ex("examples/sftr/tr_status_advice/auth084-sample.xml"),
         "--as-of",
         "2026-05-21",
     ])

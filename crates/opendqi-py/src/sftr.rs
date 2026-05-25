@@ -456,7 +456,7 @@ pub fn book_reconcile<'py>(
 /// history store — same as the v0.13 SFTR `tr_audit`
 /// binding).
 #[pyfunction]
-#[pyo3(signature = (*, tsr = None, tar = None, reconciliation = None, missing_collateral = None, msr = None, mar = None, reuse_activity = None, reuse_state = None, as_of = None))]
+#[pyo3(signature = (*, tsr = None, tar = None, reconciliation = None, missing_collateral = None, msr = None, mar = None, reuse_activity = None, reuse_state = None, tr_status_advice = None, as_of = None))]
 pub fn data_quality_pack(
     tsr: Option<&str>,
     tar: Option<&str>,
@@ -466,6 +466,7 @@ pub fn data_quality_pack(
     mar: Option<&str>,
     reuse_activity: Option<&str>,
     reuse_state: Option<&str>,
+    tr_status_advice: Option<&str>,
     as_of: Option<&str>,
 ) -> PyResult<PyDqiPackResult> {
     if tsr.is_none()
@@ -476,10 +477,12 @@ pub fn data_quality_pack(
         && mar.is_none()
         && reuse_activity.is_none()
         && reuse_state.is_none()
+        && tr_status_advice.is_none()
     {
         return Err(pyo3::exceptions::PyValueError::new_err(
             "data_quality_pack: at least one of tsr / tar / reconciliation / \
-             missing_collateral / msr / mar / reuse_activity / reuse_state is required",
+             missing_collateral / msr / mar / reuse_activity / reuse_state / \
+             tr_status_advice is required",
         ));
     }
 
@@ -558,6 +561,14 @@ pub fn data_quality_pack(
         }
         None => Vec::new(),
     };
+    let tr_status_advice_records = match tr_status_advice {
+        Some(p) => {
+            opendqi_xml::read_sftr_tr_status_advice_xml(Path::new(p))
+                .map_err(to_py_err)?
+                .records
+        }
+        None => Vec::new(),
+    };
 
     let inputs = SftrDqiInputs {
         tsr: tsr.map(|_| tsr_records.as_slice()),
@@ -573,9 +584,10 @@ pub fn data_quality_pack(
         // v0.18 C5: reuse_state slot wired through
         // `reuse_state=` kwarg.
         reuse_state: reuse_state.map(|_| reuse_state_records.as_slice()),
-        // v0.18 D2: tr_status_advice slot plumbed but no
-        // Python kwarg yet (added in D3). Forced to None.
-        tr_status_advice: None,
+        // v0.18 D3: tr_status_advice slot wired through
+        // `tr_status_advice=` kwarg.
+        tr_status_advice: tr_status_advice
+            .map(|_| tr_status_advice_records.as_slice()),
     };
 
     let pack = compute_sftr_dqi_pack(inputs, MappingPresence::default(), &thresholds, as_of_date);
