@@ -318,6 +318,15 @@ pub fn default_dqi_thresholds() -> BTreeMap<String, DqiThresholdPair> {
             red: 0.20,
         },
     );
+    // v0.18 D2 — 1 SFTR Transaction Status Advice indicator
+    // (auth.084). Mirror of EMIR DQI_REJ_RATE (5/20 %).
+    m.insert(
+        "DQI_REJ_RATE_SFTR".into(),
+        DqiThresholdPair {
+            amber: 0.05,
+            red: 0.20,
+        },
+    );
     m
 }
 
@@ -447,13 +456,15 @@ mod tests {
             // v0.18 C4 — 2 SFTR Reuse State indicators (auth.086)
             "DQI_REUSE_STATE_VOLUME_MISSING_SFTR",
             "DQI_REUSE_STATE_STALE_SFTR",
+            // v0.18 D2 — 1 SFTR Transaction Status Advice (auth.084)
+            "DQI_REJ_RATE_SFTR",
         ] {
             assert!(m.contains_key(id), "missing default threshold for {id}");
         }
         assert_eq!(
             m.len(),
-            29,
-            "v0.18 C4: B4 27 + 2 SFTR reuse-state indicators = 29"
+            30,
+            "v0.18 D2: C4 29 + 1 SFTR REJ_RATE indicator = 30"
         );
     }
 

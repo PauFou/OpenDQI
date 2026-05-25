@@ -11,6 +11,7 @@ DQI_MAR_PARTIAL_SIDES_SFTR,sftr,completeness,n/a,0,0,,,,not_applicable,SFTR MAR 
 DQI_MCR_OPEN_REQUESTS_SFTR,sftr,completeness,n/a,0,0,,,,not_applicable,SFTR missing-collateral (auth.083) not provided
 DQI_PAIRING_RATE_SFTR,sftr,completeness,n/a,0,0,,,,not_applicable,SFTR reconciliation (auth.080) not provided
 DQI_RECONCILIATION_RATE_SFTR,sftr,completeness,n/a,0,0,,,,not_applicable,SFTR reconciliation (auth.080) not provided
+DQI_REJ_RATE_SFTR,sftr,completeness,n/a,0,0,,,,not_applicable,SFTR transaction status advice (auth.084) not provided
 DQI_REUSE_ERR_RETRACTION_RATE_SFTR,sftr,completeness,n/a,0,0,,,,not_applicable,SFTR reuse activity (auth.071) not provided
 DQI_REUSE_STATE_STALE_SFTR,sftr,completeness,n/a,0,0,,,,not_applicable,SFTR reuse state (auth.086) not provided
 DQI_REUSE_STATE_VOLUME_MISSING_SFTR,sftr,completeness,n/a,0,0,,,,not_applicable,SFTR reuse state (auth.086) not provided

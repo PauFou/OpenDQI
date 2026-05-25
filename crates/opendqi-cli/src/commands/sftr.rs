@@ -2042,6 +2042,9 @@ fn run_data_quality_pack(
         } else {
             None
         },
+        // v0.18 D2: tr_status_advice slot plumbed but no CLI
+        // flag yet (added in D3). Forced to None at this surface.
+        tr_status_advice: None,
     };
 
     let pack = compute_sftr_dqi_pack(inputs, MappingPresence::default(), &thresholds, as_of);

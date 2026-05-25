@@ -37,7 +37,7 @@ use crate::dq::dqi::compute::{
     compute_dqi_loan_value_missing_sftr, compute_dqi_loan_value_stale_sftr,
     compute_dqi_mar_event_spike_sftr, compute_dqi_mar_excess_collateral_event_rate_sftr,
     compute_dqi_mar_partial_sides_sftr, compute_dqi_mcr_open_requests_sftr,
-    compute_dqi_pairing_rate_sftr, compute_dqi_reconciliation_rate_sftr,
+    compute_dqi_pairing_rate_sftr, compute_dqi_reconciliation_rate_sftr, compute_dqi_rej_rate_sftr,
     compute_dqi_reuse_err_retraction_rate_sftr, compute_dqi_reuse_state_stale_sftr,
     compute_dqi_reuse_state_volume_missing_sftr, compute_dqi_reuse_volume_missing_sftr,
     compute_dqi_t3_excess_collateral_use_sftr, compute_dqi_t3_margin_posted_missing_sftr,
@@ -54,7 +54,7 @@ use crate::dq::{
 };
 use crate::model::{
     DqDimension, DqIssue, Regime, SftrMarginActivityRecord, SftrMarginStateRecord, SftrRecord,
-    SftrReuseActivityRecord, SftrReuseStateRecord, SftrTrStateRecord,
+    SftrReuseActivityRecord, SftrReuseStateRecord, SftrTrStateRecord, SftrTrStatusAdviceRecord,
 };
 use crate::Thresholds;
 
@@ -112,10 +112,13 @@ pub struct SftrDqiInputs<'a> {
     /// SFTR Reused Collateral Data Transaction State Report
     /// (`auth.086`) — projected onto [`SftrReuseStateRecord`].
     /// TR-side snapshot of the latest reuse / reinvestment
-    /// state. **C3 status**: the slot is plumbed but no
-    /// computer reads it yet — the 2 reuse-state DQIs land in
-    /// C4 and the 2 `SFTR.REU.STATE.*` granular checks in C5.
+    /// state. Powers the 2 SFTR reuse-state DQIs (C4) and the
+    /// 2 `SFTR.REU.STATE.*` granular checks (C5).
     pub reuse_state: Option<&'a [SftrReuseStateRecord]>,
+    /// SFTR Transaction Status Advice (`auth.084`) — projected
+    /// onto [`SftrTrStatusAdviceRecord`]. TR-side aggregate
+    /// rejection statistics. Powers `DQI_REJ_RATE_SFTR` (D2).
+    pub tr_status_advice: Option<&'a [SftrTrStatusAdviceRecord]>,
 }
 
 /// Run the SFTR Data Quality Pack.
@@ -308,6 +311,21 @@ pub fn compute_sftr_dqi_pack(
             not_applicable(
                 "DQI_T3_MARGIN_STALE_SFTR",
                 "SFTR MSR (auth.085) not provided",
+            ),
+            Vec::new(),
+        );
+    }
+
+    // Transaction Status Advice indicator (1, v0.18 D2):
+    // - DQI_REJ_RATE_SFTR
+    if let Some(advice) = inputs.tr_status_advice {
+        let (ind, ev) = compute_dqi_rej_rate_sftr(advice, thresholds, mapping_presence);
+        push(ind, ev);
+    } else {
+        push(
+            not_applicable(
+                "DQI_REJ_RATE_SFTR",
+                "SFTR transaction status advice (auth.084) not provided",
             ),
             Vec::new(),
         );
@@ -588,6 +606,47 @@ mod tests {
     }
 
     #[test]
+    fn default_inputs_have_tr_status_advice_slot_at_none() {
+        // v0.18 D2 contract: the tr_status_advice slot exists
+        // and defaults to None alongside the other 8 slots.
+        let inputs: SftrDqiInputs = SftrDqiInputs::default();
+        assert!(inputs.tr_status_advice.is_none());
+    }
+
+    #[test]
+    fn providing_empty_tr_status_advice_keeps_rej_rate_indicator_in_set() {
+        // v0.18 D2: an empty tr_status_advice slice is
+        // observably distinct from tr_status_advice=None. The
+        // REJ_RATE_SFTR indicator computes on the empty slice
+        // and reports NotApplicable (denominator=0) — it is
+        // *present* in the output. With tr_status_advice=None
+        // it also reports NotApplicable but with the 'not
+        // provided' description.
+        let advice: Vec<SftrTrStatusAdviceRecord> = vec![];
+        let inputs = SftrDqiInputs {
+            tr_status_advice: Some(&advice),
+            ..SftrDqiInputs::default()
+        };
+        let result = compute_sftr_dqi_pack(
+            inputs,
+            MappingPresence::default(),
+            &Thresholds::default(),
+            as_of(),
+        );
+        let rej = result
+            .indicators
+            .iter()
+            .find(|i| i.indicator_id == "DQI_REJ_RATE_SFTR")
+            .expect("REJ_RATE_SFTR indicator must be present");
+        assert_eq!(rej.status, DqiStatus::NotApplicable);
+        assert!(
+            !rej.description.contains("not provided"),
+            "DQI_REJ_RATE_SFTR with empty tr_status_advice should not say 'not provided': {}",
+            rej.description
+        );
+    }
+
+    #[test]
     fn providing_empty_reuse_state_keeps_reuse_state_indicators_in_set() {
         // v0.18 C4: an empty reuse_state slice is observably
         // distinct from reuse_state=None. The 2 reuse-state
@@ -791,6 +850,7 @@ mod tests {
                 "DQI_MCR_OPEN_REQUESTS_SFTR",
                 "DQI_PAIRING_RATE_SFTR",
                 "DQI_RECONCILIATION_RATE_SFTR",
+                "DQI_REJ_RATE_SFTR",
                 "DQI_REUSE_ERR_RETRACTION_RATE_SFTR",
                 "DQI_REUSE_STATE_STALE_SFTR",
                 "DQI_REUSE_STATE_VOLUME_MISSING_SFTR",
