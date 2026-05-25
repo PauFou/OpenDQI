@@ -2603,6 +2603,9 @@ fn run_data_quality_pack(
         // wires --recon-stats / --reconciliation through.
         recon_stats: None,
         reconciliation: None,
+        // v0.18 E3 — positions slot plumbed but no CLI flag
+        // yet (added in E7). Forced to None.
+        positions: None,
     };
 
     let pack = compute_emir_dqi_pack(inputs, mapping_presence, &thresholds, as_of);

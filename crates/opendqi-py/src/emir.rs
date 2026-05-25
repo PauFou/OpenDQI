@@ -647,6 +647,9 @@ pub fn data_quality_pack<'py>(
         // through both the CLI and the Python binding.
         recon_stats: None,
         reconciliation: None,
+        // v0.18 E3 — positions slot plumbed but no Python kwarg
+        // yet (added in E7). Forced to None.
+        positions: None,
     };
 
     let pack = compute_emir_dqi_pack(inputs, mapping_presence, &thresholds, as_of_date);

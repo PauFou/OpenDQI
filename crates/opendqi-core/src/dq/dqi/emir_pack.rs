@@ -43,8 +43,8 @@ use crate::dq::{
     run_all_margin_activity, run_all_margin_state, run_all_tr_state, CheckContext,
 };
 use crate::model::{
-    DqIssue, EmirRecord, FeedbackRecord, MarginActivityRecord, MarginStateRecord, Regime,
-    TrStateRecord,
+    DqIssue, EmirPositionSetRecord, EmirRecord, FeedbackRecord, MarginActivityRecord,
+    MarginStateRecord, Regime, TrStateRecord,
 };
 use crate::Thresholds;
 
@@ -75,6 +75,14 @@ pub struct EmirDqiInputs<'a> {
     /// `DQI_UNPAIRED_TRADES_RATE`, `DQI_FIELD_MISMATCH_RATE`, and
     /// the v0.16 margin/notional consistency DQIs.
     pub reconciliation: Option<&'a [crate::ReconciliationRecord]>,
+    /// Derivatives Trade Position Set Report (`auth.090`) —
+    /// projected onto [`EmirPositionSetRecord`]. TR-side
+    /// aggregated exposures between counterparties across 4
+    /// position-set kinds (PosSet / CcyPosSet / CollPosSet /
+    /// CcyCollPosSet). **E3 status**: slot plumbed, no
+    /// computer reads it yet — the 4 EMIR.POS.* DQIs land in
+    /// E4 and the 4 granular checks in E5.
+    pub positions: Option<&'a [EmirPositionSetRecord]>,
 }
 
 /// Run the full EMIR Data Quality Pack.
@@ -685,5 +693,41 @@ mod tests {
             .find(|i| i.indicator_id == "DQI_REC_STATUS_UNPAIRED")
             .unwrap();
         assert_eq!(rec.status, DqiStatus::Green);
+    }
+
+    // -- v0.18 E3: EmirDqiInputs +positions slot ---------------
+
+    #[test]
+    fn default_inputs_have_positions_slot_at_none() {
+        // v0.18 E3 contract: the positions slot exists and
+        // defaults to None alongside the 7 existing slots. No
+        // DQI computer reads it yet — that lands in E4 (4 EMIR
+        // Position DQIs) and E5 (4 granular EMIR.POS.*
+        // checks).
+        let inputs: EmirDqiInputs = EmirDqiInputs::default();
+        assert!(inputs.positions.is_none());
+    }
+
+    #[test]
+    fn providing_empty_positions_is_noop_pre_e4() {
+        // v0.18 E3: an empty positions slice is observably
+        // distinct from positions=None at the type level, but
+        // no computer fires on it yet (E4 adds the 4 DQI
+        // computers, E5 the granular checks). Until then the
+        // indicator count stays at the post-v0.16 baseline (24)
+        // and granular issues stay empty.
+        let positions: Vec<EmirPositionSetRecord> = vec![];
+        let inputs = EmirDqiInputs {
+            positions: Some(&positions),
+            ..EmirDqiInputs::default()
+        };
+        let result = compute_emir_dqi_pack(
+            inputs,
+            MappingPresence::default(),
+            &Thresholds::default(),
+            as_of(),
+        );
+        assert_eq!(result.indicators.len(), 24);
+        assert!(result.issues.is_empty());
     }
 }
