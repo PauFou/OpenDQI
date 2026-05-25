@@ -33,8 +33,8 @@ use opendqi_report::{
 };
 use opendqi_xml::{
     check_wellformedness, read_emir_feedback_xml, read_emir_mar_xml, read_emir_msr_xml,
-    read_emir_recon_stats_xml, read_emir_tr_state_xml, read_emir_warnings_xml, read_emir_xml,
-    ExternalXmllintValidator, XsdValidator, XsdViolation,
+    read_emir_position_set_xml, read_emir_recon_stats_xml, read_emir_tr_state_xml,
+    read_emir_warnings_xml, read_emir_xml, ExternalXmllintValidator, XsdValidator, XsdViolation,
 };
 use tracing::{info, warn};
 
@@ -363,6 +363,14 @@ pub enum EmirAction {
         /// Path to the feedback `auth.092` XML file.
         #[arg(long)]
         feedback: Option<PathBuf>,
+        /// Path to the `auth.090` Derivatives Trade Position Set
+        /// Report. Powers 4 EMIR Position DQIs (NOTIONAL_MISSING,
+        /// MARK_TO_MARKET_MISSING, NOTIONAL_NEGATIVE,
+        /// COLLATERAL_MISSING) AND 4 granular EMIR.POS.*
+        /// per-record checks. TR-side aggregated exposures across
+        /// 4 position-set kinds (v0.18+).
+        #[arg(long)]
+        positions: Option<PathBuf>,
         /// Optional YAML thresholds configuration (overrides the
         /// shipped DQI defaults via the `dqi:` block).
         #[arg(long)]
@@ -553,6 +561,7 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
             msr,
             mar,
             feedback,
+            positions,
             config,
             as_of,
             out,
@@ -564,6 +573,7 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
                 msr.as_deref(),
                 mar.as_deref(),
                 feedback.as_deref(),
+                positions.as_deref(),
                 config.as_deref(),
                 as_of.as_deref(),
                 &out,
@@ -2458,12 +2468,14 @@ fn write_xsd_errors_csv(path: &Path, rows: &[XsdReportRow]) -> Result<()> {
 }
 
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 fn run_data_quality_pack(
     tsr_path: Option<&Path>,
     tar_path: Option<&Path>,
     msr_path: Option<&Path>,
     mar_path: Option<&Path>,
     feedback_path: Option<&Path>,
+    positions_path: Option<&Path>,
     config_path: Option<&Path>,
     as_of_str: Option<&str>,
     out: &Path,
@@ -2474,9 +2486,11 @@ fn run_data_quality_pack(
         && msr_path.is_none()
         && mar_path.is_none()
         && feedback_path.is_none()
+        && positions_path.is_none()
     {
         return Err(anyhow!(
-            "data-quality-pack: at least one of --tsr / --tar / --msr / --mar / --feedback is required"
+            "data-quality-pack: at least one of --tsr / --tar / --msr / --mar / \
+             --feedback / --positions is required"
         ));
     }
 
@@ -2549,6 +2563,21 @@ fn run_data_quality_pack(
         }
         None => Vec::new(),
     };
+    // v0.18 E1-E7: EMIR Position Set Report (auth.090) parsed,
+    // then consumed by the 4 Position DQIs (E4) and 4 EMIR.POS.*
+    // granular checks (E5).
+    let position_records = match positions_path {
+        Some(p) => {
+            let outcome = read_emir_position_set_xml(p)
+                .with_context(|| format!("reading EMIR positions {}", p.display()))?;
+            info!(
+                records = outcome.records.len(),
+                "loaded EMIR positions (auth.090)"
+            );
+            outcome.records
+        }
+        None => Vec::new(),
+    };
 
     // Detect raw_fields presence for the 2 gated indicators.
     // (Conservative: any record carries the key with a non-empty
@@ -2603,9 +2632,12 @@ fn run_data_quality_pack(
         // wires --recon-stats / --reconciliation through.
         recon_stats: None,
         reconciliation: None,
-        // v0.18 E3 — positions slot plumbed but no CLI flag
-        // yet (added in E7). Forced to None.
-        positions: None,
+        // v0.18 E7 — positions slot wired through --positions flag.
+        positions: if positions_path.is_some() {
+            Some(&position_records)
+        } else {
+            None
+        },
     };
 
     let pack = compute_emir_dqi_pack(inputs, mapping_presence, &thresholds, as_of);
@@ -2618,6 +2650,7 @@ fn run_data_quality_pack(
         ("MSR", msr_path),
         ("MAR", mar_path),
         ("Feedback", feedback_path),
+        ("Positions", positions_path),
     ] {
         if let Some(path) = p {
             sources.push(format!("{lbl}: {}", path.display()));

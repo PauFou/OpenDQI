@@ -556,7 +556,7 @@ pub fn book_reconcile<'py>(
 /// `DQI_REC_STATUS_UNPAIRED` indicator computes. Otherwise it
 /// reports `status: not_applicable` with no rate.
 #[pyfunction]
-#[pyo3(signature = (*, tsr=None, tar=None, msr=None, mar=None, feedback=None, mappings=None, as_of=None))]
+#[pyo3(signature = (*, tsr=None, tar=None, msr=None, mar=None, feedback=None, positions=None, mappings=None, as_of=None))]
 #[allow(clippy::too_many_arguments)]
 pub fn data_quality_pack<'py>(
     tsr: Option<&Bound<'py, PyAny>>,
@@ -564,12 +564,20 @@ pub fn data_quality_pack<'py>(
     msr: Option<&Bound<'py, PyAny>>,
     mar: Option<&Bound<'py, PyAny>>,
     feedback: Option<&Bound<'py, PyAny>>,
+    positions: Option<&str>,
     mappings: Option<HashMap<String, HashMap<String, String>>>,
     as_of: Option<&str>,
 ) -> PyResult<PyDqiPackResult> {
-    if tsr.is_none() && tar.is_none() && msr.is_none() && mar.is_none() && feedback.is_none() {
+    if tsr.is_none()
+        && tar.is_none()
+        && msr.is_none()
+        && mar.is_none()
+        && feedback.is_none()
+        && positions.is_none()
+    {
         return Err(pyo3::exceptions::PyValueError::new_err(
-            "data_quality_pack: at least one of tsr / tar / msr / mar / feedback is required",
+            "data_quality_pack: at least one of tsr / tar / msr / mar / feedback / \
+             positions is required",
         ));
     }
 
@@ -614,6 +622,16 @@ pub fn data_quality_pack<'py>(
         None => Vec::new(),
     };
     let feedback_records = load_feedback(feedback, layer_mapping("feedback"))?;
+    // v0.18 E7: positions = str path only (Arrow input deferred
+    // beyond v0.18 scope).
+    let position_records = match positions {
+        Some(p) => {
+            opendqi_xml::read_emir_position_set_xml(Path::new(p))
+                .map_err(to_py_err)?
+                .records
+        }
+        None => Vec::new(),
+    };
 
     // Detect raw_fields presence for the 2 gated indicators
     // (same heuristic as the CLI run_data_quality_pack).
@@ -647,9 +665,8 @@ pub fn data_quality_pack<'py>(
         // through both the CLI and the Python binding.
         recon_stats: None,
         reconciliation: None,
-        // v0.18 E3 — positions slot plumbed but no Python kwarg
-        // yet (added in E7). Forced to None.
-        positions: None,
+        // v0.18 E7 — positions slot wired through `positions=` kwarg.
+        positions: positions.map(|_| position_records.as_slice()),
     };
 
     let pack = compute_emir_dqi_pack(inputs, mapping_presence, &thresholds, as_of_date);

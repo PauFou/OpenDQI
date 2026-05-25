@@ -394,6 +394,10 @@ fn emir_data_quality_pack() {
         &ex("examples/quickstart-emir/auth030-tar.xml"),
         "--feedback",
         &ex("examples/quickstart-emir/auth092-feedback.xml"),
+        // v0.18 E7: add auth.090 EMIR Position Set layer —
+        // exercises 4 Position DQIs + 4 EMIR.POS.* granular checks.
+        "--positions",
+        &ex("examples/emir/positions/auth090-sample.xml"),
         "--as-of",
         "2026-05-21",
     ])

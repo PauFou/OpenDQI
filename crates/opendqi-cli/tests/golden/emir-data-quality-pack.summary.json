@@ -1,22 +1,22 @@
 {
   "regime": "emir",
-  "files_processed": 3,
-  "records_processed": 30,
-  "issues_total": 215,
+  "files_processed": 4,
+  "records_processed": 35,
+  "issues_total": 217,
   "issues_by_severity": {
     "info": 8,
     "warning": 87,
-    "high": 111,
+    "high": 113,
     "critical": 9
   },
   "issues_by_dimension": {
-    "completeness": 189,
+    "completeness": 191,
     "uniqueness": 7,
     "validity": 2,
     "accuracy": 3,
     "consistency": 14
   },
-  "quality_score": 46.666664,
+  "quality_score": 53.714287,
   "started_at": "1970-01-01T00:00:00Z",
   "finished_at": "1970-01-01T00:00:00Z"
 }
