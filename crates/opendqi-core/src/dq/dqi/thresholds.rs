@@ -327,6 +327,37 @@ pub fn default_dqi_thresholds() -> BTreeMap<String, DqiThresholdPair> {
             red: 0.20,
         },
     );
+    // v0.18 E4 — 4 EMIR Position Set indicators (auth.090).
+    // Completeness ones tighter (5/20 %), notional negative is
+    // a structural defect with very low tolerance (0.5/2 %).
+    m.insert(
+        "DQI_POSITION_NOTIONAL_MISSING".into(),
+        DqiThresholdPair {
+            amber: 0.05,
+            red: 0.20,
+        },
+    );
+    m.insert(
+        "DQI_POSITION_MARK_TO_MARKET_MISSING".into(),
+        DqiThresholdPair {
+            amber: 0.05,
+            red: 0.20,
+        },
+    );
+    m.insert(
+        "DQI_POSITION_NOTIONAL_NEGATIVE".into(),
+        DqiThresholdPair {
+            amber: 0.005,
+            red: 0.02,
+        },
+    );
+    m.insert(
+        "DQI_POSITION_COLLATERAL_MISSING".into(),
+        DqiThresholdPair {
+            amber: 0.05,
+            red: 0.20,
+        },
+    );
     m
 }
 
@@ -458,13 +489,18 @@ mod tests {
             "DQI_REUSE_STATE_STALE_SFTR",
             // v0.18 D2 — 1 SFTR Transaction Status Advice (auth.084)
             "DQI_REJ_RATE_SFTR",
+            // v0.18 E4 — 4 EMIR Position Set indicators (auth.090)
+            "DQI_POSITION_NOTIONAL_MISSING",
+            "DQI_POSITION_MARK_TO_MARKET_MISSING",
+            "DQI_POSITION_NOTIONAL_NEGATIVE",
+            "DQI_POSITION_COLLATERAL_MISSING",
         ] {
             assert!(m.contains_key(id), "missing default threshold for {id}");
         }
         assert_eq!(
             m.len(),
-            30,
-            "v0.18 D2: C4 29 + 1 SFTR REJ_RATE indicator = 30"
+            34,
+            "v0.18 E4: D2 30 + 4 EMIR Position indicators = 34"
         );
     }
 

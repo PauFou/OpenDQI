@@ -31,6 +31,8 @@ use crate::dq::dqi::compute::{
     compute_dqi_err_missing, compute_dqi_field_mismatch_rate, compute_dqi_lei_missing,
     compute_dqi_margin_inconsistent_post_haircut, compute_dqi_margin_inconsistent_pre_haircut,
     compute_dqi_nature_missing, compute_dqi_notional_inconsistent, compute_dqi_pairing_rate,
+    compute_dqi_position_collateral_missing, compute_dqi_position_mark_to_market_missing,
+    compute_dqi_position_notional_missing, compute_dqi_position_notional_negative,
     compute_dqi_rec_status_unpaired, compute_dqi_reconciliation_rate, compute_dqi_rej_rate,
     compute_dqi_rej_repeat_uti, compute_dqi_sector_missing, compute_dqi_tim_reporting_late,
     compute_dqi_unpaired_trades_rate, compute_dqi_val_missing, compute_dqi_val_stale,
@@ -332,6 +334,53 @@ pub fn compute_emir_dqi_pack(
         );
     }
 
+    // v0.18 E4 — auth.090-derived position-set indicators (4):
+    // POSITION_NOTIONAL_MISSING, POSITION_MARK_TO_MARKET_MISSING,
+    // POSITION_NOTIONAL_NEGATIVE, POSITION_COLLATERAL_MISSING.
+    if let Some(positions) = inputs.positions {
+        let (ind, ev) =
+            compute_dqi_position_notional_missing(positions, thresholds, mapping_presence);
+        push(ind, ev);
+        let (ind, ev) =
+            compute_dqi_position_mark_to_market_missing(positions, thresholds, mapping_presence);
+        push(ind, ev);
+        let (ind, ev) =
+            compute_dqi_position_notional_negative(positions, thresholds, mapping_presence);
+        push(ind, ev);
+        let (ind, ev) =
+            compute_dqi_position_collateral_missing(positions, thresholds, mapping_presence);
+        push(ind, ev);
+    } else {
+        push(
+            not_applicable(
+                "DQI_POSITION_NOTIONAL_MISSING",
+                "EMIR position set (auth.090) not provided",
+            ),
+            Vec::new(),
+        );
+        push(
+            not_applicable(
+                "DQI_POSITION_MARK_TO_MARKET_MISSING",
+                "EMIR position set (auth.090) not provided",
+            ),
+            Vec::new(),
+        );
+        push(
+            not_applicable(
+                "DQI_POSITION_NOTIONAL_NEGATIVE",
+                "EMIR position set (auth.090) not provided",
+            ),
+            Vec::new(),
+        );
+        push(
+            not_applicable(
+                "DQI_POSITION_COLLATERAL_MISSING",
+                "EMIR position set (auth.090) not provided",
+            ),
+            Vec::new(),
+        );
+    }
+
     // Stable order: sort by indicator_id ascending so downstream
     // outputs are deterministic regardless of the dispatch order
     // above.
@@ -506,8 +555,8 @@ mod tests {
         );
         assert_eq!(
             result.indicators.len(),
-            24,
-            "always exactly 24 indicators in v0.16 B4 (10 v0.15 + 4 B1 + 3 B2 + 4 B3 + 3 B4 final)"
+            28,
+            "always exactly 28 indicators post-v0.18 E4 (24 v0.16 + 4 v0.18 EMIR Position Set)"
         );
         for ind in &result.indicators {
             assert_eq!(
@@ -558,6 +607,10 @@ mod tests {
                 "DQI_NATURE_MISSING",
                 "DQI_NOTIONAL_INCONSISTENT",
                 "DQI_PAIRING_RATE",
+                "DQI_POSITION_COLLATERAL_MISSING",
+                "DQI_POSITION_MARK_TO_MARKET_MISSING",
+                "DQI_POSITION_NOTIONAL_MISSING",
+                "DQI_POSITION_NOTIONAL_NEGATIVE",
                 "DQI_RECONCILIATION_RATE",
                 "DQI_REC_STATUS_UNPAIRED",
                 "DQI_REJ_RATE",
@@ -588,10 +641,8 @@ mod tests {
             &Thresholds::default(),
             as_of(),
         );
-        // 10 indicators always; 3 of them computed (VAL_MISSING,
-        // VAL_STALE, COL_MISSING_STATE -> still NA because no
-        // collateral portfolio code → denominator zero).
-        assert_eq!(result.indicators.len(), 24);
+        // post-E4 baseline: 24 (v0.16) + 4 (v0.18 E4 positions) = 28.
+        assert_eq!(result.indicators.len(), 28);
         let val_missing = result
             .indicators
             .iter()
@@ -632,7 +683,7 @@ mod tests {
             &Thresholds::default(),
             as_of(),
         );
-        assert_eq!(result.indicators.len(), 24);
+        assert_eq!(result.indicators.len(), 28);
         // Feedback indicators must be computed now.
         let rej_rate = result
             .indicators
@@ -709,13 +760,13 @@ mod tests {
     }
 
     #[test]
-    fn providing_empty_positions_is_noop_pre_e4() {
-        // v0.18 E3: an empty positions slice is observably
-        // distinct from positions=None at the type level, but
-        // no computer fires on it yet (E4 adds the 4 DQI
-        // computers, E5 the granular checks). Until then the
-        // indicator count stays at the post-v0.16 baseline (24)
-        // and granular issues stay empty.
+    fn providing_empty_positions_keeps_position_indicators_in_set() {
+        // v0.18 E4: an empty positions slice is observably
+        // distinct from positions=None. The 4 POSITION
+        // indicators compute on the empty slice and report
+        // NotApplicable (denominator=0) — they are *present*
+        // in the output. With positions=None they also report
+        // NotApplicable but with the 'not provided' description.
         let positions: Vec<EmirPositionSetRecord> = vec![];
         let inputs = EmirDqiInputs {
             positions: Some(&positions),
@@ -727,7 +778,25 @@ mod tests {
             &Thresholds::default(),
             as_of(),
         );
-        assert_eq!(result.indicators.len(), 24);
-        assert!(result.issues.is_empty());
+        let pos_ids: Vec<&str> = result
+            .indicators
+            .iter()
+            .map(|i| i.indicator_id.as_str())
+            .filter(|s| s.starts_with("DQI_POSITION_"))
+            .collect();
+        assert_eq!(pos_ids.len(), 4);
+        for ind in result
+            .indicators
+            .iter()
+            .filter(|i| i.indicator_id.starts_with("DQI_POSITION_"))
+        {
+            assert_eq!(ind.status, DqiStatus::NotApplicable);
+            assert!(
+                !ind.description.contains("not provided"),
+                "{} with empty positions should not say 'not provided': {}",
+                ind.indicator_id,
+                ind.description
+            );
+        }
     }
 }

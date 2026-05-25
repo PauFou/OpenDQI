@@ -13,6 +13,10 @@ DQI_MARGIN_INCONSISTENT_PRE_HAIRCUT,emir,completeness,n/a,0,0,,,,not_applicable,
 DQI_NATURE_MISSING,emir,completeness,TAR,20,20,1.000000,0.050000,0.200000,red,Share of TAR records with no counterparty nature (FC/NFC/NFC+) classifier. Without it the firm cannot apply the right Art.11 clearing threshold / IM cadence / confirmation deadlines.
 DQI_NOTIONAL_INCONSISTENT,emir,completeness,n/a,0,0,,,,not_applicable,auth.091 per-tx reconciliation records not provided
 DQI_PAIRING_RATE,emir,completeness,n/a,0,0,,,,not_applicable,auth.091 recon_stats not provided
+DQI_POSITION_COLLATERAL_MISSING,emir,completeness,n/a,0,0,,,,not_applicable,EMIR position set (auth.090) not provided
+DQI_POSITION_MARK_TO_MARKET_MISSING,emir,completeness,n/a,0,0,,,,not_applicable,EMIR position set (auth.090) not provided
+DQI_POSITION_NOTIONAL_MISSING,emir,completeness,n/a,0,0,,,,not_applicable,EMIR position set (auth.090) not provided
+DQI_POSITION_NOTIONAL_NEGATIVE,emir,completeness,n/a,0,0,,,,not_applicable,EMIR position set (auth.090) not provided
 DQI_RECONCILIATION_RATE,emir,completeness,n/a,0,0,,,,not_applicable,auth.091 recon_stats not provided
 DQI_REC_STATUS_UNPAIRED,emir,consistency,TAR,0,0,,0.050000,0.200000,not_applicable,reconciliation_status not mapped or never observed — DQI_REC_STATUS_UNPAIRED skipped
 DQI_REJ_RATE,emir,accuracy,Feedback,2,2,1.000000,0.010000,0.050000,red,Share of feedback records that are TR rejections. Denominator is total feedback rows (proxy for total submissions).
