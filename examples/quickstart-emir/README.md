@@ -5,8 +5,8 @@ try the three primary OpenDQI workflows without first hunting
 through the rest of the `examples/` tree.
 
 **All three are synthetic.** No real client or trade-repository
-data is included anywhere in this repo (see `CLAUDE.md` and the
-project security policy).
+data is included anywhere in this repo (see the project security
+policy).
 
 ## Files
 

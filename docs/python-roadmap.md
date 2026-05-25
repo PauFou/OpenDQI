@@ -255,7 +255,7 @@ workflow added in v0.11.0. Windows is deferred (matches the
 existing CI matrix Ubuntu + macOS only).
 
 `maturin publish` to PyPI is gated on the same explicit-user-ask
-contract as `git push --tags` today (CLAUDE.md release hygiene).
+contract as `git push --tags` today (project release-hygiene rule).
 
 ## Deps freeze
 

@@ -7,7 +7,7 @@
 # Both fall back to a plain `echo` if no opener is available.
 #
 # Builds the CLI in DEBUG (--jobs 4) on first run only — never
-# touches the release profile (CLAUDE.md build hygiene).
+# touches the release profile (project build-hygiene rule).
 #
 # Compatible with macOS bash 3.2 and modern bash; `set -u` safe.
 

@@ -36,11 +36,9 @@ posted/received fields ; the T3 margin layer is the
 (`SecuritiesFinancingReportingMarginDataTransactionStateReportV02`,
 portfolio-level, CCP-cleared only, 6 amounts/portfolio with
 no pre/post-haircut split — narrower than EMIR auth.109). A
-first A1 attempt was reverted locally pre-push ; the second
-A1' shipped the correct architecture. See the inline
-"Plan V2 — pivot post-A1" note in
-`/Users/paul/.claude/plans/le-code-a-plant-hazy-trinket.md`
-(developer notes, not redistributed) for the full delta.
+first attempt was reverted locally pre-push ; the corrected
+version shipped the right architecture (developer notes
+on the delta are not redistributed).
 
 ### Added
 
@@ -1376,8 +1374,8 @@ added — it never runs on main pushes or PRs.
 
 - **`scripts/demo.sh` — 30-second walkthrough.** POSIX bash
   (macOS bash 3.2 + Linux compatible, `set -u` safe). Builds
-  `opendqi` in debug `--jobs 4` only when needed (CLAUDE.md
-  build hygiene — never release in the dev loop). Runs the 3
+  `opendqi` in debug `--jobs 4` only when needed (project
+  build-hygiene rule — never release in the dev loop). Runs the 3
   quickstart-emir workflows, drops 3 `report.html` under
   `/tmp/opendqi-demo/`, opens the consolidated audit report
   via `open` (macOS) / `xdg-open` (Linux), echoes the path
