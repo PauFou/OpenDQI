@@ -14,6 +14,7 @@
 pub mod emir;
 pub mod emir_mar;
 pub mod emir_msr;
+pub mod emir_position_set;
 pub mod emir_recon_stats;
 pub mod emir_warnings;
 pub mod feedback;
@@ -33,6 +34,7 @@ pub mod xsd;
 pub use emir::{read_emir_xml, XmlReadOutcome};
 pub use emir_mar::{read_emir_mar_xml, MarXmlReadOutcome};
 pub use emir_msr::{read_emir_msr_xml, MsrXmlReadOutcome};
+pub use emir_position_set::{read_emir_position_set_xml, EmirPositionSetXmlReadOutcome};
 pub use emir_recon_stats::{read_emir_recon_stats_xml, ReconStatsXmlReadOutcome};
 pub use emir_warnings::{read_emir_warnings_xml, WarningsXmlReadOutcome};
 pub use feedback::{read_emir_feedback_xml, FeedbackXmlReadOutcome};

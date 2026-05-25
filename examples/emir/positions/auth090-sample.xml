@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  EMIR Derivatives Trade Position Set Report (auth.090) —
+  synthetic schema-shaped fixture exercising the 4 position-set
+  kinds (PosSet / CcyPosSet / CollPosSet / CcyCollPosSet) under
+  one Rpt block sharing a single RefDt.
+
+  All values are synthetic. ESMA paths follow auth.090.001.02
+  = DerivativesTradePositionSetReportV02.
+
+  Record map:
+    PosSet-1        CRDT/SWAP — EUR notional 12.5M, MtM 125k
+    PosSet-2        INTR/FUTR — USD notional 100k, MtM 5k
+    CcyPosSet-1     EQUI/CFDS — GBP currency bucket
+    CollPosSet-1    CRDT/SWAP — EUR collateral 110k
+    CcyCollPosSet-1 INTR/FUTR — USD currency collateral 50k
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.090.001.02">
+  <DerivsTradPosSetRpt>
+    <AggtdPos>
+      <Rpt>
+        <RefDt>2026-05-21</RefDt>
+
+        <PosSet>
+          <Dmnsns>
+            <CtrPtyId>
+              <RptgCtrPty><Id><LEI>RPTGCPARTY0000000001</LEI></Id></RptgCtrPty>
+              <OthrCtrPty><Id><LEI>OTHRCPARTY0000000002</LEI></Id></OthrCtrPty>
+            </CtrPtyId>
+            <ValCcy>EUR</ValCcy>
+            <AsstClss>CRDT</AsstClss>
+            <CtrctTp>SWAP</CtrctTp>
+            <UndrlygInstrm><Sngl><ISIN>DE000A1B2C34</ISIN></Sngl></UndrlygInstrm>
+          </Dmnsns>
+          <Mtrcs>
+            <Ttl>
+              <Buyr>
+                <NbOfTrds>50</NbOfTrds>
+                <PostvVal Ccy="EUR">125000.50</PostvVal>
+                <NegVal Ccy="EUR">0</NegVal>
+                <Ntnl><Amt Ccy="EUR">12500000.00</Amt></Ntnl>
+              </Buyr>
+              <Sellr>
+                <NbOfTrds>0</NbOfTrds><PostvVal Ccy="EUR">0</PostvVal><NegVal Ccy="EUR">0</NegVal>
+                <Ntnl><Amt Ccy="EUR">0</Amt></Ntnl>
+              </Sellr>
+            </Ttl>
+            <Clean>
+              <Buyr>
+                <NbOfTrds>50</NbOfTrds><PostvVal Ccy="EUR">125000.50</PostvVal><NegVal Ccy="EUR">0</NegVal>
+                <Ntnl><Amt Ccy="EUR">12500000.00</Amt></Ntnl>
+              </Buyr>
+              <Sellr>
+                <NbOfTrds>0</NbOfTrds><PostvVal Ccy="EUR">0</PostvVal><NegVal Ccy="EUR">0</NegVal>
+                <Ntnl><Amt Ccy="EUR">0</Amt></Ntnl>
+              </Sellr>
+            </Clean>
+          </Mtrcs>
+        </PosSet>
+
+        <PosSet>
+          <Dmnsns>
+            <CtrPtyId>
+              <RptgCtrPty><Id><LEI>RPTGCPARTY0000000001</LEI></Id></RptgCtrPty>
+              <OthrCtrPty><Id><LEI>OTHRCPARTY0000000003</LEI></Id></OthrCtrPty>
+            </CtrPtyId>
+            <ValCcy>USD</ValCcy>
+            <AsstClss>INTR</AsstClss>
+            <CtrctTp>FUTR</CtrctTp>
+          </Dmnsns>
+          <Mtrcs>
+            <Ttl>
+              <Buyr>
+                <NbOfTrds>10</NbOfTrds><PostvVal Ccy="USD">5000.00</PostvVal><NegVal Ccy="USD">0</NegVal>
+                <Ntnl><Amt Ccy="USD">100000.00</Amt></Ntnl>
+              </Buyr>
+              <Sellr>
+                <NbOfTrds>0</NbOfTrds><PostvVal Ccy="USD">0</PostvVal><NegVal Ccy="USD">0</NegVal>
+                <Ntnl><Amt Ccy="USD">0</Amt></Ntnl>
+              </Sellr>
+            </Ttl>
+            <Clean>
+              <Buyr>
+                <NbOfTrds>10</NbOfTrds><PostvVal Ccy="USD">5000.00</PostvVal><NegVal Ccy="USD">0</NegVal>
+                <Ntnl><Amt Ccy="USD">100000.00</Amt></Ntnl>
+              </Buyr>
+              <Sellr>
+                <NbOfTrds>0</NbOfTrds><PostvVal Ccy="USD">0</PostvVal><NegVal Ccy="USD">0</NegVal>
+                <Ntnl><Amt Ccy="USD">0</Amt></Ntnl>
+              </Sellr>
+            </Clean>
+          </Mtrcs>
+        </PosSet>
+
+        <CcyPosSet>
+          <Dmnsns>
+            <CtrPtyId>
+              <RptgCtrPty><Id><LEI>RPTGCPARTY0000000001</LEI></Id></RptgCtrPty>
+              <OthrCtrPty><Id><LEI>OTHRCPARTY0000000004</LEI></Id></OthrCtrPty>
+            </CtrPtyId>
+            <ValCcy>GBP</ValCcy>
+            <AsstClss>EQUI</AsstClss>
+            <CtrctTp>CFDS</CtrctTp>
+          </Dmnsns>
+          <Mtrcs>
+            <Ttl>
+              <Buyr>
+                <NbOfTrds>5</NbOfTrds><PostvVal Ccy="GBP">2500.00</PostvVal><NegVal Ccy="GBP">0</NegVal>
+                <Ntnl><Amt Ccy="GBP">50000.00</Amt></Ntnl>
+              </Buyr>
+              <Sellr>
+                <NbOfTrds>0</NbOfTrds><PostvVal Ccy="GBP">0</PostvVal><NegVal Ccy="GBP">0</NegVal>
+                <Ntnl><Amt Ccy="GBP">0</Amt></Ntnl>
+              </Sellr>
+            </Ttl>
+            <Clean>
+              <Buyr>
+                <NbOfTrds>5</NbOfTrds><PostvVal Ccy="GBP">2500.00</PostvVal><NegVal Ccy="GBP">0</NegVal>
+                <Ntnl><Amt Ccy="GBP">50000.00</Amt></Ntnl>
+              </Buyr>
+              <Sellr>
+                <NbOfTrds>0</NbOfTrds><PostvVal Ccy="GBP">0</PostvVal><NegVal Ccy="GBP">0</NegVal>
+                <Ntnl><Amt Ccy="GBP">0</Amt></Ntnl>
+              </Sellr>
+            </Clean>
+          </Mtrcs>
+        </CcyPosSet>
+
+        <CollPosSet>
+          <Dmnsns>
+            <CtrPtyId>
+              <RptgCtrPty><Id><LEI>RPTGCPARTY0000000001</LEI></Id></RptgCtrPty>
+              <OthrCtrPty><Id><LEI>OTHRCPARTY0000000002</LEI></Id></OthrCtrPty>
+            </CtrPtyId>
+            <ValCcy>EUR</ValCcy>
+            <AsstClss>CRDT</AsstClss>
+            <CtrctTp>SWAP</CtrctTp>
+          </Dmnsns>
+          <Mtrcs>
+            <Ttl>
+              <NbOfRpts>50</NbOfRpts>
+              <PstdMrgnOrColl>
+                <InitlMrgnPstdPreHrcut><Amt Ccy="EUR">110000.25</Amt></InitlMrgnPstdPreHrcut>
+              </PstdMrgnOrColl>
+            </Ttl>
+            <Clean>
+              <NbOfRpts>50</NbOfRpts>
+            </Clean>
+          </Mtrcs>
+        </CollPosSet>
+
+        <CcyCollPosSet>
+          <Dmnsns>
+            <CtrPtyId>
+              <RptgCtrPty><Id><LEI>RPTGCPARTY0000000001</LEI></Id></RptgCtrPty>
+              <OthrCtrPty><Id><LEI>OTHRCPARTY0000000003</LEI></Id></OthrCtrPty>
+            </CtrPtyId>
+            <ValCcy>USD</ValCcy>
+            <AsstClss>INTR</AsstClss>
+            <CtrctTp>FUTR</CtrctTp>
+          </Dmnsns>
+          <Mtrcs>
+            <Ttl>
+              <NbOfRpts>10</NbOfRpts>
+              <PstdMrgnOrColl>
+                <InitlMrgnPstdPreHrcut><Amt Ccy="USD">50000.00</Amt></InitlMrgnPstdPreHrcut>
+              </PstdMrgnOrColl>
+            </Ttl>
+            <Clean>
+              <NbOfRpts>10</NbOfRpts>
+            </Clean>
+          </Mtrcs>
+        </CcyCollPosSet>
+
+      </Rpt>
+    </AggtdPos>
+  </DerivsTradPosSetRpt>
+</Document>
