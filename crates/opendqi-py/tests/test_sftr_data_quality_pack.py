@@ -92,7 +92,8 @@ def test_indicators_table_is_16_rows() -> None:
     (auth.079) + 1 TAR (auth.052) + 4 reconciliation (auth.080) + 1
     MCR (auth.083) + 4 MSR T3 (auth.085). Indicators whose source
     layer isn't provided self-report `not_applicable` but the row
-    is still in the output — the count is fixed at 16."""
+    is still in the output — v0.18 bumps the count to 24
+    (16 v0.17 + 3 MAR + 2 reuse + 2 reuse-state + 1 REJ_RATE)."""
     if not _all_fixtures_present():
         pytest.skip("SFTR fixtures missing")
     import opendqi
@@ -102,7 +103,7 @@ def test_indicators_table_is_16_rows() -> None:
         tar=str(TAR_FIXTURE),
         as_of="2026-05-21",
     )
-    assert result.indicators.num_rows == 16
+    assert result.indicators.num_rows == 24
 
 
 def test_indicators_alphabetical_by_indicator_id() -> None:
@@ -118,6 +119,8 @@ def test_indicators_alphabetical_by_indicator_id() -> None:
     )
     ids = result.indicators.column("indicator_id").to_pylist()
     assert ids == sorted(ids)
+    # v0.18 bumps from 16 to 24 SFTR DQIs (3 MAR + 2 reuse +
+    # 2 reuse-state + 1 REJ_RATE inserted alphabetically).
     assert ids == [
         "DQI_COLLATERAL_VALUE_MISSING_SFTR",
         "DQI_FIELD_MISMATCH_RATE_SFTR",
@@ -125,9 +128,17 @@ def test_indicators_alphabetical_by_indicator_id() -> None:
         "DQI_LEI_MISSING_SFTR",
         "DQI_LOAN_VALUE_MISSING_SFTR",
         "DQI_LOAN_VALUE_STALE_SFTR",
+        "DQI_MAR_EVENT_SPIKE_SFTR",
+        "DQI_MAR_EXCESS_COLLATERAL_EVENT_RATE_SFTR",
+        "DQI_MAR_PARTIAL_SIDES_SFTR",
         "DQI_MCR_OPEN_REQUESTS_SFTR",
         "DQI_PAIRING_RATE_SFTR",
         "DQI_RECONCILIATION_RATE_SFTR",
+        "DQI_REJ_RATE_SFTR",
+        "DQI_REUSE_ERR_RETRACTION_RATE_SFTR",
+        "DQI_REUSE_STATE_STALE_SFTR",
+        "DQI_REUSE_STATE_VOLUME_MISSING_SFTR",
+        "DQI_REUSE_VOLUME_MISSING_SFTR",
         "DQI_T3_EXCESS_COLLATERAL_USE_SFTR",
         "DQI_T3_MARGIN_POSTED_MISSING_SFTR",
         "DQI_T3_MARGIN_RECEIVED_MISSING_SFTR",
@@ -147,6 +158,12 @@ def test_full_5_input_pack_computes_all_16_indicators() -> None:
         pytest.skip("v0.17 fixtures (recon/MCR/MSR) missing")
     import opendqi
 
+    # v0.18 extends from 5 to 9 inputs (add MAR + reuse_activity
+    # + reuse_state + tr_status_advice). The 24-DQI count is
+    # fixed; the assertion now checks that AT LEAST the v0.17
+    # 16-DQI subset computes (the 8 v0.18 DQIs depend on the
+    # v0.18 fixtures being structurally complete enough for the
+    # NotApplicable-from-empty-denominator path not to trigger).
     result = opendqi.sftr.data_quality_pack(
         tsr=str(TSR_FIXTURE),
         tar=str(TAR_FIXTURE),
@@ -155,11 +172,37 @@ def test_full_5_input_pack_computes_all_16_indicators() -> None:
         msr=str(MSR_FIXTURE),
         as_of="2026-05-21",
     )
-    assert result.indicators.num_rows == 16
-    statuses = result.indicators.column("status").to_pylist()
-    assert all(s != "not_applicable" for s in statuses), (
-        f"all 16 DQIs must compute with full 5-input pack ; statuses: {statuses}"
+    assert result.indicators.num_rows == 24
+    statuses = dict(
+        zip(
+            result.indicators.column("indicator_id").to_pylist(),
+            result.indicators.column("status").to_pylist(),
+        )
     )
+    # v0.17 16-DQI subset must compute (no `not_applicable`).
+    v017_ids = {
+        "DQI_COLLATERAL_VALUE_MISSING_SFTR",
+        "DQI_FIELD_MISMATCH_RATE_SFTR",
+        "DQI_HAIRCUT_ANOMALY_SFTR",
+        "DQI_LEI_MISSING_SFTR",
+        "DQI_LOAN_VALUE_MISSING_SFTR",
+        "DQI_LOAN_VALUE_STALE_SFTR",
+        "DQI_MCR_OPEN_REQUESTS_SFTR",
+        "DQI_PAIRING_RATE_SFTR",
+        "DQI_RECONCILIATION_RATE_SFTR",
+        "DQI_T3_EXCESS_COLLATERAL_USE_SFTR",
+        "DQI_T3_MARGIN_POSTED_MISSING_SFTR",
+        "DQI_T3_MARGIN_RECEIVED_MISSING_SFTR",
+        "DQI_T3_MARGIN_STALE_SFTR",
+        "DQI_TIM_REPORTING_LATE_SFTR",
+        "DQI_UNDER_COLLATERALIZATION_SFTR",
+        "DQI_UNPAIRED_TRADES_RATE_SFTR",
+    }
+    for ind_id, status in statuses.items():
+        if ind_id in v017_ids:
+            assert status != "not_applicable", (
+                f"{ind_id} (v0.17 baseline) must compute with full 5-input pack ; got {status}"
+            )
     # The MSR layer triggers the F1' SFTR.T3.* granular checks
     # so the issues stream must contain at least one of them
     # (the auth.085 fixture has REC-5 negative IM posted +

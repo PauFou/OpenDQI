@@ -76,10 +76,12 @@ def test_pack_returns_dqi_pack_result() -> None:
     assert "score=" in r
 
 
-def test_indicators_table_is_24_rows() -> None:
-    """v0.16 B1 ships 14 EMIR indicators (10 v0.15 + 4 v0.16
-    cross-CP from auth.091) ; downstream consumers rely on a
-    fixed indicator set per release."""
+def test_indicators_table_is_28_rows() -> None:
+    """v0.18 E4 bumps the fixed EMIR indicator count from 24
+    (v0.16) to 28 by adding 4 EMIR Position Set DQIs
+    (NOTIONAL_MISSING, MARK_TO_MARKET_MISSING, NOTIONAL_NEGATIVE,
+    COLLATERAL_MISSING). Downstream consumers rely on a fixed
+    indicator set per release."""
     if not _all_fixtures_present():
         pytest.skip("quickstart fixtures missing")
     import opendqi
@@ -90,7 +92,7 @@ def test_indicators_table_is_24_rows() -> None:
         feedback=str(FBK_FIXTURE),
         as_of="2026-05-21",
     )
-    assert result.indicators.num_rows == 24
+    assert result.indicators.num_rows == 28
 
 
 def test_indicators_alphabetical_by_indicator_id() -> None:
@@ -107,6 +109,8 @@ def test_indicators_alphabetical_by_indicator_id() -> None:
     )
     ids = result.indicators.column("indicator_id").to_pylist()
     assert ids == sorted(ids)
+    # v0.18 E4 inserts 4 DQI_POSITION_* indicators alphabetically
+    # between DQI_PAIRING_RATE and DQI_RECONCILIATION_RATE (24 -> 28).
     assert ids == [
         "DQI_ANOMALY_RATE",
         "DQI_COL_ALL_ZERO",
@@ -122,6 +126,10 @@ def test_indicators_alphabetical_by_indicator_id() -> None:
         "DQI_NATURE_MISSING",
         "DQI_NOTIONAL_INCONSISTENT",
         "DQI_PAIRING_RATE",
+        "DQI_POSITION_COLLATERAL_MISSING",
+        "DQI_POSITION_MARK_TO_MARKET_MISSING",
+        "DQI_POSITION_NOTIONAL_MISSING",
+        "DQI_POSITION_NOTIONAL_NEGATIVE",
         "DQI_RECONCILIATION_RATE",
         "DQI_REC_STATUS_UNPAIRED",
         "DQI_REJ_RATE",

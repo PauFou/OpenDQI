@@ -65,7 +65,8 @@ def test_string_paths_passthrough_emits_future_warning(tmp_path: Path) -> None:
             as_of="2026-05-21",
         )
     # Same result type as the core function — same getters work.
-    assert result.indicators.num_rows == 24
+    # v0.18 E4 bumps the EMIR DQI count from 24 to 28.
+    assert result.indicators.num_rows == 28
     assert result.summary["files_processed"] == 1
 
 
