@@ -2008,6 +2008,9 @@ fn run_data_quality_pack(
         } else {
             None
         },
+        // v0.18 C3: reuse_state slot plumbed but no CLI flag
+        // yet (added in C5). Forced to None at this surface.
+        reuse_state: None,
     };
 
     let pack = compute_sftr_dqi_pack(inputs, MappingPresence::default(), &thresholds, as_of);

@@ -560,6 +560,9 @@ pub fn data_quality_pack(
         // v0.18 B5: reuse_activity slot wired through
         // `reuse_activity=` kwarg.
         reuse_activity: reuse_activity.map(|_| reuse_activity_records.as_slice()),
+        // v0.18 C3: reuse_state slot plumbed but no Python kwarg
+        // yet (added in C5). Forced to None at this surface.
+        reuse_state: None,
     };
 
     let pack = compute_sftr_dqi_pack(inputs, MappingPresence::default(), &thresholds, as_of_date);
