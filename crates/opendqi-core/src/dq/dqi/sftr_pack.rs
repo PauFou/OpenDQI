@@ -47,7 +47,8 @@ use crate::dq::{
     run_all_sftr_msr, run_all_sftr_tr_state, CheckContext,
 };
 use crate::model::{
-    DqDimension, DqIssue, Regime, SftrMarginStateRecord, SftrRecord, SftrTrStateRecord,
+    DqDimension, DqIssue, Regime, SftrMarginActivityRecord, SftrMarginStateRecord, SftrRecord,
+    SftrTrStateRecord,
 };
 use crate::Thresholds;
 
@@ -90,6 +91,14 @@ pub struct SftrDqiInputs<'a> {
     /// level margin state (CCP-cleared SFTs only). Powers the
     /// 4 SFTR T3 margin DQIs added in B1'.
     pub msr: Option<&'a [SftrMarginStateRecord]>,
+    /// SFTR Margin Data Transaction Report (`auth.070`) —
+    /// projected onto [`SftrMarginActivityRecord`]. Event-
+    /// driven per-margin-event activity (NEWT / ERRT / CORR /
+    /// TRDU), CCP-cleared SFTs only. **A3 status**: the slot
+    /// is plumbed but no computer reads it yet — the 3 MAR
+    /// DQIs land in A4 and the 4 `SFTR.MAR.*` granular checks
+    /// in A5.
+    pub mar: Option<&'a [SftrMarginActivityRecord]>,
 }
 
 /// Run the SFTR Data Quality Pack.
@@ -410,6 +419,43 @@ mod tests {
         assert!(inputs.reconciliation.is_none());
         assert!(inputs.missing_collateral.is_none());
         assert!(inputs.msr.is_none());
+    }
+
+    #[test]
+    fn default_inputs_have_mar_slot_at_none() {
+        // v0.18 A3 contract: the mar slot exists and defaults
+        // to None alongside the other 5 slots. No DQI computer
+        // reads it yet — that lands in A4 (3 SFTR MAR DQIs) and
+        // A5 (4 SFTR.MAR.* granular checks).
+        let inputs: SftrDqiInputs = SftrDqiInputs::default();
+        assert!(inputs.mar.is_none());
+    }
+
+    #[test]
+    fn providing_empty_mar_is_noop_pre_a4() {
+        // v0.18 A3: an empty mar slice is observably distinct
+        // from mar=None at the type level, but no computer fires
+        // on it yet (A4 adds the 3 SFTR MAR DQI computers and A5
+        // the granular checks). Until then the indicator count
+        // stays at the v0.17 baseline (16) and the indicator IDs
+        // stay alphabetical regardless of `mar`.
+        let mar: Vec<SftrMarginActivityRecord> = vec![];
+        let inputs = SftrDqiInputs {
+            mar: Some(&mar),
+            ..SftrDqiInputs::default()
+        };
+        let result = compute_sftr_dqi_pack(
+            inputs,
+            MappingPresence::default(),
+            &Thresholds::default(),
+            as_of(),
+        );
+        // v0.17 baseline = 16 indicators, unchanged by A3.
+        assert_eq!(result.indicators.len(), 16);
+        // No SFTR.MAR.* check exists pre-A5: the granular issues
+        // count stays at the no-input baseline (zero, since every
+        // other slot is None too).
+        assert!(result.issues.is_empty());
     }
 
     #[test]

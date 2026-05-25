@@ -535,6 +535,9 @@ pub fn data_quality_pack(
         reconciliation: reconciliation.map(|_| reconciliation_records.as_slice()),
         missing_collateral: missing_collateral.map(|_| missing_collateral_records.as_slice()),
         msr: msr.map(|_| msr_records.as_slice()),
+        // v0.18 A3: mar slot is plumbed but no Python kwarg yet
+        // (added in A6). Forced to None at this surface for now.
+        mar: None,
     };
 
     let pack = compute_sftr_dqi_pack(inputs, MappingPresence::default(), &thresholds, as_of_date);

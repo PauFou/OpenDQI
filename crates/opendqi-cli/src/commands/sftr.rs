@@ -1941,6 +1941,9 @@ fn run_data_quality_pack(
         } else {
             None
         },
+        // v0.18 A3: mar slot is plumbed but no CLI flag yet
+        // (added in A6). Forced to None at this surface for now.
+        mar: None,
     };
 
     let pack = compute_sftr_dqi_pack(inputs, MappingPresence::default(), &thresholds, as_of);
