@@ -35,8 +35,11 @@ collateral obligation, TSR (auth.107) ↔ MSR (auth.109) cross-reference
 exposed by `opendqi emir collateral-audit` (see
 [`docs/collateral-audit.md`](collateral-audit.md) and the new section
 in [`docs/emir-risk-mitigation.md`](emir-risk-mitigation.md)) — see
-the dedicated docs. **Total live EMIR catalog: 151 checks**, plus
-65 SFTR counterparts (`docs/sftr-checks.md`).
+the dedicated docs. **Total live EMIR catalog: 155 checks** (v0.18:
+151 v0.17 baseline + 4 new `EMIR.POS.*` granular checks on auth.090
+position-set records — see [`auth-messages/emir-auth090.md`](auth-messages/emir-auth090.md)),
+plus 79 SFTR counterparts (`docs/sftr-checks.md`). Combined:
+**234 granular checks across both regimes**.
 
 Severity scale: `info` < `warning` < `high` < `critical`.
 

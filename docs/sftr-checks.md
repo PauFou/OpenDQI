@@ -1,6 +1,9 @@
 # SFTR data-quality checks
 
-OpenDQI ships **71 SFTR checks** in v0.17 :
+OpenDQI ships **79 SFTR checks** in v0.18 (was 71 in v0.17,
++8 added in v0.18 across 3 new layers: 4 SFTR.MAR.* on
+auth.070, 2 SFTR.REU.* on auth.071, 2 SFTR.REU.STATE.* on
+auth.086):
 - **44 single-batch SFTR checks** (this document — including
   `SFTR.COMP.SECURITY_ID_MISSING`)
 - **19 post-TR checks** (6 TSR + 5 TAR + 3 reconciliation + 5
@@ -9,6 +12,12 @@ OpenDQI ships **71 SFTR checks** in v0.17 :
   see [`pre-submission-checks.md`](pre-submission-checks.md))
 - **6 `SFTR.T3.*` MSR margin checks** (v0.17 ; auth.085
   portfolio-level — see [`auth-messages/sftr-auth085.md`](auth-messages/sftr-auth085.md))
+- **4 `SFTR.MAR.*` margin-activity checks** (v0.18 ; auth.070
+  event-driven — see [`auth-messages/sftr-auth070.md`](auth-messages/sftr-auth070.md))
+- **2 `SFTR.REU.*` reuse-activity checks** (v0.18 ; auth.071
+  firm-side reuse — see [`auth-messages/sftr-auth071.md`](auth-messages/sftr-auth071.md))
+- **2 `SFTR.REU.STATE.*` reuse-state checks** (v0.18 ; auth.086
+  state snapshot — see [`auth-messages/sftr-auth086.md`](auth-messages/sftr-auth086.md))
 
 …across the SFTR post-TR intelligence layers — `auth.080`
 reconciliation, `auth.083` missing-collateral, `auth.079` TSR,

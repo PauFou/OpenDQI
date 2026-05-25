@@ -1,12 +1,19 @@
-# Data Quality Pack (v0.17+)
+# Data Quality Pack (v0.18+)
 
 The Data Quality Pack is OpenDQI's **committee-readable**
 view on top of the granular check catalogue. Where the
-per-row `DqIssue` stream is forensic (222 checks, 6
-dimensions), the DQI pack rolls them up into **40
-regulator-style indicators** — 24 EMIR + 16 SFTR — each with
-`numerator / denominator / rate / threshold / status`, plus
-drill-down evidence.
+per-row `DqIssue` stream is forensic (234 checks across 6
+dimensions in v0.18 : 155 EMIR + 79 SFTR), the DQI pack rolls
+them up into **52 regulator-style indicators** — 28 EMIR + 24
+SFTR — each with `numerator / denominator / rate / threshold
+/ status`, plus drill-down evidence.
+
+v0.18 adds 12 new indicators on top of the v0.17 baseline (4
+EMIR Position Set + 3 SFTR MAR + 2 SFTR Reuse + 2 SFTR Reuse
+State + 1 SFTR Rejection Rate) across 5 new ESMA messages
+(EMIR auth.090, SFTR auth.070 / 071 / 084 / 086), plus closes
+the v0.16 EMIR auth.091 carry-over so the 7 cross-CP DQIs
+finally compute when `--recon-stats` is provided.
 
 Same scan, two views — the granular issue stream is
 **co-produced**, never replaced. `issues.csv` keeps carrying
@@ -56,11 +63,12 @@ reconciliation (`auth.080`) + missing-collateral (`auth.083`)
 + MSR (`auth.085`). Each layer flag is optional ; indicators
 whose source layer isn't provided self-report `not_applicable`.
 
-## The 24 EMIR indicators
+## The 28 EMIR indicators (v0.18)
 
 Grouped by source layer for readability ; the on-disk
 `indicators.csv` is always sorted alphabetically by
-`indicator_id`.
+`indicator_id`. v0.18 adds the 4 Position Set DQIs (E4) on
+top of the v0.16 baseline of 24.
 
 ### TSR-only (5)
 
@@ -133,14 +141,39 @@ from the `ReconciliationRecord` detail.
 | `DQI_MARGIN_INCONSISTENT_PRE_HAIRCUT` | consistency | paired records flagged on any IM/VM pre-haircut criterion | paired records carrying ≥ 1 such criterion | 5 % / 20 % |
 | `DQI_MARGIN_INCONSISTENT_POST_HAIRCUT` | consistency | paired records flagged on any IM/VM post-haircut criterion | paired records carrying ≥ 1 such criterion | 5 % / 20 % |
 
-**Wiring note (v0.16 honest scope)** — the new auth.091-derived
-indicators ship in the core engine, the CLI flag and Python
-keyword to feed `--recon-stats` / `--reconciliation` are
-**not yet wired** on `opendqi emir data-quality-pack` ;
-they self-report `not_applicable` until the follow-up commit
-threads those inputs through both surfaces.
+**Wiring note (v0.16 honest scope, CLOSED in v0.18 F1)** —
+the 7 auth.091-derived indicators ship in the core engine
+since v0.16 ; the CLI flag and Python keyword were not wired
+through `opendqi emir data-quality-pack` until v0.18 F1.
+**v0.18+** : `--recon-stats <auth091.xml>` /
+`recon_stats="auth091.xml"` activates all 7 (one parse populates
+both per-CP stats and per-tx reconciliation slots).
 
-## The 16 SFTR indicators (v0.17)
+### Position Set — `auth.090` (4, v0.18 E4)
+
+| ID | Dimension | Numerator | Denominator | Default thresholds (amber / red) |
+|---|---|---|---|---|
+| `DQI_POSITION_NOTIONAL_MISSING` | completeness | PosSet/CcyPosSet records with `notional = None` | PosSet/CcyPosSet records | 5 % / 20 % |
+| `DQI_POSITION_MARK_TO_MARKET_MISSING` | completeness | PosSet/CcyPosSet records with `mark_to_market_value = None` | PosSet/CcyPosSet records | 5 % / 20 % |
+| `DQI_POSITION_NOTIONAL_NEGATIVE` | accuracy | PosSet/CcyPosSet records with `notional < 0` | PosSet/CcyPosSet records with `notional` set | 0.5 % / 2 % |
+| `DQI_POSITION_COLLATERAL_MISSING` | completeness | CollPosSet/CcyCollPosSet with `collateral_value = None` | CollPosSet/CcyCollPosSet records | 5 % / 20 % |
+
+Activated by `--positions <auth090.xml>` / `positions="auth090.xml"`.
+Each DQI scopes by `position_set_kind` (4 kinds: PosSet,
+CcyPosSet, CollPosSet, CcyCollPosSet) — notional/MtM DQIs
+exclude collateral kinds and vice versa. See
+[`auth-messages/emir-auth090.md`](auth-messages/emir-auth090.md)
+for the XSD shape.
+
+## The 24 SFTR indicators (v0.18)
+
+v0.18 adds 8 SFTR DQIs on top of the v0.17 baseline of 16,
+across 4 new ESMA messages (auth.070 MAR / auth.071 reuse
+activity / auth.084 status advice / auth.086 reuse state).
+Sections below cover the v0.17 baseline first, then the v0.18
+additions.
+
+### v0.17 baseline (16 indicators)
 
 Grouped by source layer for readability ; the on-disk
 `indicators.csv` is always sorted alphabetically by
@@ -216,7 +249,67 @@ reporting, `MARGIN_NEGATIVE`, `MARGIN_CURRENCY_MISSING`) that
 are co-produced into `issues.csv` alongside the aggregated
 DQIs.
 
-## Status mapping (common to all 40)
+### v0.18 additions (8 indicators across 4 new layers)
+
+#### MAR — `auth.070` (3, v0.18 A4)
+
+Activated by `--mar <auth070.xml>` / `mar="auth070.xml"`.
+
+| ID | Dimension | Numerator | Denominator | Default thresholds (amber / red) |
+|---|---|---|---|---|
+| `DQI_MAR_PARTIAL_SIDES_SFTR` | completeness | MAR events reporting only one of (posted, received) | non-Err MAR events with ≥ 1 amount | 5 % / 20 % |
+| `DQI_MAR_EXCESS_COLLATERAL_EVENT_RATE_SFTR` | accuracy | MAR events with `excess_collateral_posted > 0` | MAR events with posted-side amount | 20 % / 50 % |
+| `DQI_MAR_EVENT_SPIKE_SFTR` | timeliness | CP-pairs with event count > mean + 2σ | distinct CP-pairs (≥ 4 needed for stats) | 5 % / 20 % |
+
+Triggers 4 granular `SFTR.MAR.*` checks (action-type enum,
+portfolio mandatory, event-date in future, amount-currency
+missing).
+
+#### Reuse Activity — `auth.071` (2, v0.18 B4)
+
+Activated by `--reuse-activity <auth071.xml>` /
+`reuse_activity="auth071.xml"`.
+
+| ID | Dimension | Numerator | Denominator | Default thresholds (amber / red) |
+|---|---|---|---|---|
+| `DQI_REUSE_VOLUME_MISSING_SFTR` | completeness | non-Err records with no Scty/ReuseVal AND no Csh/CshRinvstmtRate | non-Err records | 5 % / 20 % |
+| `DQI_REUSE_ERR_RETRACTION_RATE_SFTR` | timeliness | records with `action_type = ERRT` | all records | 5 % / 20 % |
+
+**Honest pivot from plan** — the plan's `DQI_REUSE_VOLUME_RATE`
+(TSR UTI cross-ref) and `DQI_REUSE_CHAIN_DEPTH` were
+redesigned : auth.071 has neither a UTI cross-reference field
+nor a chain-depth field at the XSD level.
+
+Triggers 2 granular `SFTR.REU.*` checks
+(`MISSING_REUSE_CURRENCY`, `RATE_OUTSIDE_PLAUSIBLE_BAND`).
+
+#### Reuse State — `auth.086` (2, v0.18 C4)
+
+Activated by `--reuse-state <auth086.xml>` /
+`reuse_state="auth086.xml"`. State-side mirror of `auth.071`.
+
+| ID | Dimension | Numerator | Denominator | Default thresholds (amber / red) |
+|---|---|---|---|---|
+| `DQI_REUSE_STATE_VOLUME_MISSING_SFTR` | completeness | state snapshots with no Scty/ReuseVal AND no Csh/CshRinvstmtRate | all snapshots | 5 % / 20 % |
+| `DQI_REUSE_STATE_STALE_SFTR` | timeliness | snapshots with `RptgDtTm` older than `max_valuation_age_business_days` TARGET2 BD | snapshots with timestamp + content | 5 % / 20 % |
+
+Triggers 2 granular `SFTR.REU.STATE.*` checks (state-side
+mirrors of the `SFTR.REU.*` family).
+
+#### Transaction Status Advice — `auth.084` (1, v0.18 D2)
+
+Activated by `--tr-status-advice <auth084.xml>` /
+`tr_status_advice="auth084.xml"`.
+
+| ID | Dimension | Numerator | Denominator | Default thresholds (amber / red) |
+|---|---|---|---|---|
+| `DQI_REJ_RATE_SFTR` | accuracy | sum(`total_reports_rejected`) | sum(`total_reports`) | 5 % / 20 % |
+
+Mirror of EMIR `DQI_REJ_RATE`. Evidence rows surface the top-N
+validation rule codes by per-error rejection count. No
+granular checks in v0.18 (aggregate-stats shape).
+
+## Status mapping (common to all 52)
 
 - `rate ≤ amber_threshold` → **green**
 - `amber_threshold < rate ≤ red_threshold` → **amber**
