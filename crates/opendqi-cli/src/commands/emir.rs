@@ -2483,7 +2483,6 @@ fn write_xsd_errors_csv(path: &Path, rows: &[XsdReportRow]) -> Result<()> {
 }
 
 #[allow(clippy::too_many_arguments)]
-#[allow(clippy::too_many_arguments)]
 fn run_data_quality_pack(
     tsr_path: Option<&Path>,
     tar_path: Option<&Path>,

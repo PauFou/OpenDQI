@@ -1683,17 +1683,34 @@ mod tests {
         let mut reference: Vec<DqIssue> = mk().into_iter().flat_map(|b| b.0).collect();
         finalize_issues(&mut reference, &ctx);
 
-        // `DqIssue` has no `PartialEq`; compare the serialised form
-        // (the output-byte proxy used across the sink tests).
-        let to_json = |v: &[DqIssue]| -> Vec<String> {
-            v.iter()
+        // M0.20 fix (v0.18 F3): `stream_checks_into` uses
+        // `par_iter`, so the per-batch arrival order at the sink
+        // is non-deterministic. `issue_cmp` excludes `severity`
+        // (because two issues equal on the 8 compared fields
+        // would be byte-identical in `issues.csv`), so two
+        // issues with the same check_id / source_file /
+        // record_id / uti / field / value / message / evidence
+        // but **different severities** tie on the sort key. The
+        // unstable sort then leaves them in insertion order,
+        // which differs between the parallel-streaming path and
+        // the sequential concat-then-sort reference path.
+        //
+        // The documented codebase invariant is **multiset
+        // equality** of the issue set (not sequence equality);
+        // assert that here instead of strict byte-identical
+        // JSON-string sequence.
+        let to_sorted_json = |v: &[DqIssue]| -> Vec<String> {
+            let mut out: Vec<String> = v
+                .iter()
                 .map(|i| serde_json::to_string(i).unwrap())
-                .collect()
+                .collect();
+            out.sort();
+            out
         };
         assert_eq!(
-            to_json(&streamed),
-            to_json(&reference),
-            "stream path must equal finalize path"
+            to_sorted_json(&streamed),
+            to_sorted_json(&reference),
+            "stream path must equal finalize path as a multiset of issues"
         );
         assert_eq!(summary.issues_total as usize, reference.len());
     }

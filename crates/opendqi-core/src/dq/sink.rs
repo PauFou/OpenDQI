@@ -30,6 +30,7 @@ use std::collections::{BTreeMap, BinaryHeap};
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 
 use chrono::{DateTime, Utc};
 
@@ -102,14 +103,23 @@ impl SortedIssueSink {
 
     fn ensure_spill_dir(&mut self) -> PathBuf {
         if self.spill_dir.is_none() {
+            // Process-local monotonic counter — disambiguates
+            // spill dirs allocated by parallel sinks within the
+            // same nanosecond (M0.20 fix: under parallel cargo
+            // test execution, two sinks could otherwise collide
+            // on (pid, nanos) and step on each other's spill
+            // files).
+            static SEQ: AtomicU64 = AtomicU64::new(0);
+            let seq = SEQ.fetch_add(1, AtomicOrdering::Relaxed);
             let nanos = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_nanos())
                 .unwrap_or(0);
             let dir = std::env::temp_dir().join(format!(
-                "opendqi-spill-{}-{}",
+                "opendqi-spill-{}-{}-{}",
                 std::process::id(),
-                nanos
+                nanos,
+                seq
             ));
             let _ = fs::create_dir_all(&dir);
             self.spill_dir = Some(SpillDir { dir });
@@ -515,13 +525,20 @@ mod tests {
 
     #[test]
     fn spill_dir_raii_unit() {
+        // Test-local atomic counter mirrors the production
+        // (pid, nanos, seq) shape — guarantees uniqueness even
+        // if this test runs in parallel with itself across
+        // multiple cargo-test binaries on the same nanos.
+        static TEST_SEQ: AtomicU64 = AtomicU64::new(0);
+        let seq = TEST_SEQ.fetch_add(1, AtomicOrdering::Relaxed);
         let dir = std::env::temp_dir().join(format!(
-            "opendqi-spill-raii-{}-{}",
+            "opendqi-spill-raii-{}-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
-                .as_nanos()
+                .as_nanos(),
+            seq
         ));
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("run-000000.jsonl"), b"{}").unwrap();
