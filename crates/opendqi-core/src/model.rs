@@ -873,6 +873,95 @@ impl Default for SftrMarginActivityRecord {
     }
 }
 
+/// One line from an SFTR Reused Collateral Data Report (ISO 20022
+/// `auth.071`) — the firm-side report of collateral reused or
+/// reinvested. Event-driven, mirrors `SftrMarginActivityRecord`
+/// in spirit but scoped to reuse events on the collateral the
+/// firm received and then re-pledged or reinvested.
+///
+/// Distinctive vs `auth.070`:
+/// - No `OthrCtrPty` — auth.071 is firm-portfolio-level, not
+///   bilateral. The 3 entities captured are RptSubmitgNtty,
+///   RptgCtrPty, NttyRspnsblForRpt (we promote only the first
+///   two onto typed fields; the third lives in `raw_fields`).
+/// - No `CollPrtflId` — records are keyed by submitter + event
+///   day + (ISIN | cash currency).
+/// - Reuse value is captured as a single aggregate amount (sum
+///   of all `Scty/ReuseVal/{Actl|Estmtd}` entries observed) plus
+///   a shared currency promoted from the first `@Ccy`. The per-
+///   ISIN breakdown stays in `raw_fields`.
+/// - Cash reuse exposes a single `cash_reinvestment_rate` (the
+///   `CashReuseData1/CshRinvstmtRate` decimal percentage).
+/// - The action_type is encoded in the wrapper element name
+///   (mirror of auth.070 pattern): `New` → `NEWT`, `Err` →
+///   `ERRT`, `Crrctn` → `CORR`, `CollReuseUpd` → `CRUD`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SftrReuseActivityRecord {
+    /// Source file path (or other origin label).
+    pub source_file: Option<String>,
+    /// Stable identifier of the line within the source.
+    /// Maps to `TechRcrdId` (Max140Text). Optional in `New` /
+    /// required in `Err` per the XSD ; we treat it uniformly
+    /// as Option.
+    pub record_id: Option<String>,
+    /// Regulatory regime — always `Regime::Sftr` for this record.
+    pub regime: Regime,
+    /// Report submission timestamp from `RptgDtTm`.
+    pub state_as_of: Option<DateTime<Utc>>,
+    /// `EvtDay` — date on which the reuse event took place.
+    /// Absent on `Err` (retraction) wrappers per the XSD.
+    pub event_day: Option<NaiveDate>,
+    /// LEI of the reporting counterparty
+    /// (`CtrPty/RptgCtrPty/.../LEI`).
+    pub reporting_counterparty: Option<String>,
+    /// LEI of the report-submitting entity, when distinct from
+    /// the reporting counterparty (delegated reporting).
+    /// (`CtrPty/RptSubmitgNtty/.../LEI`).
+    pub report_submitting_entity: Option<String>,
+    /// Action type derived from the wrapper element name in
+    /// `TradData/Rpt/<wrapper>` :
+    /// `"NEWT"` (`New`), `"ERRT"` (`Err`), `"CORR"`
+    /// (`Crrctn`), `"CRUD"` (`CollReuseUpd`).
+    pub action_type: Option<String>,
+    /// Aggregate reused-value across every `CollCmpnt/Scty[]`
+    /// entry observed — sum of all `Scty/ReuseVal/Actl` and
+    /// `Scty/ReuseVal/Estmtd` amounts. Absent on `Err` wrappers
+    /// and on cash-only reuse records.
+    pub total_reuse_value: Option<Decimal>,
+    /// ISO 4217 currency shared by all reuse amounts (promoted
+    /// from the first observed per-amount `@Ccy` attribute).
+    pub reuse_currency: Option<String>,
+    /// Average interest rate received on cash collateral
+    /// reinvestment (`CollCmpnt/Csh/CshRinvstmtRate`,
+    /// `PercentageRate`). Absent when no cash reinvestment is
+    /// reported.
+    pub cash_reinvestment_rate: Option<Decimal>,
+    /// Catch-all of XML leaves not promoted to typed fields :
+    /// per-ISIN breakdown, individual `FndgSrc/Tp` and
+    /// `FndgSrc/MktVal` entries, `NttyRspnsblForRpt/LEI`, etc.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub raw_fields: BTreeMap<String, String>,
+}
+
+impl Default for SftrReuseActivityRecord {
+    fn default() -> Self {
+        Self {
+            source_file: None,
+            record_id: None,
+            regime: Regime::Sftr,
+            state_as_of: None,
+            event_day: None,
+            reporting_counterparty: None,
+            report_submitting_entity: None,
+            action_type: None,
+            total_reuse_value: None,
+            reuse_currency: None,
+            cash_reinvestment_rate: None,
+            raw_fields: BTreeMap::new(),
+        }
+    }
+}
+
 /// One line from an EMIR Margin Activity Report (MAR) — the
 /// history of margin calls / postings / collections for a portfolio
 /// (ISO 20022 `auth.108`). Activity-oriented, mirrors `EmirRecord`
@@ -1693,6 +1782,90 @@ mod tests {
             r.excess_collateral_received
         );
         assert_eq!(back.margin_currency, r.margin_currency);
+        assert_eq!(back.action_type, r.action_type);
+    }
+
+    // -- v0.18 B1: SftrReuseActivityRecord (auth.071) ----------
+
+    #[test]
+    fn sftr_reuse_activity_record_default_is_sftr_with_all_options_none() {
+        let r = SftrReuseActivityRecord::default();
+        assert_eq!(r.regime, Regime::Sftr);
+        assert!(r.source_file.is_none());
+        assert!(r.record_id.is_none());
+        assert!(r.state_as_of.is_none());
+        assert!(r.event_day.is_none());
+        assert!(r.reporting_counterparty.is_none());
+        assert!(r.report_submitting_entity.is_none());
+        assert!(r.action_type.is_none());
+        assert!(r.total_reuse_value.is_none());
+        assert!(r.reuse_currency.is_none());
+        assert!(r.cash_reinvestment_rate.is_none());
+        assert!(r.raw_fields.is_empty());
+    }
+
+    #[test]
+    fn sftr_reuse_activity_record_serde_always_emits_metadata_keys_when_none() {
+        // Mirror of the v0.17 SftrMarginStateRecord contract test:
+        // critical metadata fields stay serialised as `null` (not
+        // skipped) so downstream consumers can rely on the key
+        // appearing in every JSON record.
+        let r = SftrReuseActivityRecord::default();
+        let j = serde_json::to_string(&r).unwrap();
+        for required_key in [
+            "source_file",
+            "record_id",
+            "state_as_of",
+            "event_day",
+            "reporting_counterparty",
+            "report_submitting_entity",
+            "action_type",
+            "total_reuse_value",
+            "reuse_currency",
+            "cash_reinvestment_rate",
+        ] {
+            assert!(
+                j.contains(&format!("\"{required_key}\":null")),
+                "key {required_key} should serialise as null on default, json was {j}"
+            );
+        }
+        // raw_fields is skip-serialized when empty (matches the
+        // shipped pattern on the 5 other SFTR record types).
+        assert!(
+            !j.contains("\"raw_fields\""),
+            "raw_fields should be skipped when empty"
+        );
+    }
+
+    #[test]
+    fn sftr_reuse_activity_record_round_trip_populated() {
+        // Full NEWT-wrapper payload: aggregate reuse value +
+        // currency + cash reinvestment rate + both CP fields.
+        // Locks the v0.18 schema contract for the new reuse layer.
+        use rust_decimal::Decimal;
+        use std::str::FromStr;
+        let r = SftrReuseActivityRecord {
+            source_file: Some("auth071.xml".into()),
+            record_id: Some("REUSE-1".into()),
+            regime: Regime::Sftr,
+            reporting_counterparty: Some("549300ABCDEFGH123456".into()),
+            report_submitting_entity: Some("549300SUBMITRPT00001".into()),
+            total_reuse_value: Some(Decimal::from_str("12345.67").unwrap()),
+            reuse_currency: Some("EUR".into()),
+            cash_reinvestment_rate: Some(Decimal::from_str("0.0125").unwrap()),
+            action_type: Some("NEWT".into()),
+            ..SftrReuseActivityRecord::default()
+        };
+        let j = serde_json::to_string(&r).unwrap();
+        let back: SftrReuseActivityRecord = serde_json::from_str(&j).unwrap();
+        assert_eq!(back.source_file, r.source_file);
+        assert_eq!(back.record_id, r.record_id);
+        assert_eq!(back.regime, r.regime);
+        assert_eq!(back.reporting_counterparty, r.reporting_counterparty);
+        assert_eq!(back.report_submitting_entity, r.report_submitting_entity);
+        assert_eq!(back.total_reuse_value, r.total_reuse_value);
+        assert_eq!(back.reuse_currency, r.reuse_currency);
+        assert_eq!(back.cash_reinvestment_rate, r.cash_reinvestment_rate);
         assert_eq!(back.action_type, r.action_type);
     }
 }
