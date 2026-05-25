@@ -40,9 +40,10 @@ use crate::dq::dqi::compute::{
 };
 use crate::dq::dqi::{DqiEvidence, DqiIndicator, DqiPackResult, MappingPresence};
 use crate::dq::{
-    default_checks, default_feedback_checks, default_margin_activity_checks,
-    default_margin_state_checks, default_tr_state_checks, run_all, run_all_feedback,
-    run_all_margin_activity, run_all_margin_state, run_all_tr_state, CheckContext,
+    default_checks, default_emir_pos_checks, default_feedback_checks,
+    default_margin_activity_checks, default_margin_state_checks, default_tr_state_checks, run_all,
+    run_all_emir_pos, run_all_feedback, run_all_margin_activity, run_all_margin_state,
+    run_all_tr_state, CheckContext,
 };
 use crate::model::{
     DqIssue, EmirPositionSetRecord, EmirRecord, FeedbackRecord, MarginActivityRecord,
@@ -438,6 +439,17 @@ pub fn compute_emir_dqi_pack(
             &default_feedback_checks(),
             feedback,
             prior,
+            &ctx,
+        ));
+    }
+    if let Some(positions) = inputs.positions {
+        // v0.18 E5: fire the 4 EMIR.POS.* granular checks on top
+        // of the 4 aggregate position DQIs from E4.
+        files_processed += 1;
+        records_processed = records_processed.saturating_add(positions.len() as u32);
+        all_issues.append(&mut run_all_emir_pos(
+            &default_emir_pos_checks(),
+            positions,
             &ctx,
         ));
     }

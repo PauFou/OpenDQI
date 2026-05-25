@@ -7,11 +7,11 @@ use rayon::prelude::*;
 
 use crate::config::Thresholds;
 use crate::model::{
-    DqDimension, DqIssue, EmirRecord, FeedbackRecord, MarginActivityRecord, MarginStateRecord,
-    MissingCollateralRecord, ReconStatsRecord, ReconciliationRecord, RejectionProfile, Severity,
-    SftrMarginActivityRecord, SftrMarginStateRecord, SftrRecord, SftrReuseActivityRecord,
-    SftrReuseStateRecord, SftrTrStateRecord, TrStateRecord, TradeWarningsRecord,
-    WarningsCounterpartyRecord, WarningsTransactionRecord,
+    DqDimension, DqIssue, EmirPositionSetRecord, EmirRecord, FeedbackRecord, MarginActivityRecord,
+    MarginStateRecord, MissingCollateralRecord, ReconStatsRecord, ReconciliationRecord,
+    RejectionProfile, Severity, SftrMarginActivityRecord, SftrMarginStateRecord, SftrRecord,
+    SftrReuseActivityRecord, SftrReuseStateRecord, SftrTrStateRecord, TrStateRecord,
+    TradeWarningsRecord, WarningsCounterpartyRecord, WarningsTransactionRecord,
 };
 
 mod aggregate;
@@ -1160,6 +1160,35 @@ pub fn default_sftr_reu_state_checks() -> Vec<Box<dyn SftrReuStateCheck>> {
 pub fn run_all_sftr_reu_state(
     checks: &[Box<dyn SftrReuStateCheck>],
     records: &[SftrReuseStateRecord],
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    collect_finalize(checks, ctx, |c| c.run(records, ctx))
+}
+
+// ---- EMIR Derivatives Trade Position Set Report (auth.090) ----
+// v0.18 E5. Per-record granular defects on the position layer.
+
+mod emir_pos;
+
+pub use emir_pos::{
+    EmirPosAssetClassEnumInvalid, EmirPosCheck, EmirPosJurisdictionMissing,
+    EmirPosNotionalNegative, EmirPosPositionSetKindInvalid,
+};
+
+/// Default EMIR position-set check registry (4 EMIR.POS.* checks).
+pub fn default_emir_pos_checks() -> Vec<Box<dyn EmirPosCheck>> {
+    vec![
+        Box::new(EmirPosPositionSetKindInvalid),
+        Box::new(EmirPosNotionalNegative),
+        Box::new(EmirPosAssetClassEnumInvalid),
+        Box::new(EmirPosJurisdictionMissing),
+    ]
+}
+
+/// Run every EMIR position-set check over the provided records slice.
+pub fn run_all_emir_pos(
+    checks: &[Box<dyn EmirPosCheck>],
+    records: &[EmirPositionSetRecord],
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
     collect_finalize(checks, ctx, |c| c.run(records, ctx))
