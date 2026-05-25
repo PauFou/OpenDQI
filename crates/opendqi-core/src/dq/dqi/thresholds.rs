@@ -252,6 +252,34 @@ pub fn default_dqi_thresholds() -> BTreeMap<String, DqiThresholdPair> {
             red: 0.02,
         },
     );
+    // v0.18 A4 — 3 SFTR MAR indicators (auth.070 event layer).
+    // PARTIAL_SIDES mirrors the T3 completeness baseline (5/20 %).
+    // EXCESS_COLLATERAL_EVENT_RATE mirrors the state-side
+    // T3_EXCESS_COLLATERAL_USE_SFTR pair (operational signal,
+    // looser 20/50 %). EVENT_SPIKE mirrors the reconciliation
+    // tolerances (5/20 % — more than one CP-pair in twenty being
+    // a 2σ spike is unusual).
+    m.insert(
+        "DQI_MAR_PARTIAL_SIDES_SFTR".into(),
+        DqiThresholdPair {
+            amber: 0.05,
+            red: 0.20,
+        },
+    );
+    m.insert(
+        "DQI_MAR_EXCESS_COLLATERAL_EVENT_RATE_SFTR".into(),
+        DqiThresholdPair {
+            amber: 0.20,
+            red: 0.50,
+        },
+    );
+    m.insert(
+        "DQI_MAR_EVENT_SPIKE_SFTR".into(),
+        DqiThresholdPair {
+            amber: 0.05,
+            red: 0.20,
+        },
+    );
     m
 }
 
@@ -371,13 +399,17 @@ mod tests {
             "DQI_HAIRCUT_ANOMALY_SFTR",
             "DQI_LEI_MISSING_SFTR",
             "DQI_UNDER_COLLATERALIZATION_SFTR",
+            // v0.18 A4 — 3 SFTR MAR indicators (auth.070)
+            "DQI_MAR_PARTIAL_SIDES_SFTR",
+            "DQI_MAR_EXCESS_COLLATERAL_EVENT_RATE_SFTR",
+            "DQI_MAR_EVENT_SPIKE_SFTR",
         ] {
             assert!(m.contains_key(id), "missing default threshold for {id}");
         }
         assert_eq!(
             m.len(),
-            22,
-            "v0.17 E1: 10 v0.15 + 4 T3 + 4 SFTR-recon + 1 SFTR-MCR + 3 SFTR-specific = 22"
+            25,
+            "v0.18 A4: v0.17 22 + 3 SFTR MAR indicators = 25"
         );
     }
 

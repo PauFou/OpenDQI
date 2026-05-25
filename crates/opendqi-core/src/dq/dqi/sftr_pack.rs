@@ -35,11 +35,13 @@ use crate::dq::dqi::compute::{
     compute_dqi_collateral_value_missing_sftr, compute_dqi_field_mismatch_rate_sftr,
     compute_dqi_haircut_anomaly_sftr, compute_dqi_lei_missing_sftr,
     compute_dqi_loan_value_missing_sftr, compute_dqi_loan_value_stale_sftr,
-    compute_dqi_mcr_open_requests_sftr, compute_dqi_pairing_rate_sftr,
-    compute_dqi_reconciliation_rate_sftr, compute_dqi_t3_excess_collateral_use_sftr,
-    compute_dqi_t3_margin_posted_missing_sftr, compute_dqi_t3_margin_received_missing_sftr,
-    compute_dqi_t3_margin_stale_sftr, compute_dqi_tim_reporting_late_sftr,
-    compute_dqi_under_collateralization_sftr, compute_dqi_unpaired_trades_rate_sftr,
+    compute_dqi_mar_event_spike_sftr, compute_dqi_mar_excess_collateral_event_rate_sftr,
+    compute_dqi_mar_partial_sides_sftr, compute_dqi_mcr_open_requests_sftr,
+    compute_dqi_pairing_rate_sftr, compute_dqi_reconciliation_rate_sftr,
+    compute_dqi_t3_excess_collateral_use_sftr, compute_dqi_t3_margin_posted_missing_sftr,
+    compute_dqi_t3_margin_received_missing_sftr, compute_dqi_t3_margin_stale_sftr,
+    compute_dqi_tim_reporting_late_sftr, compute_dqi_under_collateralization_sftr,
+    compute_dqi_unpaired_trades_rate_sftr,
 };
 use crate::dq::dqi::{DqiEvidence, DqiIndicator, DqiPackResult, DqiStatus, MappingPresence};
 use crate::dq::{
@@ -296,6 +298,42 @@ pub fn compute_sftr_dqi_pack(
         );
     }
 
+    // MAR-only event-layer indicators (3, v0.18 A4):
+    // - DQI_MAR_PARTIAL_SIDES_SFTR
+    // - DQI_MAR_EXCESS_COLLATERAL_EVENT_RATE_SFTR
+    // - DQI_MAR_EVENT_SPIKE_SFTR
+    if let Some(mar) = inputs.mar {
+        let (ind, ev) = compute_dqi_mar_partial_sides_sftr(mar, thresholds, mapping_presence);
+        push(ind, ev);
+        let (ind, ev) =
+            compute_dqi_mar_excess_collateral_event_rate_sftr(mar, thresholds, mapping_presence);
+        push(ind, ev);
+        let (ind, ev) = compute_dqi_mar_event_spike_sftr(mar, thresholds, mapping_presence);
+        push(ind, ev);
+    } else {
+        push(
+            not_applicable(
+                "DQI_MAR_PARTIAL_SIDES_SFTR",
+                "SFTR MAR (auth.070) not provided",
+            ),
+            Vec::new(),
+        );
+        push(
+            not_applicable(
+                "DQI_MAR_EXCESS_COLLATERAL_EVENT_RATE_SFTR",
+                "SFTR MAR (auth.070) not provided",
+            ),
+            Vec::new(),
+        );
+        push(
+            not_applicable(
+                "DQI_MAR_EVENT_SPIKE_SFTR",
+                "SFTR MAR (auth.070) not provided",
+            ),
+            Vec::new(),
+        );
+    }
+
     // Stable order: sort by indicator_id ascending.
     indicators.sort_by(|a, b| a.indicator_id.cmp(&b.indicator_id));
 
@@ -432,13 +470,13 @@ mod tests {
     }
 
     #[test]
-    fn providing_empty_mar_is_noop_pre_a4() {
-        // v0.18 A3: an empty mar slice is observably distinct
-        // from mar=None at the type level, but no computer fires
-        // on it yet (A4 adds the 3 SFTR MAR DQI computers and A5
-        // the granular checks). Until then the indicator count
-        // stays at the v0.17 baseline (16) and the indicator IDs
-        // stay alphabetical regardless of `mar`.
+    fn providing_empty_mar_keeps_mar_indicators_in_set() {
+        // v0.18 A4: an empty mar slice is observably distinct
+        // from mar=None. The 3 MAR indicators compute on an empty
+        // slice and report NotApplicable (denominator=0) — they
+        // are *present* in the output. With mar=None they also
+        // report NotApplicable but with a different `description`
+        // string ("SFTR MAR (auth.070) not provided").
         let mar: Vec<SftrMarginActivityRecord> = vec![];
         let inputs = SftrDqiInputs {
             mar: Some(&mar),
@@ -450,12 +488,26 @@ mod tests {
             &Thresholds::default(),
             as_of(),
         );
-        // v0.17 baseline = 16 indicators, unchanged by A3.
-        assert_eq!(result.indicators.len(), 16);
-        // No SFTR.MAR.* check exists pre-A5: the granular issues
-        // count stays at the no-input baseline (zero, since every
-        // other slot is None too).
-        assert!(result.issues.is_empty());
+        let mar_ids: Vec<&str> = result
+            .indicators
+            .iter()
+            .map(|i| i.indicator_id.as_str())
+            .filter(|s| s.starts_with("DQI_MAR_"))
+            .collect();
+        assert_eq!(mar_ids.len(), 3);
+        for ind in result
+            .indicators
+            .iter()
+            .filter(|i| i.indicator_id.starts_with("DQI_MAR_"))
+        {
+            assert_eq!(ind.status, DqiStatus::NotApplicable);
+            assert!(
+                !ind.description.contains("not provided"),
+                "{} with empty mar should not say 'not provided': {}",
+                ind.indicator_id,
+                ind.description
+            );
+        }
     }
 
     #[test]
@@ -529,6 +581,9 @@ mod tests {
                 "DQI_LEI_MISSING_SFTR",
                 "DQI_LOAN_VALUE_MISSING_SFTR",
                 "DQI_LOAN_VALUE_STALE_SFTR",
+                "DQI_MAR_EVENT_SPIKE_SFTR",
+                "DQI_MAR_EXCESS_COLLATERAL_EVENT_RATE_SFTR",
+                "DQI_MAR_PARTIAL_SIDES_SFTR",
                 "DQI_MCR_OPEN_REQUESTS_SFTR",
                 "DQI_PAIRING_RATE_SFTR",
                 "DQI_RECONCILIATION_RATE_SFTR",
