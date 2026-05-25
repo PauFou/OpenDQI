@@ -747,6 +747,132 @@ impl Default for SftrMarginStateRecord {
     }
 }
 
+/// One line from an SFTR Transaction Margin Data Report (MAR)
+/// (auth.070) — the per-event activity history of margins
+/// exchanged for one **CCP-cleared** collateral portfolio.
+///
+/// Scope (per ESMA XSD `auth.070.001.02_ESMAUG_1.1.0` =
+/// `SecuritiesFinancingReportingTransactionMarginDataReportV02`):
+///
+/// > "the margins exchanged in relation to the CCP-cleared
+/// > securities financing transactions"
+///
+/// **Difference vs [`SftrMarginStateRecord`] (auth.085)** :
+///
+/// - auth.085 is the **state** snapshot (latest values per
+///   portfolio) ; auth.070 is the **activity** event stream
+///   (one record per posting / correction / error / margin
+///   update). Same 6-amount data shape.
+/// - The per-record element is `Rpt` (one of 4 wrapper
+///   choices : `New` / `Err` / `Crrctn` / `TradUpd`). The
+///   wrapper element name itself encodes the action type —
+///   there's no separate `ActnTp` element under
+///   `CtrctMod`. The parser projects the wrapper name onto
+///   `action_type` as `"NEWT"` (for `New`), `"ERRT"`
+///   (`Err`), `"CORR"` (`Crrctn`), `"TRDU"` (`TradUpd`).
+/// - The `Err` wrapper carries no amounts and no `EvtDt` —
+///   it's a pure retraction signal ; the corresponding record
+///   has the 6 amount fields at `None` and `event_date` at
+///   `None`.
+/// - `event_date` (`EvtDt`) is semantically meaningful here
+///   (the moment the activity took place, useful for
+///   sliding-window analysis) ; on auth.085 it was the
+///   snapshot reference date.
+///
+/// Mirror of EMIR's [`MarginActivityRecord`] (auth.108) but
+/// adapted to the SFTR data shape (portfolio-level, 6 amounts
+/// without pre/post-haircut split, `XcssColl*` SFTR-specific).
+///
+/// Added in v0.18 alongside the new `auth.070` parser
+/// (`crates/opendqi-xml/src/sftr_margin_activity.rs`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SftrMarginActivityRecord {
+    /// Source file path (or other origin label).
+    pub source_file: Option<String>,
+    /// Stable identifier of the line within the source.
+    /// Maps to `TechRcrdId` (Max140Text).
+    pub record_id: Option<String>,
+    /// Regulatory regime — always `Regime::Sftr` for this record.
+    pub regime: Regime,
+    /// Report submission timestamp from `RptgDtTm`.
+    pub state_as_of: Option<DateTime<Utc>>,
+    /// `EvtDt` — date on which the reportable margin event
+    /// (posting / correction / update) took place. None on
+    /// `Err` (retraction) wrappers per the XSD.
+    pub event_date: Option<NaiveDate>,
+    /// LEI of the reporting counterparty
+    /// (`CtrPty/RptgCtrPty/.../LEI`).
+    pub reporting_counterparty: Option<String>,
+    /// LEI of the other counterparty (or natural person id)
+    /// (`CtrPty/OthrCtrPty/.../{Lgl/LEI | Ntrl/Id}`).
+    pub other_counterparty: Option<String>,
+    /// `CollPrtflId` — unique and unambiguous identification
+    /// of the collateral portfolio. **Required** by the XSD ;
+    /// Option-wrapped only to keep the struct uniformly
+    /// constructible / serialisable.
+    pub collateral_portfolio_code: Option<String>,
+    /// Initial margin posted by the reporting counterparty to
+    /// the other counterparty
+    /// (`PstdMrgnOrColl/InitlMrgnPstd/Amt`). None on `Err`
+    /// wrappers.
+    pub initial_margin_posted: Option<Decimal>,
+    /// Variation margin posted, including cash settled
+    /// (`PstdMrgnOrColl/VartnMrgnPstd/Amt`).
+    pub variation_margin_posted: Option<Decimal>,
+    /// Excess collateral posted (in excess of the required
+    /// collateral) (`PstdMrgnOrColl/XcssCollPstd/Amt`).
+    /// SFTR-specific (no EMIR equivalent).
+    pub excess_collateral_posted: Option<Decimal>,
+    /// Initial margin received from the other counterparty
+    /// (`RcvdMrgnOrColl/InitlMrgnRcvd/Amt`).
+    pub initial_margin_received: Option<Decimal>,
+    /// Variation margin received, including cash settled
+    /// (`RcvdMrgnOrColl/VartnMrgnRcvd/Amt`).
+    pub variation_margin_received: Option<Decimal>,
+    /// Excess collateral received (in excess of the required
+    /// collateral) (`RcvdMrgnOrColl/XcssCollRcvd/Amt`).
+    /// SFTR-specific (no EMIR equivalent).
+    pub excess_collateral_received: Option<Decimal>,
+    /// ISO 4217 currency, shared by all 6 amounts (promoted
+    /// from the first observed per-amount `@Ccy` attribute).
+    pub margin_currency: Option<String>,
+    /// Action type derived from the wrapper element name in
+    /// `TradData/Rpt/<wrapper>` :
+    /// `"NEWT"` (`New`), `"ERRT"` (`Err`), `"CORR"`
+    /// (`Crrctn`), `"TRDU"` (`TradUpd`). Required by the XSD
+    /// (every record is one of these 4 choices) ;
+    /// Option-wrapped here for uniformity with the other SFTR
+    /// records.
+    pub action_type: Option<String>,
+    /// Catch-all of XML leaves not promoted to typed fields.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub raw_fields: BTreeMap<String, String>,
+}
+
+impl Default for SftrMarginActivityRecord {
+    fn default() -> Self {
+        Self {
+            source_file: None,
+            record_id: None,
+            regime: Regime::Sftr,
+            state_as_of: None,
+            event_date: None,
+            reporting_counterparty: None,
+            other_counterparty: None,
+            collateral_portfolio_code: None,
+            initial_margin_posted: None,
+            variation_margin_posted: None,
+            excess_collateral_posted: None,
+            initial_margin_received: None,
+            variation_margin_received: None,
+            excess_collateral_received: None,
+            margin_currency: None,
+            action_type: None,
+            raw_fields: BTreeMap::new(),
+        }
+    }
+}
+
 /// One line from an EMIR Margin Activity Report (MAR) — the
 /// history of margin calls / postings / collections for a portfolio
 /// (ISO 20022 `auth.108`). Activity-oriented, mirrors `EmirRecord`
@@ -1449,6 +1575,108 @@ mod tests {
         };
         let j = serde_json::to_string(&r).unwrap();
         let back: SftrMarginStateRecord = serde_json::from_str(&j).unwrap();
+        assert_eq!(back.source_file, r.source_file);
+        assert_eq!(back.record_id, r.record_id);
+        assert_eq!(back.regime, r.regime);
+        assert_eq!(back.collateral_portfolio_code, r.collateral_portfolio_code);
+        assert_eq!(back.reporting_counterparty, r.reporting_counterparty);
+        assert_eq!(back.other_counterparty, r.other_counterparty);
+        assert_eq!(back.initial_margin_posted, r.initial_margin_posted);
+        assert_eq!(back.variation_margin_posted, r.variation_margin_posted);
+        assert_eq!(back.excess_collateral_posted, r.excess_collateral_posted);
+        assert_eq!(back.initial_margin_received, r.initial_margin_received);
+        assert_eq!(back.variation_margin_received, r.variation_margin_received);
+        assert_eq!(
+            back.excess_collateral_received,
+            r.excess_collateral_received
+        );
+        assert_eq!(back.margin_currency, r.margin_currency);
+        assert_eq!(back.action_type, r.action_type);
+    }
+
+    #[test]
+    fn sftr_margin_activity_record_default_is_sftr_with_all_options_none() {
+        // v0.18 A1 — mirror of sftr_margin_state_record_default_is_*
+        // for the new MAR record. Locks the v0.18 public surface
+        // (16-field struct, regime=Sftr default, all fields None,
+        // empty raw_fields).
+        let r = SftrMarginActivityRecord::default();
+        assert_eq!(r.regime, Regime::Sftr);
+        assert!(r.state_as_of.is_none());
+        assert!(r.event_date.is_none());
+        assert!(r.reporting_counterparty.is_none());
+        assert!(r.other_counterparty.is_none());
+        assert!(r.collateral_portfolio_code.is_none());
+        assert!(r.initial_margin_posted.is_none());
+        assert!(r.variation_margin_posted.is_none());
+        assert!(r.excess_collateral_posted.is_none());
+        assert!(r.initial_margin_received.is_none());
+        assert!(r.variation_margin_received.is_none());
+        assert!(r.excess_collateral_received.is_none());
+        assert!(r.margin_currency.is_none());
+        assert!(r.action_type.is_none());
+        assert!(r.raw_fields.is_empty());
+    }
+
+    #[test]
+    fn sftr_margin_activity_record_serde_always_emits_metadata_keys_when_none() {
+        // Mirror of sftr_margin_state_record_serde_always_emits_*.
+        // Every Option<T> serialises as JSON null when None
+        // (no skip_serializing_if) — keeps Parquet/CSV schemas
+        // stable. The catch-all raw_fields IS skip-serialised
+        // when empty.
+        let r = SftrMarginActivityRecord::default();
+        let j = serde_json::to_string(&r).unwrap();
+        for key in [
+            "initial_margin_posted",
+            "variation_margin_posted",
+            "excess_collateral_posted",
+            "initial_margin_received",
+            "variation_margin_received",
+            "excess_collateral_received",
+            "margin_currency",
+            "reporting_counterparty",
+            "other_counterparty",
+            "collateral_portfolio_code",
+            "action_type",
+            "event_date",
+            "state_as_of",
+        ] {
+            assert!(
+                j.contains(&format!("\"{key}\":")),
+                "default JSON must include key {key}: {j}"
+            );
+        }
+        assert!(!j.contains("raw_fields"));
+    }
+
+    #[test]
+    fn sftr_margin_activity_record_round_trip_populated() {
+        // Full event payload (NEWT wrapper with all 6 amounts +
+        // currency + portfolio + CPs) round-trips through serde
+        // without loss. Locks the v0.18 schema contract for the
+        // new MAR layer.
+        use rust_decimal::Decimal;
+        use std::str::FromStr;
+        let r = SftrMarginActivityRecord {
+            source_file: Some("auth070.xml".into()),
+            record_id: Some("EVT-1".into()),
+            regime: Regime::Sftr,
+            collateral_portfolio_code: Some("PORTFOLIO-1".into()),
+            reporting_counterparty: Some("549300ABCDEFGH123456".into()),
+            other_counterparty: Some("549300ZYXWVU987654ZZ".into()),
+            initial_margin_posted: Some(Decimal::from_str("1000.50").unwrap()),
+            variation_margin_posted: Some(Decimal::from_str("50.00").unwrap()),
+            excess_collateral_posted: Some(Decimal::from_str("25.25").unwrap()),
+            initial_margin_received: Some(Decimal::from_str("980.75").unwrap()),
+            variation_margin_received: Some(Decimal::from_str("48.00").unwrap()),
+            excess_collateral_received: Some(Decimal::from_str("20.10").unwrap()),
+            margin_currency: Some("EUR".into()),
+            action_type: Some("NEWT".into()),
+            ..SftrMarginActivityRecord::default()
+        };
+        let j = serde_json::to_string(&r).unwrap();
+        let back: SftrMarginActivityRecord = serde_json::from_str(&j).unwrap();
         assert_eq!(back.source_file, r.source_file);
         assert_eq!(back.record_id, r.record_id);
         assert_eq!(back.regime, r.regime);
