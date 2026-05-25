@@ -10,8 +10,8 @@ use crate::model::{
     DqDimension, DqIssue, EmirRecord, FeedbackRecord, MarginActivityRecord, MarginStateRecord,
     MissingCollateralRecord, ReconStatsRecord, ReconciliationRecord, RejectionProfile, Severity,
     SftrMarginActivityRecord, SftrMarginStateRecord, SftrRecord, SftrReuseActivityRecord,
-    SftrTrStateRecord, TrStateRecord, TradeWarningsRecord, WarningsCounterpartyRecord,
-    WarningsTransactionRecord,
+    SftrReuseStateRecord, SftrTrStateRecord, TrStateRecord, TradeWarningsRecord,
+    WarningsCounterpartyRecord, WarningsTransactionRecord,
 };
 
 mod aggregate;
@@ -1134,6 +1134,32 @@ pub fn default_sftr_reu_checks() -> Vec<Box<dyn SftrReuCheck>> {
 pub fn run_all_sftr_reu(
     checks: &[Box<dyn SftrReuCheck>],
     records: &[SftrReuseActivityRecord],
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    collect_finalize(checks, ctx, |c| c.run(records, ctx))
+}
+
+// ---- SFTR Reused Collateral Data Transaction State (auth.086) ----
+// v0.18 C5. Per-record granular defects on the reuse-state layer.
+
+mod sftr_reu_state;
+
+pub use sftr_reu_state::{
+    SftrReuStateCheck, SftrReuStateMissingReuseCurrency, SftrReuStateRateOutsidePlausibleBand,
+};
+
+/// Default SFTR REU.STATE check registry (2 SFTR.REU.STATE.* checks).
+pub fn default_sftr_reu_state_checks() -> Vec<Box<dyn SftrReuStateCheck>> {
+    vec![
+        Box::new(SftrReuStateMissingReuseCurrency),
+        Box::new(SftrReuStateRateOutsidePlausibleBand),
+    ]
+}
+
+/// Run every SFTR REU.STATE check over the provided records slice.
+pub fn run_all_sftr_reu_state(
+    checks: &[Box<dyn SftrReuStateCheck>],
+    records: &[SftrReuseStateRecord],
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
     collect_finalize(checks, ctx, |c| c.run(records, ctx))

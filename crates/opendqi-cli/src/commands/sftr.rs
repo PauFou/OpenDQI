@@ -31,7 +31,8 @@ use opendqi_report::{
 use opendqi_xml::{
     check_wellformedness, read_sftr_margin_activity_xml, read_sftr_margin_state_xml,
     read_sftr_missing_collateral_xml, read_sftr_reconciliation_xml, read_sftr_reuse_activity_xml,
-    read_sftr_tr_state_xml, read_sftr_xml, ExternalXmllintValidator, XsdValidator, XsdViolation,
+    read_sftr_reuse_state_xml, read_sftr_tr_state_xml, read_sftr_xml, ExternalXmllintValidator,
+    XsdValidator, XsdViolation,
 };
 use tracing::{info, warn};
 
@@ -292,6 +293,13 @@ pub enum SftrAction {
         /// level reuse / reinvestment activity (v0.18+).
         #[arg(long)]
         reuse_activity: Option<PathBuf>,
+        /// Path to the `auth.086` SFTR Reused Collateral Data
+        /// Transaction State Report. Powers 2 reuse-state DQIs
+        /// (REUSE_STATE_VOLUME_MISSING, REUSE_STATE_STALE) AND 2
+        /// granular SFTR.REU.STATE.* per-record checks. TR-side
+        /// snapshot of latest reuse state (v0.18+).
+        #[arg(long)]
+        reuse_state: Option<PathBuf>,
         /// Optional YAML thresholds configuration (overrides
         /// the shipped DQI defaults via the `dqi:` block).
         #[arg(long)]
@@ -429,6 +437,7 @@ pub fn run(action: SftrAction) -> Result<ExitCode> {
             msr,
             mar,
             reuse_activity,
+            reuse_state,
             config,
             as_of,
             out,
@@ -442,6 +451,7 @@ pub fn run(action: SftrAction) -> Result<ExitCode> {
                 msr.as_deref(),
                 mar.as_deref(),
                 reuse_activity.as_deref(),
+                reuse_state.as_deref(),
                 config.as_deref(),
                 as_of.as_deref(),
                 &out,
@@ -1835,6 +1845,7 @@ fn run_data_quality_pack(
     msr_path: Option<&Path>,
     mar_path: Option<&Path>,
     reuse_activity_path: Option<&Path>,
+    reuse_state_path: Option<&Path>,
     config_path: Option<&Path>,
     as_of_str: Option<&str>,
     out: &Path,
@@ -1847,11 +1858,12 @@ fn run_data_quality_pack(
         && msr_path.is_none()
         && mar_path.is_none()
         && reuse_activity_path.is_none()
+        && reuse_state_path.is_none()
     {
         return Err(anyhow!(
             "sftr data-quality-pack: at least one of --tsr / --tar / \
              --reconciliation / --missing-collateral / --msr / --mar / \
-             --reuse-activity is required"
+             --reuse-activity / --reuse-state is required"
         ));
     }
 
@@ -1968,6 +1980,21 @@ fn run_data_quality_pack(
         }
         None => Vec::new(),
     };
+    // v0.18 C2 + C4 + C5: SFTR Reuse State (auth.086) parsed,
+    // then consumed by the 2 reuse-state DQIs (C4) and 2
+    // SFTR.REU.STATE.* granular checks (C5).
+    let reuse_state_records = match reuse_state_path {
+        Some(p) => {
+            let outcome = read_sftr_reuse_state_xml(p)
+                .with_context(|| format!("reading SFTR Reuse State {}", p.display()))?;
+            info!(
+                records = outcome.records.len(),
+                "loaded SFTR Reuse State (auth.086)"
+            );
+            outcome.records
+        }
+        None => Vec::new(),
+    };
 
     let inputs = SftrDqiInputs {
         msr: if msr_path.is_some() {
@@ -2008,9 +2035,13 @@ fn run_data_quality_pack(
         } else {
             None
         },
-        // v0.18 C3: reuse_state slot plumbed but no CLI flag
-        // yet (added in C5). Forced to None at this surface.
-        reuse_state: None,
+        // v0.18 C5: reuse_state slot wired through
+        // --reuse-state flag.
+        reuse_state: if reuse_state_path.is_some() {
+            Some(&reuse_state_records)
+        } else {
+            None
+        },
     };
 
     let pack = compute_sftr_dqi_pack(inputs, MappingPresence::default(), &thresholds, as_of);
@@ -2025,6 +2056,7 @@ fn run_data_quality_pack(
         ("SFTR-MSR", msr_path),
         ("SFTR-MAR", mar_path),
         ("SFTR-REU", reuse_activity_path),
+        ("SFTR-REU-STATE", reuse_state_path),
     ] {
         if let Some(path) = p {
             sources.push(format!("{lbl}: {}", path.display()));

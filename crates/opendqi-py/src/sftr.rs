@@ -456,7 +456,7 @@ pub fn book_reconcile<'py>(
 /// history store — same as the v0.13 SFTR `tr_audit`
 /// binding).
 #[pyfunction]
-#[pyo3(signature = (*, tsr = None, tar = None, reconciliation = None, missing_collateral = None, msr = None, mar = None, reuse_activity = None, as_of = None))]
+#[pyo3(signature = (*, tsr = None, tar = None, reconciliation = None, missing_collateral = None, msr = None, mar = None, reuse_activity = None, reuse_state = None, as_of = None))]
 pub fn data_quality_pack(
     tsr: Option<&str>,
     tar: Option<&str>,
@@ -465,6 +465,7 @@ pub fn data_quality_pack(
     msr: Option<&str>,
     mar: Option<&str>,
     reuse_activity: Option<&str>,
+    reuse_state: Option<&str>,
     as_of: Option<&str>,
 ) -> PyResult<PyDqiPackResult> {
     if tsr.is_none()
@@ -474,10 +475,11 @@ pub fn data_quality_pack(
         && msr.is_none()
         && mar.is_none()
         && reuse_activity.is_none()
+        && reuse_state.is_none()
     {
         return Err(pyo3::exceptions::PyValueError::new_err(
             "data_quality_pack: at least one of tsr / tar / reconciliation / \
-             missing_collateral / msr / mar / reuse_activity is required",
+             missing_collateral / msr / mar / reuse_activity / reuse_state is required",
         ));
     }
 
@@ -548,6 +550,14 @@ pub fn data_quality_pack(
         }
         None => Vec::new(),
     };
+    let reuse_state_records = match reuse_state {
+        Some(p) => {
+            opendqi_xml::read_sftr_reuse_state_xml(Path::new(p))
+                .map_err(to_py_err)?
+                .records
+        }
+        None => Vec::new(),
+    };
 
     let inputs = SftrDqiInputs {
         tsr: tsr.map(|_| tsr_records.as_slice()),
@@ -560,9 +570,9 @@ pub fn data_quality_pack(
         // v0.18 B5: reuse_activity slot wired through
         // `reuse_activity=` kwarg.
         reuse_activity: reuse_activity.map(|_| reuse_activity_records.as_slice()),
-        // v0.18 C3: reuse_state slot plumbed but no Python kwarg
-        // yet (added in C5). Forced to None at this surface.
-        reuse_state: None,
+        // v0.18 C5: reuse_state slot wired through
+        // `reuse_state=` kwarg.
+        reuse_state: reuse_state.map(|_| reuse_state_records.as_slice()),
     };
 
     let pack = compute_sftr_dqi_pack(inputs, MappingPresence::default(), &thresholds, as_of_date);

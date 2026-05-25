@@ -48,8 +48,9 @@ use crate::dq::dqi::compute::{
 use crate::dq::dqi::{DqiEvidence, DqiIndicator, DqiPackResult, DqiStatus, MappingPresence};
 use crate::dq::{
     default_sftr_checks, default_sftr_mar_checks, default_sftr_msr_checks, default_sftr_reu_checks,
-    default_sftr_tr_state_checks, run_all_sftr, run_all_sftr_mar, run_all_sftr_msr,
-    run_all_sftr_reu, run_all_sftr_tr_state, CheckContext,
+    default_sftr_reu_state_checks, default_sftr_tr_state_checks, run_all_sftr, run_all_sftr_mar,
+    run_all_sftr_msr, run_all_sftr_reu, run_all_sftr_reu_state, run_all_sftr_tr_state,
+    CheckContext,
 };
 use crate::model::{
     DqDimension, DqIssue, Regime, SftrMarginActivityRecord, SftrMarginStateRecord, SftrRecord,
@@ -446,6 +447,17 @@ pub fn compute_sftr_dqi_pack(
         all_issues.append(&mut run_all_sftr_reu(
             &default_sftr_reu_checks(),
             reuse,
+            &ctx,
+        ));
+    }
+    if let Some(reuse_state) = inputs.reuse_state {
+        // v0.18 C5: fire the 2 SFTR.REU.STATE.* granular checks
+        // on top of the 2 aggregate reuse-state DQIs from C4.
+        files_processed += 1;
+        records_processed = records_processed.saturating_add(reuse_state.len() as u32);
+        all_issues.append(&mut run_all_sftr_reu_state(
+            &default_sftr_reu_state_checks(),
+            reuse_state,
             &ctx,
         ));
     }

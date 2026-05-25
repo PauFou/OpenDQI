@@ -35,6 +35,10 @@ DQI_MAR_PARTIAL_SIDES_SFTR,PORTFOLIO-003,RPTGCPARTY0000000001,,<WS>/examples/sft
 DQI_MCR_OPEN_REQUESTS_SFTR,OPENDQI-SFTR-MCR-0001,RPTGLEI0000000000001,,<WS>/examples/sftr/missing_collateral/auth083-sample.xml,GMRA,requested UTI not present in SFTR TSR snapshot
 DQI_RECONCILIATION_RATE_SFTR,OPENDQI-SFTR-RECON-NOTMTCHD-2,RPTGLEI0000000000001,,<WS>/examples/sftr/reconciliation/auth080-sample.xml,UNRECONCILED,paired SFTR trade flagged UNRECONCILED on at least one field
 DQI_REUSE_ERR_RETRACTION_RATE_SFTR,REUSE-ERR-1,RPTGCPARTY0000000001,,<WS>/examples/sftr/reuse_activity/auth071-sample.xml,ERRT,reuse retraction (Err wrapper) — previously submitted record cancelled
+DQI_REUSE_STATE_STALE_SFTR,R-STATE-1,RPTGCPARTY0000000001,,<WS>/examples/sftr/reuse_state/auth086-sample.xml,2026-05-13T08:00:00+00:00,state_as_of older than 1 TARGET2 business day(s) vs as_of 2026-05-21
+DQI_REUSE_STATE_STALE_SFTR,R-STATE-2,RPTGCPARTY0000000001,,<WS>/examples/sftr/reuse_state/auth086-sample.xml,2026-05-13T08:00:00+00:00,state_as_of older than 1 TARGET2 business day(s) vs as_of 2026-05-21
+DQI_REUSE_STATE_STALE_SFTR,R-STATE-3,RPTGCPARTY0000000001,,<WS>/examples/sftr/reuse_state/auth086-sample.xml,2026-05-13T08:00:00+00:00,state_as_of older than 1 TARGET2 business day(s) vs as_of 2026-05-21
+DQI_REUSE_STATE_STALE_SFTR,R-STATE-4,RPTGCPARTY0000000001,,<WS>/examples/sftr/reuse_state/auth086-sample.xml,2026-05-13T08:00:00+00:00,state_as_of older than 1 TARGET2 business day(s) vs as_of 2026-05-21
 DQI_T3_EXCESS_COLLATERAL_USE_SFTR,PORTFOLIO-001,RPTGCPARTY0000000001,,<WS>/examples/sftr/margin_state/auth085-sample.xml,"posted=25000.00, received=20000.00",excess collateral > 0 on posted or received side
 DQI_T3_EXCESS_COLLATERAL_USE_SFTR,PORTFOLIO-004,RPTGCPARTY0000000001,,<WS>/examples/sftr/margin_state/auth085-sample.xml,posted=500000.00,excess collateral > 0 on posted or received side
 DQI_T3_MARGIN_POSTED_MISSING_SFTR,PORTFOLIO-003,RPTGCPARTY0000000001,,<WS>/examples/sftr/margin_state/auth085-sample.xml,,no posted margin reported (IM/VM/excess-collateral all None)

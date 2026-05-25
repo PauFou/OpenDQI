@@ -613,6 +613,11 @@ fn sftr_data_quality_pack_full() {
         // exercises 2 reuse DQIs + 2 SFTR.REU.* granular checks.
         "--reuse-activity",
         &ex("examples/sftr/reuse_activity/auth071-sample.xml"),
+        // v0.18 C5: add auth.086 reuse state layer —
+        // exercises 2 reuse-state DQIs + 2 SFTR.REU.STATE.*
+        // granular checks.
+        "--reuse-state",
+        &ex("examples/sftr/reuse_state/auth086-sample.xml"),
         "--as-of",
         "2026-05-21",
     ])
