@@ -38,6 +38,7 @@ use crate::dq::dqi::compute::{
     compute_dqi_mar_event_spike_sftr, compute_dqi_mar_excess_collateral_event_rate_sftr,
     compute_dqi_mar_partial_sides_sftr, compute_dqi_mcr_open_requests_sftr,
     compute_dqi_pairing_rate_sftr, compute_dqi_reconciliation_rate_sftr,
+    compute_dqi_reuse_err_retraction_rate_sftr, compute_dqi_reuse_volume_missing_sftr,
     compute_dqi_t3_excess_collateral_use_sftr, compute_dqi_t3_margin_posted_missing_sftr,
     compute_dqi_t3_margin_received_missing_sftr, compute_dqi_t3_margin_stale_sftr,
     compute_dqi_tim_reporting_late_sftr, compute_dqi_under_collateralization_sftr,
@@ -305,6 +306,32 @@ pub fn compute_sftr_dqi_pack(
         );
     }
 
+    // Reuse Activity layer indicators (2, v0.18 B4):
+    // - DQI_REUSE_VOLUME_MISSING_SFTR
+    // - DQI_REUSE_ERR_RETRACTION_RATE_SFTR
+    if let Some(reuse) = inputs.reuse_activity {
+        let (ind, ev) = compute_dqi_reuse_volume_missing_sftr(reuse, thresholds, mapping_presence);
+        push(ind, ev);
+        let (ind, ev) =
+            compute_dqi_reuse_err_retraction_rate_sftr(reuse, thresholds, mapping_presence);
+        push(ind, ev);
+    } else {
+        push(
+            not_applicable(
+                "DQI_REUSE_VOLUME_MISSING_SFTR",
+                "SFTR reuse activity (auth.071) not provided",
+            ),
+            Vec::new(),
+        );
+        push(
+            not_applicable(
+                "DQI_REUSE_ERR_RETRACTION_RATE_SFTR",
+                "SFTR reuse activity (auth.071) not provided",
+            ),
+            Vec::new(),
+        );
+    }
+
     // MAR-only event-layer indicators (3, v0.18 A4):
     // - DQI_MAR_PARTIAL_SIDES_SFTR
     // - DQI_MAR_EXCESS_COLLATERAL_EVENT_RATE_SFTR
@@ -494,13 +521,14 @@ mod tests {
     }
 
     #[test]
-    fn providing_empty_reuse_activity_is_noop_pre_b4() {
-        // v0.18 B3: an empty reuse_activity slice is observably
-        // distinct from reuse_activity=None at the type level,
-        // but no computer fires on it yet (B4 adds the 2 reuse
-        // DQI computers and B5 the granular checks). Until then
-        // the indicator count stays at the post-A4 baseline
-        // (19) and granular issues stay empty.
+    fn providing_empty_reuse_activity_keeps_reuse_indicators_in_set() {
+        // v0.18 B4: an empty reuse_activity slice is observably
+        // distinct from reuse_activity=None. The 2 reuse
+        // indicators compute on the empty slice and report
+        // NotApplicable (denominator=0) — they are *present*
+        // in the output. With reuse_activity=None they also
+        // report NotApplicable but with the "not provided"
+        // description.
         let reuse: Vec<SftrReuseActivityRecord> = vec![];
         let inputs = SftrDqiInputs {
             reuse_activity: Some(&reuse),
@@ -512,10 +540,26 @@ mod tests {
             &Thresholds::default(),
             as_of(),
         );
-        // Post-A4 baseline = 19 indicators, unchanged by B3.
-        assert_eq!(result.indicators.len(), 19);
-        // No SFTR.REU.* check exists pre-B5.
-        assert!(result.issues.is_empty());
+        let reuse_ids: Vec<&str> = result
+            .indicators
+            .iter()
+            .map(|i| i.indicator_id.as_str())
+            .filter(|s| s.starts_with("DQI_REUSE_"))
+            .collect();
+        assert_eq!(reuse_ids.len(), 2);
+        for ind in result
+            .indicators
+            .iter()
+            .filter(|i| i.indicator_id.starts_with("DQI_REUSE_"))
+        {
+            assert_eq!(ind.status, DqiStatus::NotApplicable);
+            assert!(
+                !ind.description.contains("not provided"),
+                "{} with empty reuse_activity should not say 'not provided': {}",
+                ind.indicator_id,
+                ind.description
+            );
+        }
     }
 
     #[test]
@@ -636,6 +680,8 @@ mod tests {
                 "DQI_MCR_OPEN_REQUESTS_SFTR",
                 "DQI_PAIRING_RATE_SFTR",
                 "DQI_RECONCILIATION_RATE_SFTR",
+                "DQI_REUSE_ERR_RETRACTION_RATE_SFTR",
+                "DQI_REUSE_VOLUME_MISSING_SFTR",
                 "DQI_T3_EXCESS_COLLATERAL_USE_SFTR",
                 "DQI_T3_MARGIN_POSTED_MISSING_SFTR",
                 "DQI_T3_MARGIN_RECEIVED_MISSING_SFTR",

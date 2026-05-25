@@ -280,6 +280,26 @@ pub fn default_dqi_thresholds() -> BTreeMap<String, DqiThresholdPair> {
             red: 0.20,
         },
     );
+    // v0.18 B4 — 2 SFTR Reuse Activity indicators (auth.071).
+    // VOLUME_MISSING is completeness (5/20 % mirror of the
+    // missing-margin family). ERR_RETRACTION_RATE is timeliness
+    // / operational (5/20 % mirror of reconciliation
+    // tolerances — retraction churn above 1/20 records is
+    // unusual).
+    m.insert(
+        "DQI_REUSE_VOLUME_MISSING_SFTR".into(),
+        DqiThresholdPair {
+            amber: 0.05,
+            red: 0.20,
+        },
+    );
+    m.insert(
+        "DQI_REUSE_ERR_RETRACTION_RATE_SFTR".into(),
+        DqiThresholdPair {
+            amber: 0.05,
+            red: 0.20,
+        },
+    );
     m
 }
 
@@ -403,13 +423,16 @@ mod tests {
             "DQI_MAR_PARTIAL_SIDES_SFTR",
             "DQI_MAR_EXCESS_COLLATERAL_EVENT_RATE_SFTR",
             "DQI_MAR_EVENT_SPIKE_SFTR",
+            // v0.18 B4 — 2 SFTR Reuse indicators (auth.071)
+            "DQI_REUSE_VOLUME_MISSING_SFTR",
+            "DQI_REUSE_ERR_RETRACTION_RATE_SFTR",
         ] {
             assert!(m.contains_key(id), "missing default threshold for {id}");
         }
         assert_eq!(
             m.len(),
-            25,
-            "v0.18 A4: v0.17 22 + 3 SFTR MAR indicators = 25"
+            27,
+            "v0.18 B4: A4 25 + 2 SFTR reuse indicators = 27"
         );
     }
 
