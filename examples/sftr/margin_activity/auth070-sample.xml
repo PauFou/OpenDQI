@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SFTR Margin Data Transaction Report (auth.070) — synthetic
+  schema-shaped fixture, 5 Rpt records covering every action
+  wrapper (New / Crrctn / TradUpd / Err) on the
+  SftrMarginActivityRecord model (model.rs::SftrMarginActivityRecord).
+
+  All values are synthetic. ESMA paths follow auth.070.001.02
+  =SecuritiesFinancingReportingTransactionMarginDataReportV02.
+
+  Per the XSD, the V02 amount simpleType is restricted to
+  minInclusive=0 (no negative amounts), so REC-5 exercises the
+  Err wrapper (metadata-only, no amounts, no EvtDt) with a
+  natural-person OthrCtrPty path instead.
+
+  Record map:
+    PORTFOLIO-001 (REC-NEW-1)  New      — full / clean, IM/VM/Xcss posted & received
+    PORTFOLIO-002 (REC-CORR-1) Crrctn   — posted-only (Rcvd block absent)
+    PORTFOLIO-003 (REC-TRD-1)  TradUpd  — received-only (Pstd block absent)
+    PORTFOLIO-004 (REC-NEW-2)  New      — excess-collateral signature: large XcssCollPstd vs InitlMrgnPstd
+    PORTFOLIO-005 (REC-ERR-1)  Err      — metadata-only + natural-person OthrCtrPty
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.070.001.02">
+  <SctiesFincgRptgTxMrgnDataRpt>
+    <TradData>
+
+      <Rpt>
+        <New>
+          <TechRcrdId>REC-NEW-1</TechRcrdId>
+          <RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm>
+          <EvtDt>2026-05-12</EvtDt>
+          <CtrPty>
+            <RptgCtrPty><Id><LEI>RPTGCPARTY0000000001</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Lgl><LEI>OTHRCPARTY0000000002</LEI></Lgl></Id></OthrCtrPty>
+          </CtrPty>
+          <CollPrtflId>PORTFOLIO-001</CollPrtflId>
+          <PstdMrgnOrColl>
+            <InitlMrgnPstd><Amt Ccy="EUR">1000000.00</Amt></InitlMrgnPstd>
+            <VartnMrgnPstd><Amt Ccy="EUR">50000.00</Amt></VartnMrgnPstd>
+            <XcssCollPstd><Amt Ccy="EUR">25000.00</Amt></XcssCollPstd>
+          </PstdMrgnOrColl>
+          <RcvdMrgnOrColl>
+            <InitlMrgnRcvd><Amt Ccy="EUR">980000.00</Amt></InitlMrgnRcvd>
+            <VartnMrgnRcvd><Amt Ccy="EUR">48000.00</Amt></VartnMrgnRcvd>
+            <XcssCollRcvd><Amt Ccy="EUR">20000.00</Amt></XcssCollRcvd>
+          </RcvdMrgnOrColl>
+        </New>
+      </Rpt>
+
+      <Rpt>
+        <Crrctn>
+          <TechRcrdId>REC-CORR-1</TechRcrdId>
+          <RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm>
+          <EvtDt>2026-05-12</EvtDt>
+          <CtrPty>
+            <RptgCtrPty><Id><LEI>RPTGCPARTY0000000001</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Lgl><LEI>OTHRCPARTY0000000003</LEI></Lgl></Id></OthrCtrPty>
+          </CtrPty>
+          <CollPrtflId>PORTFOLIO-002</CollPrtflId>
+          <PstdMrgnOrColl>
+            <InitlMrgnPstd><Amt Ccy="USD">500000.00</Amt></InitlMrgnPstd>
+            <VartnMrgnPstd><Amt Ccy="USD">10000.00</Amt></VartnMrgnPstd>
+          </PstdMrgnOrColl>
+        </Crrctn>
+      </Rpt>
+
+      <Rpt>
+        <TradUpd>
+          <TechRcrdId>REC-TRD-1</TechRcrdId>
+          <RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm>
+          <EvtDt>2026-05-12</EvtDt>
+          <CtrPty>
+            <RptgCtrPty><Id><LEI>RPTGCPARTY0000000001</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Lgl><LEI>OTHRCPARTY0000000004</LEI></Lgl></Id></OthrCtrPty>
+          </CtrPty>
+          <CollPrtflId>PORTFOLIO-003</CollPrtflId>
+          <RcvdMrgnOrColl>
+            <InitlMrgnRcvd><Amt Ccy="GBP">300000.00</Amt></InitlMrgnRcvd>
+            <VartnMrgnRcvd><Amt Ccy="GBP">5000.00</Amt></VartnMrgnRcvd>
+          </RcvdMrgnOrColl>
+        </TradUpd>
+      </Rpt>
+
+      <Rpt>
+        <New>
+          <TechRcrdId>REC-NEW-2</TechRcrdId>
+          <RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm>
+          <EvtDt>2026-05-12</EvtDt>
+          <CtrPty>
+            <RptgCtrPty><Id><LEI>RPTGCPARTY0000000001</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Lgl><LEI>OTHRCPARTY0000000005</LEI></Lgl></Id></OthrCtrPty>
+          </CtrPty>
+          <CollPrtflId>PORTFOLIO-004</CollPrtflId>
+          <PstdMrgnOrColl>
+            <InitlMrgnPstd><Amt Ccy="EUR">100000.00</Amt></InitlMrgnPstd>
+            <VartnMrgnPstd><Amt Ccy="EUR">2000.00</Amt></VartnMrgnPstd>
+            <XcssCollPstd><Amt Ccy="EUR">500000.00</Amt></XcssCollPstd>
+          </PstdMrgnOrColl>
+          <RcvdMrgnOrColl>
+            <InitlMrgnRcvd><Amt Ccy="EUR">98000.00</Amt></InitlMrgnRcvd>
+            <VartnMrgnRcvd><Amt Ccy="EUR">1800.00</Amt></VartnMrgnRcvd>
+          </RcvdMrgnOrColl>
+        </New>
+      </Rpt>
+
+      <Rpt>
+        <Err>
+          <TechRcrdId>REC-ERR-1</TechRcrdId>
+          <RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm>
+          <CtrPty>
+            <RptgCtrPty><Id><LEI>RPTGCPARTY0000000001</LEI></Id></RptgCtrPty>
+            <OthrCtrPty><Id><Ntrl><Id>NATURAL-PERSON-ID-42</Id></Ntrl></Id></OthrCtrPty>
+          </CtrPty>
+          <CollPrtflId>PORTFOLIO-005</CollPrtflId>
+        </Err>
+      </Rpt>
+
+    </TradData>
+  </SctiesFincgRptgTxMrgnDataRpt>
+</Document>

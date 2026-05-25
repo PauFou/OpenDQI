@@ -46,8 +46,8 @@ pub use model::{
     DqDimension, DqIssue, EmirRecord, EvidenceItem, FeedbackRecord, FeedbackType,
     MarginActivityRecord, MarginStateRecord, MissingCollateralRecord, ReconStatsRecord,
     ReconciliationRecord, Regime, RejectionCause, RejectionProfile, RejectionProfileFile,
-    RepeatedRejection, ScanSummary, Severity, SftrMarginStateRecord, SftrRecord, SftrTrStateRecord,
-    TrActivitySummary, TrStateRecord, TradeWarningsRecord, WarningsCounterpartyRecord,
-    WarningsTransactionRecord,
+    RepeatedRejection, ScanSummary, Severity, SftrMarginActivityRecord, SftrMarginStateRecord,
+    SftrRecord, SftrTrStateRecord, TrActivitySummary, TrStateRecord, TradeWarningsRecord,
+    WarningsCounterpartyRecord, WarningsTransactionRecord,
 };
 pub use scoring::{quality_score, quality_score_from_counts, rate_with_status};
