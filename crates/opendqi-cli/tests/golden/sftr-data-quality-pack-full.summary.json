@@ -1,7 +1,7 @@
 {
   "regime": "sftr",
-  "files_processed": 4,
-  "records_processed": 37,
+  "files_processed": 5,
+  "records_processed": 42,
   "issues_total": 83,
   "issues_by_severity": {
     "info": 13,
@@ -16,7 +16,7 @@
     "accuracy": 20,
     "consistency": 20
   },
-  "quality_score": 82.58108,
+  "quality_score": 84.65476,
   "started_at": "1970-01-01T00:00:00Z",
   "finished_at": "1970-01-01T00:00:00Z"
 }

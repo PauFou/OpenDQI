@@ -9,8 +9,9 @@ use crate::config::Thresholds;
 use crate::model::{
     DqDimension, DqIssue, EmirRecord, FeedbackRecord, MarginActivityRecord, MarginStateRecord,
     MissingCollateralRecord, ReconStatsRecord, ReconciliationRecord, RejectionProfile, Severity,
-    SftrMarginActivityRecord, SftrMarginStateRecord, SftrRecord, SftrTrStateRecord, TrStateRecord,
-    TradeWarningsRecord, WarningsCounterpartyRecord, WarningsTransactionRecord,
+    SftrMarginActivityRecord, SftrMarginStateRecord, SftrRecord, SftrReuseActivityRecord,
+    SftrTrStateRecord, TrStateRecord, TradeWarningsRecord, WarningsCounterpartyRecord,
+    WarningsTransactionRecord,
 };
 
 mod aggregate;
@@ -1109,6 +1110,30 @@ pub fn default_sftr_mar_checks() -> Vec<Box<dyn SftrMarCheck>> {
 pub fn run_all_sftr_mar(
     checks: &[Box<dyn SftrMarCheck>],
     records: &[SftrMarginActivityRecord],
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    collect_finalize(checks, ctx, |c| c.run(records, ctx))
+}
+
+// ---- SFTR Reused Collateral Data Report (auth.071) checks ----
+// v0.18 B5. Per-record granular defects on the reuse activity layer.
+
+mod sftr_reu;
+
+pub use sftr_reu::{SftrReuCheck, SftrReuMissingReuseCurrency, SftrReuRateOutsidePlausibleBand};
+
+/// Default SFTR REU check registry (2 SFTR.REU.* checks).
+pub fn default_sftr_reu_checks() -> Vec<Box<dyn SftrReuCheck>> {
+    vec![
+        Box::new(SftrReuMissingReuseCurrency),
+        Box::new(SftrReuRateOutsidePlausibleBand),
+    ]
+}
+
+/// Run every SFTR REU check over the provided records slice.
+pub fn run_all_sftr_reu(
+    checks: &[Box<dyn SftrReuCheck>],
+    records: &[SftrReuseActivityRecord],
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
     collect_finalize(checks, ctx, |c| c.run(records, ctx))

@@ -609,6 +609,10 @@ fn sftr_data_quality_pack_full() {
         // SFTR.MAR.* granular checks on the same path.
         "--mar",
         &ex("examples/sftr/margin_activity/auth070-sample.xml"),
+        // v0.18 B5: add auth.071 reuse activity layer —
+        // exercises 2 reuse DQIs + 2 SFTR.REU.* granular checks.
+        "--reuse-activity",
+        &ex("examples/sftr/reuse_activity/auth071-sample.xml"),
         "--as-of",
         "2026-05-21",
     ])

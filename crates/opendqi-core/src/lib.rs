@@ -39,8 +39,9 @@ pub use dq::dqi::{
 };
 pub use dq::{
     default_checks, default_sftr_checks, default_sftr_mar_checks, default_sftr_msr_checks,
-    stream_checks_into, stream_emir_checks_into, Check, IssueAggregator, SftrCheck, SftrMarCheck,
-    SftrMsrCheck, SortedIssueSink, SortedIssues, STREAM_SPILL_MAX_ISSUES,
+    default_sftr_reu_checks, stream_checks_into, stream_emir_checks_into, Check, IssueAggregator,
+    SftrCheck, SftrMarCheck, SftrMsrCheck, SftrReuCheck, SortedIssueSink, SortedIssues,
+    STREAM_SPILL_MAX_ISSUES,
 };
 pub use model::{
     DqDimension, DqIssue, EmirRecord, EvidenceItem, FeedbackRecord, FeedbackType,
