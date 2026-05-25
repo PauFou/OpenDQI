@@ -9,8 +9,8 @@ use crate::config::Thresholds;
 use crate::model::{
     DqDimension, DqIssue, EmirRecord, FeedbackRecord, MarginActivityRecord, MarginStateRecord,
     MissingCollateralRecord, ReconStatsRecord, ReconciliationRecord, RejectionProfile, Severity,
-    SftrMarginStateRecord, SftrRecord, SftrTrStateRecord, TrStateRecord, TradeWarningsRecord,
-    WarningsCounterpartyRecord, WarningsTransactionRecord,
+    SftrMarginActivityRecord, SftrMarginStateRecord, SftrRecord, SftrTrStateRecord, TrStateRecord,
+    TradeWarningsRecord, WarningsCounterpartyRecord, WarningsTransactionRecord,
 };
 
 mod aggregate;
@@ -1076,6 +1076,39 @@ pub fn default_sftr_msr_checks() -> Vec<Box<dyn SftrMsrCheck>> {
 pub fn run_all_sftr_msr(
     checks: &[Box<dyn SftrMsrCheck>],
     records: &[SftrMarginStateRecord],
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    collect_finalize(checks, ctx, |c| c.run(records, ctx))
+}
+
+// ---- SFTR Margin Data Transaction Report (auth.070) checks ----
+// v0.18 A5. Event-driven mirror of the auth.085 sftr_msr module.
+
+mod sftr_mar;
+
+pub use sftr_mar::{
+    SftrMarActionTypeEnumInvalid, SftrMarAmountCurrencyMissing, SftrMarCheck,
+    SftrMarEventDateInFuture, SftrMarEventWithoutPortfolio,
+};
+
+/// Default SFTR MAR check registry (4 SFTR.MAR.* checks).
+///
+/// No `prior` argument on the per-check `run` — v0.18 has no
+/// cross-batch MAR-history tracking (amount-change implausibility
+/// deferred to v0.19+).
+pub fn default_sftr_mar_checks() -> Vec<Box<dyn SftrMarCheck>> {
+    vec![
+        Box::new(SftrMarActionTypeEnumInvalid),
+        Box::new(SftrMarEventWithoutPortfolio),
+        Box::new(SftrMarEventDateInFuture),
+        Box::new(SftrMarAmountCurrencyMissing),
+    ]
+}
+
+/// Run every SFTR MAR check over the provided records slice.
+pub fn run_all_sftr_mar(
+    checks: &[Box<dyn SftrMarCheck>],
+    records: &[SftrMarginActivityRecord],
     ctx: &CheckContext,
 ) -> Vec<DqIssue> {
     collect_finalize(checks, ctx, |c| c.run(records, ctx))
