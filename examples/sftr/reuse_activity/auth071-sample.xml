@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SFTR Reused Collateral Data Report (auth.071) — synthetic
+  schema-shaped fixture, 5 Rpt records covering every action
+  wrapper (New / Crrctn / CollReuseUpd / Err) and reuse-content
+  variants on the SftrReuseActivityRecord model
+  (model.rs::SftrReuseActivityRecord).
+
+  All values are synthetic. ESMA paths follow auth.071.001.02
+  = SecuritiesFinancingReportingTransactionReusedCollateralDataReportV02.
+
+  Per the XSD, amounts are restricted to minInclusive=0 (no
+  negative amounts), and Err wrappers carry no EvtDay / no
+  CollCmpnt / no FndgSrc.
+
+  Record map:
+    REUSE-NEW-1     New          — full / clean: 2 Scty entries (Actl + Estmtd) + Csh w/ rate
+    REUSE-CORR-1    Crrctn       — Scty-only (no Csh, no rate)
+    REUSE-CRUD-1    CollReuseUpd — cash-only (CshRinvstmtRate but no Scty entries)
+    REUSE-NEW-2     New          — large reuse volume (single Actl)
+    REUSE-ERR-1     Err          — metadata-only retraction (no EvtDay/CollCmpnt)
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.071.001.02">
+  <SctiesFincgRptgTxReusdCollDataRpt>
+    <TradData>
+
+      <Rpt>
+        <New>
+          <TechRcrdId>REUSE-NEW-1</TechRcrdId>
+          <RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm>
+          <CtrPty>
+            <RptSubmitgNtty><LEI>SUBMITRPT000000000001</LEI></RptSubmitgNtty>
+            <RptgCtrPty><LEI>RPTGCPARTY0000000001</LEI></RptgCtrPty>
+            <NttyRspnsblForRpt><LEI>ENTRESP00000000000001</LEI></NttyRspnsblForRpt>
+          </CtrPty>
+          <CollCmpnt>
+            <Scty>
+              <ISIN>DE000A1B2C34</ISIN>
+              <ReuseVal><Actl Ccy="EUR">1000000.00</Actl></ReuseVal>
+            </Scty>
+            <Scty>
+              <ISIN>DE000A1B2C35</ISIN>
+              <ReuseVal><Estmtd Ccy="EUR">500000.00</Estmtd></ReuseVal>
+            </Scty>
+            <Csh>
+              <RinvstdCsh><Tp>OTHR</Tp><Amt Ccy="EUR">250000.00</Amt></RinvstdCsh>
+              <CshRinvstmtRate>0.0125</CshRinvstmtRate>
+            </Csh>
+          </CollCmpnt>
+          <EvtDay>2026-05-12</EvtDay>
+          <FndgSrc><Tp>SECL</Tp><MktVal><Amt Ccy="EUR">10000000.00</Amt></MktVal></FndgSrc>
+        </New>
+      </Rpt>
+
+      <Rpt>
+        <Crrctn>
+          <TechRcrdId>REUSE-CORR-1</TechRcrdId>
+          <RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm>
+          <CtrPty>
+            <RptSubmitgNtty><LEI>SUBMITRPT000000000001</LEI></RptSubmitgNtty>
+            <RptgCtrPty><LEI>RPTGCPARTY0000000001</LEI></RptgCtrPty>
+            <NttyRspnsblForRpt><LEI>ENTRESP00000000000001</LEI></NttyRspnsblForRpt>
+          </CtrPty>
+          <CollCmpnt>
+            <Scty>
+              <ISIN>DE000A1B2C36</ISIN>
+              <ReuseVal><Actl Ccy="USD">200000.00</Actl></ReuseVal>
+            </Scty>
+          </CollCmpnt>
+          <EvtDay>2026-05-12</EvtDay>
+        </Crrctn>
+      </Rpt>
+
+      <Rpt>
+        <CollReuseUpd>
+          <TechRcrdId>REUSE-CRUD-1</TechRcrdId>
+          <RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm>
+          <CtrPty>
+            <RptSubmitgNtty><LEI>SUBMITRPT000000000001</LEI></RptSubmitgNtty>
+            <RptgCtrPty><LEI>RPTGCPARTY0000000001</LEI></RptgCtrPty>
+            <NttyRspnsblForRpt><LEI>ENTRESP00000000000001</LEI></NttyRspnsblForRpt>
+          </CtrPty>
+          <CollCmpnt>
+            <Csh>
+              <RinvstdCsh><Tp>FREE</Tp><Amt Ccy="GBP">75000.00</Amt></RinvstdCsh>
+              <CshRinvstmtRate>0.0200</CshRinvstmtRate>
+            </Csh>
+          </CollCmpnt>
+          <EvtDay>2026-05-12</EvtDay>
+          <FndgSrc><Tp>OTHR</Tp><MktVal><Amt Ccy="GBP">75000.00</Amt></MktVal></FndgSrc>
+        </CollReuseUpd>
+      </Rpt>
+
+      <Rpt>
+        <New>
+          <TechRcrdId>REUSE-NEW-2</TechRcrdId>
+          <RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm>
+          <CtrPty>
+            <RptSubmitgNtty><LEI>SUBMITRPT000000000001</LEI></RptSubmitgNtty>
+            <RptgCtrPty><LEI>RPTGCPARTY0000000001</LEI></RptgCtrPty>
+            <NttyRspnsblForRpt><LEI>ENTRESP00000000000001</LEI></NttyRspnsblForRpt>
+          </CtrPty>
+          <CollCmpnt>
+            <Scty>
+              <ISIN>DE000A1B2C37</ISIN>
+              <ReuseVal><Actl Ccy="EUR">5000000.00</Actl></ReuseVal>
+            </Scty>
+          </CollCmpnt>
+          <EvtDay>2026-05-12</EvtDay>
+        </New>
+      </Rpt>
+
+      <Rpt>
+        <Err>
+          <TechRcrdId>REUSE-ERR-1</TechRcrdId>
+          <RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm>
+          <CtrPty>
+            <RptSubmitgNtty><LEI>SUBMITRPT000000000001</LEI></RptSubmitgNtty>
+            <RptgCtrPty><LEI>RPTGCPARTY0000000001</LEI></RptgCtrPty>
+            <NttyRspnsblForRpt><LEI>ENTRESP00000000000001</LEI></NttyRspnsblForRpt>
+          </CtrPty>
+        </Err>
+      </Rpt>
+
+    </TradData>
+  </SctiesFincgRptgTxReusdCollDataRpt>
+</Document>
