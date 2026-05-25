@@ -1050,6 +1050,70 @@ impl Default for SftrReuseStateRecord {
     }
 }
 
+/// One line from an SFTR Transaction Status Advice (ISO 20022
+/// `auth.084`) — the TR-side aggregate rejection statistics
+/// message identifying which transaction reports were rejected
+/// and why.
+///
+/// Unlike the per-trade SFTR messages, `auth.084` is a
+/// **statistics** message: one record per file carrying
+/// aggregate counts (total reports, accepted, rejected) plus a
+/// per-error-code breakdown.
+///
+/// Plan pivot honesty (v0.18 D): the v0.18 plan originally
+/// scoped Phase D for `auth.078` (Pairing Request), but XSD
+/// verification against the actual ESMA SFTR bundle showed
+/// `auth.078` is not in the published message set — pairing
+/// semantics are carried by `auth.080` (Reconciliation Status
+/// Advice, already covered). Pivoted Phase D to `auth.084`
+/// (Transaction Status Advice, the actual SFTR rejection-
+/// feedback message) — closes a real gap in our coverage.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SftrTrStatusAdviceRecord {
+    /// Source file path (or other origin label).
+    pub source_file: Option<String>,
+    /// Stable identifier of the line within the source.
+    /// `auth.084` has no `TechRcrdId` element so the parser
+    /// synthesises one from `source_file` + record index.
+    pub record_id: Option<String>,
+    /// Regulatory regime — always `Regime::Sftr` for this record.
+    pub regime: Regime,
+    /// `RptSttstcs/TtlNbOfRpts` — total number of reports
+    /// sent or received in the reporting period.
+    pub total_reports: Option<u64>,
+    /// `RptSttstcs/TtlNbOfRptsAccptd` — number of reports
+    /// accepted by the TR.
+    pub total_reports_accepted: Option<u64>,
+    /// `RptSttstcs/TtlNbOfRptsRjctd` — number of reports
+    /// rejected by the TR.
+    pub total_reports_rejected: Option<u64>,
+    /// Per-error-code breakdown of rejected reports
+    /// (`RptSttstcs/NbOfRptsRjctdPerErr[]` keyed by validation
+    /// rule code). Empty when no per-error rows are reported.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub rejected_reports_per_error: BTreeMap<String, u64>,
+    /// Catch-all of XML leaves not promoted to typed fields
+    /// (transaction-level statistics under `TxSttstcs`,
+    /// reporting-period metadata, etc.).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub raw_fields: BTreeMap<String, String>,
+}
+
+impl Default for SftrTrStatusAdviceRecord {
+    fn default() -> Self {
+        Self {
+            source_file: None,
+            record_id: None,
+            regime: Regime::Sftr,
+            total_reports: None,
+            total_reports_accepted: None,
+            total_reports_rejected: None,
+            rejected_reports_per_error: BTreeMap::new(),
+            raw_fields: BTreeMap::new(),
+        }
+    }
+}
+
 /// One line from an EMIR Margin Activity Report (MAR) — the
 /// history of margin calls / postings / collections for a portfolio
 /// (ISO 20022 `auth.108`). Activity-oriented, mirrors `EmirRecord`
@@ -2030,5 +2094,66 @@ mod tests {
         assert_eq!(back.reuse_currency, r.reuse_currency);
         assert_eq!(back.cash_reinvestment_rate, r.cash_reinvestment_rate);
         assert_eq!(back.action_type, r.action_type);
+    }
+
+    // -- v0.18 D1: SftrTrStatusAdviceRecord (auth.084) ---------
+
+    #[test]
+    fn sftr_tr_status_advice_record_default_is_sftr_with_all_options_none() {
+        let r = SftrTrStatusAdviceRecord::default();
+        assert_eq!(r.regime, Regime::Sftr);
+        assert!(r.source_file.is_none());
+        assert!(r.record_id.is_none());
+        assert!(r.total_reports.is_none());
+        assert!(r.total_reports_accepted.is_none());
+        assert!(r.total_reports_rejected.is_none());
+        assert!(r.rejected_reports_per_error.is_empty());
+        assert!(r.raw_fields.is_empty());
+    }
+
+    #[test]
+    fn sftr_tr_status_advice_record_serde_always_emits_metadata_keys_when_none() {
+        let r = SftrTrStatusAdviceRecord::default();
+        let j = serde_json::to_string(&r).unwrap();
+        for required_key in [
+            "source_file",
+            "record_id",
+            "total_reports",
+            "total_reports_accepted",
+            "total_reports_rejected",
+        ] {
+            assert!(
+                j.contains(&format!("\"{required_key}\":null")),
+                "key {required_key} should serialise as null on default, json was {j}"
+            );
+        }
+        // Maps skip-serialize when empty.
+        assert!(!j.contains("\"rejected_reports_per_error\""));
+        assert!(!j.contains("\"raw_fields\""));
+    }
+
+    #[test]
+    fn sftr_tr_status_advice_record_round_trip_populated() {
+        let mut per_err = BTreeMap::new();
+        per_err.insert("VR-001".into(), 12u64);
+        per_err.insert("VR-002".into(), 3u64);
+        let r = SftrTrStatusAdviceRecord {
+            source_file: Some("auth084.xml".into()),
+            record_id: Some("auth084.xml#rpt-1".into()),
+            regime: Regime::Sftr,
+            total_reports: Some(1000),
+            total_reports_accepted: Some(985),
+            total_reports_rejected: Some(15),
+            rejected_reports_per_error: per_err.clone(),
+            ..SftrTrStatusAdviceRecord::default()
+        };
+        let j = serde_json::to_string(&r).unwrap();
+        let back: SftrTrStatusAdviceRecord = serde_json::from_str(&j).unwrap();
+        assert_eq!(back.source_file, r.source_file);
+        assert_eq!(back.record_id, r.record_id);
+        assert_eq!(back.total_reports, Some(1000));
+        assert_eq!(back.total_reports_accepted, Some(985));
+        assert_eq!(back.total_reports_rejected, Some(15));
+        assert_eq!(back.rejected_reports_per_error, per_err);
     }
 }

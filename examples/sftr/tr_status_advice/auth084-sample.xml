@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SFTR Transaction Status Advice (auth.084) — synthetic schema-
+  shaped fixture, 1 Rpt with aggregate rejection statistics + a
+  per-error breakdown across 3 validation rules.
+
+  All values are synthetic. ESMA paths follow auth.084.001.02
+  = SecuritiesFinancingReportingTransactionStatusAdviceV02.
+
+  Unlike the per-trade SFTR messages, this is a statistics
+  message: one Rpt block per file carrying totals + per-error-
+  code counts. The single record below reports a 4.5 %
+  rejection rate (45 rejected out of 1000 reports) split
+  across 3 validation rules.
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.084.001.02">
+  <SctiesFincgRptgTxStsAdvc>
+    <TxRptStsAndRsn>
+      <Rpt>
+        <RptSttstcs>
+          <TtlNbOfRpts>1000</TtlNbOfRpts>
+          <TtlNbOfRptsAccptd>955</TtlNbOfRptsAccptd>
+          <TtlNbOfRptsRjctd>45</TtlNbOfRptsRjctd>
+          <NbOfRptsRjctdPerErr>
+            <Dtl><Prtry><Id>VR-001</Id></Prtry></Dtl>
+            <NbOfTxs>20</NbOfTxs>
+          </NbOfRptsRjctdPerErr>
+          <NbOfRptsRjctdPerErr>
+            <Dtl><Prtry><Id>VR-002</Id></Prtry></Dtl>
+            <NbOfTxs>15</NbOfTxs>
+          </NbOfRptsRjctdPerErr>
+          <NbOfRptsRjctdPerErr>
+            <Dtl><Prtry><Id>VR-099</Id></Prtry></Dtl>
+            <NbOfTxs>10</NbOfTxs>
+          </NbOfRptsRjctdPerErr>
+        </RptSttstcs>
+        <TxSttstcs>
+          <DataSetActn>NOTX</DataSetActn>
+        </TxSttstcs>
+      </Rpt>
+    </TxRptStsAndRsn>
+  </SctiesFincgRptgTxStsAdvc>
+</Document>
