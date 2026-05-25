@@ -456,13 +456,14 @@ pub fn book_reconcile<'py>(
 /// history store — same as the v0.13 SFTR `tr_audit`
 /// binding).
 #[pyfunction]
-#[pyo3(signature = (*, tsr = None, tar = None, reconciliation = None, missing_collateral = None, msr = None, as_of = None))]
+#[pyo3(signature = (*, tsr = None, tar = None, reconciliation = None, missing_collateral = None, msr = None, mar = None, as_of = None))]
 pub fn data_quality_pack(
     tsr: Option<&str>,
     tar: Option<&str>,
     reconciliation: Option<&str>,
     missing_collateral: Option<&str>,
     msr: Option<&str>,
+    mar: Option<&str>,
     as_of: Option<&str>,
 ) -> PyResult<PyDqiPackResult> {
     if tsr.is_none()
@@ -470,10 +471,11 @@ pub fn data_quality_pack(
         && reconciliation.is_none()
         && missing_collateral.is_none()
         && msr.is_none()
+        && mar.is_none()
     {
         return Err(pyo3::exceptions::PyValueError::new_err(
             "data_quality_pack: at least one of tsr / tar / reconciliation / \
-             missing_collateral / msr is required",
+             missing_collateral / msr / mar is required",
         ));
     }
 
@@ -528,6 +530,14 @@ pub fn data_quality_pack(
         }
         None => Vec::new(),
     };
+    let mar_records = match mar {
+        Some(p) => {
+            opendqi_xml::read_sftr_margin_activity_xml(Path::new(p))
+                .map_err(to_py_err)?
+                .records
+        }
+        None => Vec::new(),
+    };
 
     let inputs = SftrDqiInputs {
         tsr: tsr.map(|_| tsr_records.as_slice()),
@@ -535,9 +545,8 @@ pub fn data_quality_pack(
         reconciliation: reconciliation.map(|_| reconciliation_records.as_slice()),
         missing_collateral: missing_collateral.map(|_| missing_collateral_records.as_slice()),
         msr: msr.map(|_| msr_records.as_slice()),
-        // v0.18 A3: mar slot is plumbed but no Python kwarg yet
-        // (added in A6). Forced to None at this surface for now.
-        mar: None,
+        // v0.18 A6: mar slot wired through `mar=` kwarg.
+        mar: mar.map(|_| mar_records.as_slice()),
     };
 
     let pack = compute_sftr_dqi_pack(inputs, MappingPresence::default(), &thresholds, as_of_date);

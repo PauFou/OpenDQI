@@ -28,6 +28,10 @@ DQI_LOAN_VALUE_STALE_SFTR,OPENDQI-SFTR-TSR-MGLDUC-0010,,MGLD,<WS>/examples/sftr/
 DQI_LOAN_VALUE_STALE_SFTR,OPENDQI-SFTR-TSR-NOCOLL-0002,,REPO,<WS>/examples/sftr/tr_state/auth079-sample.xml,2026-05-13T08:00:00+00:00,state_as_of older than 1 TARGET2 business day(s) vs as_of 2026-05-21
 DQI_LOAN_VALUE_STALE_SFTR,OPENDQI-SFTR-TSR-PASTMAT-0003,,BSBC,<WS>/examples/sftr/tr_state/auth079-sample.xml,2026-05-13T08:00:00+00:00,state_as_of older than 1 TARGET2 business day(s) vs as_of 2026-05-21
 DQI_LOAN_VALUE_STALE_SFTR,OPENDQI-SFTR-TSR-STALE-0007,,REPO,<WS>/examples/sftr/tr_state/auth079-sample.xml,2024-01-01T00:00:00+00:00,state_as_of older than 1 TARGET2 business day(s) vs as_of 2026-05-21
+DQI_MAR_EXCESS_COLLATERAL_EVENT_RATE_SFTR,PORTFOLIO-001,RPTGCPARTY0000000001,,<WS>/examples/sftr/margin_activity/auth070-sample.xml,25000.00,MAR event posts excess collateral 25000.00 EUR
+DQI_MAR_EXCESS_COLLATERAL_EVENT_RATE_SFTR,PORTFOLIO-004,RPTGCPARTY0000000001,,<WS>/examples/sftr/margin_activity/auth070-sample.xml,500000.00,MAR event posts excess collateral 500000.00 EUR
+DQI_MAR_PARTIAL_SIDES_SFTR,PORTFOLIO-002,RPTGCPARTY0000000001,,<WS>/examples/sftr/margin_activity/auth070-sample.xml,posted-only,MAR event reports posted-only margin (the other side is entirely None)
+DQI_MAR_PARTIAL_SIDES_SFTR,PORTFOLIO-003,RPTGCPARTY0000000001,,<WS>/examples/sftr/margin_activity/auth070-sample.xml,received-only,MAR event reports received-only margin (the other side is entirely None)
 DQI_MCR_OPEN_REQUESTS_SFTR,OPENDQI-SFTR-MCR-0001,RPTGLEI0000000000001,,<WS>/examples/sftr/missing_collateral/auth083-sample.xml,GMRA,requested UTI not present in SFTR TSR snapshot
 DQI_RECONCILIATION_RATE_SFTR,OPENDQI-SFTR-RECON-NOTMTCHD-2,RPTGLEI0000000000001,,<WS>/examples/sftr/reconciliation/auth080-sample.xml,UNRECONCILED,paired SFTR trade flagged UNRECONCILED on at least one field
 DQI_T3_EXCESS_COLLATERAL_USE_SFTR,PORTFOLIO-001,RPTGCPARTY0000000001,,<WS>/examples/sftr/margin_state/auth085-sample.xml,"posted=25000.00, received=20000.00",excess collateral > 0 on posted or received side

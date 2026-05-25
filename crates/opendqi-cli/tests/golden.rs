@@ -604,6 +604,11 @@ fn sftr_data_quality_pack_full() {
         &ex("examples/sftr/missing_collateral/auth083-sample.xml"),
         "--msr",
         &ex("examples/sftr/margin_state/auth085-sample.xml"),
+        // v0.18 A6: add auth.070 MAR layer to the canonical
+        // full-coverage golden — exercises 3 MAR DQIs + 4
+        // SFTR.MAR.* granular checks on the same path.
+        "--mar",
+        &ex("examples/sftr/margin_activity/auth070-sample.xml"),
         "--as-of",
         "2026-05-21",
     ])

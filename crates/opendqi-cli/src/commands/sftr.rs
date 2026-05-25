@@ -29,9 +29,9 @@ use opendqi_report::{
     write_report_html, write_report_html_with_dqi, write_summary_json, TopIssues,
 };
 use opendqi_xml::{
-    check_wellformedness, read_sftr_margin_state_xml, read_sftr_missing_collateral_xml,
-    read_sftr_reconciliation_xml, read_sftr_tr_state_xml, read_sftr_xml, ExternalXmllintValidator,
-    XsdValidator, XsdViolation,
+    check_wellformedness, read_sftr_margin_activity_xml, read_sftr_margin_state_xml,
+    read_sftr_missing_collateral_xml, read_sftr_reconciliation_xml, read_sftr_tr_state_xml,
+    read_sftr_xml, ExternalXmllintValidator, XsdValidator, XsdViolation,
 };
 use tracing::{info, warn};
 
@@ -277,6 +277,13 @@ pub enum SftrAction {
         /// ESMA scope.
         #[arg(long)]
         msr: Option<PathBuf>,
+        /// Path to the `auth.070` SFTR Margin Data Transaction
+        /// Report (MAR). Powers 3 MAR event-layer DQIs
+        /// (PARTIAL_SIDES, EXCESS_COLLATERAL_EVENT_RATE,
+        /// EVENT_SPIKE) AND 4 granular SFTR.MAR.* per-record
+        /// checks. Event-driven CCP-cleared SFT activity (v0.18+).
+        #[arg(long)]
+        mar: Option<PathBuf>,
         /// Optional YAML thresholds configuration (overrides
         /// the shipped DQI defaults via the `dqi:` block).
         #[arg(long)]
@@ -412,6 +419,7 @@ pub fn run(action: SftrAction) -> Result<ExitCode> {
             reconciliation,
             missing_collateral,
             msr,
+            mar,
             config,
             as_of,
             out,
@@ -423,6 +431,7 @@ pub fn run(action: SftrAction) -> Result<ExitCode> {
                 reconciliation.as_deref(),
                 missing_collateral.as_deref(),
                 msr.as_deref(),
+                mar.as_deref(),
                 config.as_deref(),
                 as_of.as_deref(),
                 &out,
@@ -1814,6 +1823,7 @@ fn run_data_quality_pack(
     reconciliation_path: Option<&Path>,
     missing_collateral_path: Option<&Path>,
     msr_path: Option<&Path>,
+    mar_path: Option<&Path>,
     config_path: Option<&Path>,
     as_of_str: Option<&str>,
     out: &Path,
@@ -1824,10 +1834,11 @@ fn run_data_quality_pack(
         && reconciliation_path.is_none()
         && missing_collateral_path.is_none()
         && msr_path.is_none()
+        && mar_path.is_none()
     {
         return Err(anyhow!(
             "sftr data-quality-pack: at least one of --tsr / --tar / \
-             --reconciliation / --missing-collateral / --msr is required"
+             --reconciliation / --missing-collateral / --msr / --mar is required"
         ));
     }
 
@@ -1914,6 +1925,21 @@ fn run_data_quality_pack(
         }
         None => Vec::new(),
     };
+    // v0.18 A2 + A4 + A5 + A6: SFTR MAR (auth.070) parsed, then
+    // consumed by the 3 MAR event-layer DQIs (A4) and 4
+    // SFTR.MAR.* granular checks (A5).
+    let mar_records = match mar_path {
+        Some(p) => {
+            let outcome = read_sftr_margin_activity_xml(p)
+                .with_context(|| format!("reading SFTR MAR {}", p.display()))?;
+            info!(
+                records = outcome.records.len(),
+                "loaded SFTR MAR (auth.070)"
+            );
+            outcome.records
+        }
+        None => Vec::new(),
+    };
 
     let inputs = SftrDqiInputs {
         msr: if msr_path.is_some() {
@@ -1941,9 +1967,12 @@ fn run_data_quality_pack(
         } else {
             None
         },
-        // v0.18 A3: mar slot is plumbed but no CLI flag yet
-        // (added in A6). Forced to None at this surface for now.
-        mar: None,
+        // v0.18 A6: mar slot wired through --mar flag.
+        mar: if mar_path.is_some() {
+            Some(&mar_records)
+        } else {
+            None
+        },
     };
 
     let pack = compute_sftr_dqi_pack(inputs, MappingPresence::default(), &thresholds, as_of);
@@ -1956,6 +1985,7 @@ fn run_data_quality_pack(
         ("SFTR-Recon", reconciliation_path),
         ("SFTR-MCR", missing_collateral_path),
         ("SFTR-MSR", msr_path),
+        ("SFTR-MAR", mar_path),
     ] {
         if let Some(path) = p {
             sources.push(format!("{lbl}: {}", path.display()));
