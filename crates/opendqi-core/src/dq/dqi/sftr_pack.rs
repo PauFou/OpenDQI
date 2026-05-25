@@ -51,7 +51,7 @@ use crate::dq::{
 };
 use crate::model::{
     DqDimension, DqIssue, Regime, SftrMarginActivityRecord, SftrMarginStateRecord, SftrRecord,
-    SftrTrStateRecord,
+    SftrReuseActivityRecord, SftrTrStateRecord,
 };
 use crate::Thresholds;
 
@@ -97,11 +97,17 @@ pub struct SftrDqiInputs<'a> {
     /// SFTR Margin Data Transaction Report (`auth.070`) —
     /// projected onto [`SftrMarginActivityRecord`]. Event-
     /// driven per-margin-event activity (NEWT / ERRT / CORR /
-    /// TRDU), CCP-cleared SFTs only. **A3 status**: the slot
-    /// is plumbed but no computer reads it yet — the 3 MAR
-    /// DQIs land in A4 and the 4 `SFTR.MAR.*` granular checks
-    /// in A5.
+    /// TRDU), CCP-cleared SFTs only. Powers the 3 SFTR MAR
+    /// DQIs (A4) and the 4 `SFTR.MAR.*` granular checks (A5).
     pub mar: Option<&'a [SftrMarginActivityRecord]>,
+    /// SFTR Reused Collateral Data Report (`auth.071`) —
+    /// projected onto [`SftrReuseActivityRecord`]. Firm-side
+    /// portfolio-level reuse / reinvestment event report (NEWT
+    /// / ERRT / CORR / CRUD). **B3 status**: the slot is
+    /// plumbed but no computer reads it yet — the 2 reuse
+    /// DQIs land in B4 and the 2 `SFTR.REU.*` granular checks
+    /// in B5.
+    pub reuse_activity: Option<&'a [SftrReuseActivityRecord]>,
 }
 
 /// Run the SFTR Data Quality Pack.
@@ -475,6 +481,41 @@ mod tests {
         // A5 (4 SFTR.MAR.* granular checks).
         let inputs: SftrDqiInputs = SftrDqiInputs::default();
         assert!(inputs.mar.is_none());
+    }
+
+    #[test]
+    fn default_inputs_have_reuse_activity_slot_at_none() {
+        // v0.18 B3 contract: the reuse_activity slot exists and
+        // defaults to None alongside the other 6 slots. No DQI
+        // computer reads it yet — that lands in B4 (2 SFTR
+        // reuse DQIs) and B5 (2 SFTR.REU.* granular checks).
+        let inputs: SftrDqiInputs = SftrDqiInputs::default();
+        assert!(inputs.reuse_activity.is_none());
+    }
+
+    #[test]
+    fn providing_empty_reuse_activity_is_noop_pre_b4() {
+        // v0.18 B3: an empty reuse_activity slice is observably
+        // distinct from reuse_activity=None at the type level,
+        // but no computer fires on it yet (B4 adds the 2 reuse
+        // DQI computers and B5 the granular checks). Until then
+        // the indicator count stays at the post-A4 baseline
+        // (19) and granular issues stay empty.
+        let reuse: Vec<SftrReuseActivityRecord> = vec![];
+        let inputs = SftrDqiInputs {
+            reuse_activity: Some(&reuse),
+            ..SftrDqiInputs::default()
+        };
+        let result = compute_sftr_dqi_pack(
+            inputs,
+            MappingPresence::default(),
+            &Thresholds::default(),
+            as_of(),
+        );
+        // Post-A4 baseline = 19 indicators, unchanged by B3.
+        assert_eq!(result.indicators.len(), 19);
+        // No SFTR.REU.* check exists pre-B5.
+        assert!(result.issues.is_empty());
     }
 
     #[test]

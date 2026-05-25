@@ -547,6 +547,9 @@ pub fn data_quality_pack(
         msr: msr.map(|_| msr_records.as_slice()),
         // v0.18 A6: mar slot wired through `mar=` kwarg.
         mar: mar.map(|_| mar_records.as_slice()),
+        // v0.18 B3: reuse_activity slot plumbed but no Python
+        // kwarg yet (added in B5). Forced to None at this surface.
+        reuse_activity: None,
     };
 
     let pack = compute_sftr_dqi_pack(inputs, MappingPresence::default(), &thresholds, as_of_date);

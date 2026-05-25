@@ -1973,6 +1973,9 @@ fn run_data_quality_pack(
         } else {
             None
         },
+        // v0.18 B3: reuse_activity slot plumbed but no CLI flag
+        // yet (added in B5). Forced to None at this surface.
+        reuse_activity: None,
     };
 
     let pack = compute_sftr_dqi_pack(inputs, MappingPresence::default(), &thresholds, as_of);
