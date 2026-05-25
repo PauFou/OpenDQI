@@ -1114,6 +1114,99 @@ impl Default for SftrTrStatusAdviceRecord {
     }
 }
 
+/// One position-set row from an EMIR Derivatives Trade Position
+/// Set Report (ISO 20022 `auth.090`) — the TR-side aggregated
+/// exposures between a pair of counterparties.
+///
+/// Unlike per-trade `auth.030`/`auth.107`, `auth.090` is a
+/// **statistics** message: each `PosSet` (or `CcyPosSet`,
+/// `CollPosSet`, `CcyCollPosSet`) is an aggregate over many
+/// outstanding derivatives sharing the same dimensions (CP,
+/// asset class, contract type, value currency, …) and carries
+/// a metrics block (notional, MtM value, collateral, …).
+///
+/// We model the most DQ-actionable subset of the 5400-line XSD
+/// — 14 typed fields covering the dimensions and the headline
+/// metrics. The full per-leg / per-event detail (Direction,
+/// CommonTradeDataReport, EnergyCommodity*, …) is captured
+/// into `raw_fields` for downstream inspection.
+///
+/// The 4 position-set kinds are discriminated via
+/// `position_set_kind` (`"PosSet"`, `"CcyPosSet"`,
+/// `"CollPosSet"`, `"CcyCollPosSet"`) so DQI computers can
+/// scope by kind.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmirPositionSetRecord {
+    /// Source file path (or other origin label).
+    pub source_file: Option<String>,
+    /// Synthetic stable identifier (`<source>#<kind>-<index>`).
+    /// auth.090 has no per-record id at the XSD level; the
+    /// parser stamps one based on file + kind + 1-based index.
+    pub record_id: Option<String>,
+    /// Regulatory regime — always `Regime::Emir` for v1.
+    pub regime: Regime,
+    /// `Rpt/RefDt` — reference date for statistics collection.
+    /// Shared across every record in the same file.
+    pub reference_date: Option<NaiveDate>,
+    /// Which of the 4 aggregated-position kinds the record
+    /// represents : `"PosSet"`, `"CcyPosSet"`, `"CollPosSet"`,
+    /// `"CcyCollPosSet"`.
+    pub position_set_kind: Option<String>,
+    /// LEI of the reporting counterparty
+    /// (`Dmnsns/CtrPtyId/.../RptgCtrPty/.../LEI`).
+    pub reporting_counterparty: Option<String>,
+    /// LEI of the other counterparty
+    /// (`Dmnsns/CtrPtyId/.../OthrCtrPty/.../LEI`).
+    pub other_counterparty: Option<String>,
+    /// Asset class enum (`Dmnsns/AsstClss`, `ProductType4Code`):
+    /// `CRDT`, `CURR`, `EQUI`, `INTR`, `COMM`, etc.
+    pub asset_class: Option<String>,
+    /// Contract type enum (`Dmnsns/CtrctTp`,
+    /// `FinancialInstrumentContractType2Code`): `OPTN`, `FUTR`,
+    /// `FRWD`, `SWAP`, `CFDS`, etc.
+    pub contract_type: Option<String>,
+    /// ISO 4217 valuation currency (`Dmnsns/ValCcy`).
+    pub value_currency: Option<String>,
+    /// Underlying instrument id (`Dmnsns/UndrlygInstrm/.../ISIN`)
+    /// when reported as an ISIN.
+    pub underlying_id: Option<String>,
+    /// Aggregated notional metric in the value currency. The
+    /// parser promotes the first observed amount in
+    /// `Mtrcs/.../Amt` (XSD has several alternates depending
+    /// on the metric type).
+    pub notional: Option<Decimal>,
+    /// Aggregated mark-to-market value
+    /// (`Mtrcs/MtMVal/Amt` when present).
+    pub mark_to_market_value: Option<Decimal>,
+    /// Aggregated collateral value (CollPosSet kinds only).
+    pub collateral_value: Option<Decimal>,
+    /// Catch-all of XML leaves not promoted to typed fields.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub raw_fields: BTreeMap<String, String>,
+}
+
+impl Default for EmirPositionSetRecord {
+    fn default() -> Self {
+        Self {
+            source_file: None,
+            record_id: None,
+            regime: Regime::Emir,
+            reference_date: None,
+            position_set_kind: None,
+            reporting_counterparty: None,
+            other_counterparty: None,
+            asset_class: None,
+            contract_type: None,
+            value_currency: None,
+            underlying_id: None,
+            notional: None,
+            mark_to_market_value: None,
+            collateral_value: None,
+            raw_fields: BTreeMap::new(),
+        }
+    }
+}
+
 /// One line from an EMIR Margin Activity Report (MAR) — the
 /// history of margin calls / postings / collections for a portfolio
 /// (ISO 20022 `auth.108`). Activity-oriented, mirrors `EmirRecord`
@@ -2155,5 +2248,94 @@ mod tests {
         assert_eq!(back.total_reports_accepted, Some(985));
         assert_eq!(back.total_reports_rejected, Some(15));
         assert_eq!(back.rejected_reports_per_error, per_err);
+    }
+
+    // -- v0.18 E1: EmirPositionSetRecord (auth.090) ------------
+
+    #[test]
+    fn emir_position_set_record_default_is_emir_with_all_options_none() {
+        let r = EmirPositionSetRecord::default();
+        assert_eq!(r.regime, Regime::Emir);
+        assert!(r.source_file.is_none());
+        assert!(r.record_id.is_none());
+        assert!(r.reference_date.is_none());
+        assert!(r.position_set_kind.is_none());
+        assert!(r.reporting_counterparty.is_none());
+        assert!(r.other_counterparty.is_none());
+        assert!(r.asset_class.is_none());
+        assert!(r.contract_type.is_none());
+        assert!(r.value_currency.is_none());
+        assert!(r.underlying_id.is_none());
+        assert!(r.notional.is_none());
+        assert!(r.mark_to_market_value.is_none());
+        assert!(r.collateral_value.is_none());
+        assert!(r.raw_fields.is_empty());
+    }
+
+    #[test]
+    fn emir_position_set_record_serde_always_emits_metadata_keys_when_none() {
+        let r = EmirPositionSetRecord::default();
+        let j = serde_json::to_string(&r).unwrap();
+        for required_key in [
+            "source_file",
+            "record_id",
+            "reference_date",
+            "position_set_kind",
+            "reporting_counterparty",
+            "other_counterparty",
+            "asset_class",
+            "contract_type",
+            "value_currency",
+            "underlying_id",
+            "notional",
+            "mark_to_market_value",
+            "collateral_value",
+        ] {
+            assert!(
+                j.contains(&format!("\"{required_key}\":null")),
+                "key {required_key} should serialise as null on default, json was {j}"
+            );
+        }
+        assert!(!j.contains("\"raw_fields\""));
+    }
+
+    #[test]
+    fn emir_position_set_record_round_trip_populated() {
+        use chrono::NaiveDate;
+        use rust_decimal::Decimal;
+        use std::str::FromStr;
+        let r = EmirPositionSetRecord {
+            source_file: Some("auth090.xml".into()),
+            record_id: Some("auth090.xml#PosSet-1".into()),
+            regime: Regime::Emir,
+            reference_date: NaiveDate::from_ymd_opt(2026, 5, 21),
+            position_set_kind: Some("PosSet".into()),
+            reporting_counterparty: Some("549300ABCDEFGH123456".into()),
+            other_counterparty: Some("549300ZYXWVU987654ZZ".into()),
+            asset_class: Some("CRDT".into()),
+            contract_type: Some("SWAP".into()),
+            value_currency: Some("EUR".into()),
+            underlying_id: Some("DE000A1B2C34".into()),
+            notional: Some(Decimal::from_str("12500000.00").unwrap()),
+            mark_to_market_value: Some(Decimal::from_str("125000.50").unwrap()),
+            collateral_value: Some(Decimal::from_str("110000.25").unwrap()),
+            ..EmirPositionSetRecord::default()
+        };
+        let j = serde_json::to_string(&r).unwrap();
+        let back: EmirPositionSetRecord = serde_json::from_str(&j).unwrap();
+        assert_eq!(back.source_file, r.source_file);
+        assert_eq!(back.record_id, r.record_id);
+        assert_eq!(back.regime, r.regime);
+        assert_eq!(back.reference_date, r.reference_date);
+        assert_eq!(back.position_set_kind, r.position_set_kind);
+        assert_eq!(back.reporting_counterparty, r.reporting_counterparty);
+        assert_eq!(back.other_counterparty, r.other_counterparty);
+        assert_eq!(back.asset_class, r.asset_class);
+        assert_eq!(back.contract_type, r.contract_type);
+        assert_eq!(back.value_currency, r.value_currency);
+        assert_eq!(back.underlying_id, r.underlying_id);
+        assert_eq!(back.notional, r.notional);
+        assert_eq!(back.mark_to_market_value, r.mark_to_market_value);
+        assert_eq!(back.collateral_value, r.collateral_value);
     }
 }

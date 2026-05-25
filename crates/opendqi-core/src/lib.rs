@@ -44,12 +44,12 @@ pub use dq::{
     SftrReuCheck, SftrReuStateCheck, SortedIssueSink, SortedIssues, STREAM_SPILL_MAX_ISSUES,
 };
 pub use model::{
-    DqDimension, DqIssue, EmirRecord, EvidenceItem, FeedbackRecord, FeedbackType,
-    MarginActivityRecord, MarginStateRecord, MissingCollateralRecord, ReconStatsRecord,
-    ReconciliationRecord, Regime, RejectionCause, RejectionProfile, RejectionProfileFile,
-    RepeatedRejection, ScanSummary, Severity, SftrMarginActivityRecord, SftrMarginStateRecord,
-    SftrRecord, SftrReuseActivityRecord, SftrReuseStateRecord, SftrTrStateRecord,
-    SftrTrStatusAdviceRecord, TrActivitySummary, TrStateRecord, TradeWarningsRecord,
-    WarningsCounterpartyRecord, WarningsTransactionRecord,
+    DqDimension, DqIssue, EmirPositionSetRecord, EmirRecord, EvidenceItem, FeedbackRecord,
+    FeedbackType, MarginActivityRecord, MarginStateRecord, MissingCollateralRecord,
+    ReconStatsRecord, ReconciliationRecord, Regime, RejectionCause, RejectionProfile,
+    RejectionProfileFile, RepeatedRejection, ScanSummary, Severity, SftrMarginActivityRecord,
+    SftrMarginStateRecord, SftrRecord, SftrReuseActivityRecord, SftrReuseStateRecord,
+    SftrTrStateRecord, SftrTrStatusAdviceRecord, TrActivitySummary, TrStateRecord,
+    TradeWarningsRecord, WarningsCounterpartyRecord, WarningsTransactionRecord,
 };
 pub use scoring::{quality_score, quality_score_from_counts, rate_with_status};
