@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SFTR Reused Collateral Data Transaction State Report
+  (auth.086) — synthetic schema-shaped fixture, 4 Stat records
+  covering security/cash mix variants on the
+  SftrReuseStateRecord model.
+
+  All values are synthetic. ESMA paths follow auth.086.001.02
+  = SecuritiesFinancingReportingReusedCollateralDataTransactionStateReportV02.
+
+  Unlike auth.071 (event log with 4 action wrappers), auth.086
+  is a state snapshot — every Stat carries a CtrctMod/ActnTp
+  leaf with REUU (CollateralReuseUpdate). No retraction
+  wrappers; the snapshot replaces prior state.
+
+  Record map:
+    R-STATE-1  full / clean  — Scty + Csh both populated, EUR
+    R-STATE-2  Scty-only     — no cash reinvestment, USD
+    R-STATE-3  cash-only     — no Scty, GBP, rate set
+    R-STATE-4  multi-Scty    — 3 Scty entries (sum), EUR
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.086.001.02">
+  <SctiesFincgRptgReusdCollDataTxStatRpt>
+    <TradData>
+
+      <Stat>
+        <TechRcrdId>R-STATE-1</TechRcrdId>
+        <CtrPty>
+          <RptSubmitgNtty><LEI>SUBMITRPT000000000001</LEI></RptSubmitgNtty>
+          <RptgCtrPty><LEI>RPTGCPARTY0000000001</LEI></RptgCtrPty>
+          <NttyRspnsblForRpt><LEI>ENTRESP00000000000001</LEI></NttyRspnsblForRpt>
+        </CtrPty>
+        <CollCmpnt>
+          <Scty>
+            <ISIN>DE000A1B2C34</ISIN>
+            <ReuseVal><Actl Ccy="EUR">1000000.00</Actl></ReuseVal>
+          </Scty>
+          <Csh>
+            <RinvstdCsh><Tp>OTHR</Tp><Amt Ccy="EUR">250000.00</Amt></RinvstdCsh>
+            <CshRinvstmtRate>0.0125</CshRinvstmtRate>
+          </Csh>
+        </CollCmpnt>
+        <EvtDay>2026-05-12</EvtDay>
+        <RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm>
+        <FndgSrc><Tp>SECL</Tp><MktVal><Amt Ccy="EUR">10000000.00</Amt></MktVal></FndgSrc>
+        <CtrctMod><ActnTp>REUU</ActnTp></CtrctMod>
+      </Stat>
+
+      <Stat>
+        <TechRcrdId>R-STATE-2</TechRcrdId>
+        <CtrPty>
+          <RptSubmitgNtty><LEI>SUBMITRPT000000000001</LEI></RptSubmitgNtty>
+          <RptgCtrPty><LEI>RPTGCPARTY0000000001</LEI></RptgCtrPty>
+          <NttyRspnsblForRpt><LEI>ENTRESP00000000000001</LEI></NttyRspnsblForRpt>
+        </CtrPty>
+        <CollCmpnt>
+          <Scty>
+            <ISIN>DE000A1B2C35</ISIN>
+            <ReuseVal><Actl Ccy="USD">500000.00</Actl></ReuseVal>
+          </Scty>
+        </CollCmpnt>
+        <EvtDay>2026-05-12</EvtDay>
+        <RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm>
+        <CtrctMod><ActnTp>REUU</ActnTp></CtrctMod>
+      </Stat>
+
+      <Stat>
+        <TechRcrdId>R-STATE-3</TechRcrdId>
+        <CtrPty>
+          <RptSubmitgNtty><LEI>SUBMITRPT000000000001</LEI></RptSubmitgNtty>
+          <RptgCtrPty><LEI>RPTGCPARTY0000000001</LEI></RptgCtrPty>
+          <NttyRspnsblForRpt><LEI>ENTRESP00000000000001</LEI></NttyRspnsblForRpt>
+        </CtrPty>
+        <CollCmpnt>
+          <Csh>
+            <RinvstdCsh><Tp>FREE</Tp><Amt Ccy="GBP">75000.00</Amt></RinvstdCsh>
+            <CshRinvstmtRate>0.0200</CshRinvstmtRate>
+          </Csh>
+        </CollCmpnt>
+        <EvtDay>2026-05-12</EvtDay>
+        <RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm>
+        <CtrctMod><ActnTp>REUU</ActnTp></CtrctMod>
+      </Stat>
+
+      <Stat>
+        <TechRcrdId>R-STATE-4</TechRcrdId>
+        <CtrPty>
+          <RptSubmitgNtty><LEI>SUBMITRPT000000000001</LEI></RptSubmitgNtty>
+          <RptgCtrPty><LEI>RPTGCPARTY0000000001</LEI></RptgCtrPty>
+          <NttyRspnsblForRpt><LEI>ENTRESP00000000000001</LEI></NttyRspnsblForRpt>
+        </CtrPty>
+        <CollCmpnt>
+          <Scty>
+            <ISIN>DE000A1B2C40</ISIN>
+            <ReuseVal><Actl Ccy="EUR">100000.00</Actl></ReuseVal>
+          </Scty>
+          <Scty>
+            <ISIN>DE000A1B2C41</ISIN>
+            <ReuseVal><Estmtd Ccy="EUR">200000.00</Estmtd></ReuseVal>
+          </Scty>
+          <Scty>
+            <ISIN>DE000A1B2C42</ISIN>
+            <ReuseVal><Actl Ccy="EUR">50000.00</Actl></ReuseVal>
+          </Scty>
+        </CollCmpnt>
+        <EvtDay>2026-05-12</EvtDay>
+        <RptgDtTm>2026-05-13T08:00:00Z</RptgDtTm>
+        <CtrctMod><ActnTp>REUU</ActnTp></CtrctMod>
+      </Stat>
+
+    </TradData>
+  </SctiesFincgRptgReusdCollDataTxStatRpt>
+</Document>

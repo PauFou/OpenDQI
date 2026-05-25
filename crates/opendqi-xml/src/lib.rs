@@ -23,6 +23,7 @@ pub mod sftr_margin_activity;
 pub mod sftr_margin_state;
 pub mod sftr_missing_collateral;
 pub mod sftr_reuse_activity;
+pub mod sftr_reuse_state;
 pub mod sftr_tr_state;
 pub mod tr_state;
 pub mod wellformed;
@@ -42,6 +43,7 @@ pub use sftr_missing_collateral::{
     read_sftr_missing_collateral_xml, MissingCollateralXmlReadOutcome,
 };
 pub use sftr_reuse_activity::{read_sftr_reuse_activity_xml, SftrReuseActivityXmlReadOutcome};
+pub use sftr_reuse_state::{read_sftr_reuse_state_xml, SftrReuseStateXmlReadOutcome};
 pub use sftr_tr_state::{read_sftr_tr_state_xml, SftrTrStateXmlReadOutcome};
 pub use tr_state::{read_emir_tr_state_xml, TrStateXmlReadOutcome};
 pub use wellformed::{check_wellformedness, WellformednessError};
