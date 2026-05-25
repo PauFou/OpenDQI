@@ -300,6 +300,24 @@ pub fn default_dqi_thresholds() -> BTreeMap<String, DqiThresholdPair> {
             red: 0.20,
         },
     );
+    // v0.18 C4 — 2 SFTR Reuse State indicators (auth.086).
+    // VOLUME_MISSING is completeness (5/20 % mirror of the
+    // auth.071 version). STALE is timeliness (5/20 % mirror
+    // of T3_MARGIN_STALE_SFTR on the auth.085 state side).
+    m.insert(
+        "DQI_REUSE_STATE_VOLUME_MISSING_SFTR".into(),
+        DqiThresholdPair {
+            amber: 0.05,
+            red: 0.20,
+        },
+    );
+    m.insert(
+        "DQI_REUSE_STATE_STALE_SFTR".into(),
+        DqiThresholdPair {
+            amber: 0.05,
+            red: 0.20,
+        },
+    );
     m
 }
 
@@ -426,13 +444,16 @@ mod tests {
             // v0.18 B4 — 2 SFTR Reuse indicators (auth.071)
             "DQI_REUSE_VOLUME_MISSING_SFTR",
             "DQI_REUSE_ERR_RETRACTION_RATE_SFTR",
+            // v0.18 C4 — 2 SFTR Reuse State indicators (auth.086)
+            "DQI_REUSE_STATE_VOLUME_MISSING_SFTR",
+            "DQI_REUSE_STATE_STALE_SFTR",
         ] {
             assert!(m.contains_key(id), "missing default threshold for {id}");
         }
         assert_eq!(
             m.len(),
-            27,
-            "v0.18 B4: A4 25 + 2 SFTR reuse indicators = 27"
+            29,
+            "v0.18 C4: B4 27 + 2 SFTR reuse-state indicators = 29"
         );
     }
 

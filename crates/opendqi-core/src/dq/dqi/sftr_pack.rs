@@ -38,7 +38,8 @@ use crate::dq::dqi::compute::{
     compute_dqi_mar_event_spike_sftr, compute_dqi_mar_excess_collateral_event_rate_sftr,
     compute_dqi_mar_partial_sides_sftr, compute_dqi_mcr_open_requests_sftr,
     compute_dqi_pairing_rate_sftr, compute_dqi_reconciliation_rate_sftr,
-    compute_dqi_reuse_err_retraction_rate_sftr, compute_dqi_reuse_volume_missing_sftr,
+    compute_dqi_reuse_err_retraction_rate_sftr, compute_dqi_reuse_state_stale_sftr,
+    compute_dqi_reuse_state_volume_missing_sftr, compute_dqi_reuse_volume_missing_sftr,
     compute_dqi_t3_excess_collateral_use_sftr, compute_dqi_t3_margin_posted_missing_sftr,
     compute_dqi_t3_margin_received_missing_sftr, compute_dqi_t3_margin_stale_sftr,
     compute_dqi_tim_reporting_late_sftr, compute_dqi_under_collateralization_sftr,
@@ -311,6 +312,33 @@ pub fn compute_sftr_dqi_pack(
         );
     }
 
+    // Reuse State layer indicators (2, v0.18 C4):
+    // - DQI_REUSE_STATE_VOLUME_MISSING_SFTR
+    // - DQI_REUSE_STATE_STALE_SFTR
+    if let Some(reuse_state) = inputs.reuse_state {
+        let (ind, ev) =
+            compute_dqi_reuse_state_volume_missing_sftr(reuse_state, thresholds, mapping_presence);
+        push(ind, ev);
+        let (ind, ev) =
+            compute_dqi_reuse_state_stale_sftr(reuse_state, thresholds, as_of, mapping_presence);
+        push(ind, ev);
+    } else {
+        push(
+            not_applicable(
+                "DQI_REUSE_STATE_VOLUME_MISSING_SFTR",
+                "SFTR reuse state (auth.086) not provided",
+            ),
+            Vec::new(),
+        );
+        push(
+            not_applicable(
+                "DQI_REUSE_STATE_STALE_SFTR",
+                "SFTR reuse state (auth.086) not provided",
+            ),
+            Vec::new(),
+        );
+    }
+
     // Reuse Activity layer indicators (2, v0.18 B4):
     // - DQI_REUSE_VOLUME_MISSING_SFTR
     // - DQI_REUSE_ERR_RETRACTION_RATE_SFTR
@@ -548,13 +576,14 @@ mod tests {
     }
 
     #[test]
-    fn providing_empty_reuse_state_is_noop_pre_c4() {
-        // v0.18 C3: an empty reuse_state slice is observably
-        // distinct from reuse_state=None at the type level, but
-        // no computer fires on it yet (C4 adds the 2 DQI
-        // computers and C5 the granular checks). Until then
-        // the indicator count stays at the post-B4 baseline
-        // (21) and granular issues stay empty.
+    fn providing_empty_reuse_state_keeps_reuse_state_indicators_in_set() {
+        // v0.18 C4: an empty reuse_state slice is observably
+        // distinct from reuse_state=None. The 2 reuse-state
+        // indicators compute on the empty slice and report
+        // NotApplicable (denominator=0) — they are *present*
+        // in the output. With reuse_state=None they also
+        // report NotApplicable but with the 'not provided'
+        // description.
         let reuse_state: Vec<SftrReuseStateRecord> = vec![];
         let inputs = SftrDqiInputs {
             reuse_state: Some(&reuse_state),
@@ -566,8 +595,26 @@ mod tests {
             &Thresholds::default(),
             as_of(),
         );
-        assert_eq!(result.indicators.len(), 21);
-        assert!(result.issues.is_empty());
+        let state_ids: Vec<&str> = result
+            .indicators
+            .iter()
+            .map(|i| i.indicator_id.as_str())
+            .filter(|s| s.starts_with("DQI_REUSE_STATE_"))
+            .collect();
+        assert_eq!(state_ids.len(), 2);
+        for ind in result
+            .indicators
+            .iter()
+            .filter(|i| i.indicator_id.starts_with("DQI_REUSE_STATE_"))
+        {
+            assert_eq!(ind.status, DqiStatus::NotApplicable);
+            assert!(
+                !ind.description.contains("not provided"),
+                "{} with empty reuse_state should not say 'not provided': {}",
+                ind.indicator_id,
+                ind.description
+            );
+        }
     }
 
     #[test]
@@ -590,18 +637,20 @@ mod tests {
             &Thresholds::default(),
             as_of(),
         );
+        // Reuse activity indicators are DQI_REUSE_{VOLUME_MISSING,
+        // ERR_RETRACTION_RATE}_SFTR. Exclude the C4 reuse-state
+        // sister indicators (DQI_REUSE_STATE_*) from this count.
         let reuse_ids: Vec<&str> = result
             .indicators
             .iter()
             .map(|i| i.indicator_id.as_str())
-            .filter(|s| s.starts_with("DQI_REUSE_"))
+            .filter(|s| s.starts_with("DQI_REUSE_") && !s.starts_with("DQI_REUSE_STATE_"))
             .collect();
         assert_eq!(reuse_ids.len(), 2);
-        for ind in result
-            .indicators
-            .iter()
-            .filter(|i| i.indicator_id.starts_with("DQI_REUSE_"))
-        {
+        for ind in result.indicators.iter().filter(|i| {
+            i.indicator_id.starts_with("DQI_REUSE_")
+                && !i.indicator_id.starts_with("DQI_REUSE_STATE_")
+        }) {
             assert_eq!(ind.status, DqiStatus::NotApplicable);
             assert!(
                 !ind.description.contains("not provided"),
@@ -731,6 +780,8 @@ mod tests {
                 "DQI_PAIRING_RATE_SFTR",
                 "DQI_RECONCILIATION_RATE_SFTR",
                 "DQI_REUSE_ERR_RETRACTION_RATE_SFTR",
+                "DQI_REUSE_STATE_STALE_SFTR",
+                "DQI_REUSE_STATE_VOLUME_MISSING_SFTR",
                 "DQI_REUSE_VOLUME_MISSING_SFTR",
                 "DQI_T3_EXCESS_COLLATERAL_USE_SFTR",
                 "DQI_T3_MARGIN_POSTED_MISSING_SFTR",
