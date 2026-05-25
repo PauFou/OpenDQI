@@ -22,6 +22,7 @@ DQI_ERR_MISSING,U-MODI-006,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,enti
 DQI_ERR_MISSING,U-MODI-007,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,entity_responsible_for_reporting LEI missing or empty
 DQI_ERR_MISSING,U-MODI-008,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,entity_responsible_for_reporting LEI missing or empty
 DQI_ERR_MISSING,U-MODI-009,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,entity_responsible_for_reporting LEI missing or empty
+DQI_FIELD_MISMATCH_RATE,U-A-4,LEIA0000000000000001,,<WS>/examples/emir/recon_stats/auth091-sample.xml,"CtrctTp,CtrctVal",2 criterion(s) mismatched between counterparties
 DQI_NATURE_MISSING,U-CORR-001,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,counterparty nature (FC/NFC/NFC+) missing
 DQI_NATURE_MISSING,U-CORR-001,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,counterparty nature (FC/NFC/NFC+) missing
 DQI_NATURE_MISSING,U-CORR-001,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,counterparty nature (FC/NFC/NFC+) missing
@@ -42,6 +43,8 @@ DQI_NATURE_MISSING,U-MODI-006,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,c
 DQI_NATURE_MISSING,U-MODI-007,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,counterparty nature (FC/NFC/NFC+) missing
 DQI_NATURE_MISSING,U-MODI-008,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,counterparty nature (FC/NFC/NFC+) missing
 DQI_NATURE_MISSING,U-MODI-009,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,counterparty nature (FC/NFC/NFC+) missing
+DQI_PAIRING_RATE,LEIA0000000000000001,LEIA0000000000000001,,<WS>/examples/emir/recon_stats/auth091-sample.xml,0.3000,counterparty pairing rate = 0.7000 (unpaired share 30.00%)
+DQI_RECONCILIATION_RATE,LEIA0000000000000001,LEIA0000000000000001,,<WS>/examples/emir/recon_stats/auth091-sample.xml,0.5000,counterparty reconciliation rate = 0.5000 (unreconciled share 50.00%)
 DQI_REJ_RATE,OPENDQI-FBK-INCF-0002,,,<WS>/examples/quickstart-emir/auth092-feedback.xml,VR-0100,TR rejected this submission
 DQI_REJ_RATE,OPENDQI-FBK-RJCT-0001,,,<WS>/examples/quickstart-emir/auth092-feedback.xml,VR-0001,Notional amount missing
 DQI_SECTOR_MISSING,U-CORR-001,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,corporate_sector classifier missing
@@ -64,6 +67,8 @@ DQI_SECTOR_MISSING,U-MODI-006,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,c
 DQI_SECTOR_MISSING,U-MODI-007,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,corporate_sector classifier missing
 DQI_SECTOR_MISSING,U-MODI-008,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,corporate_sector classifier missing
 DQI_SECTOR_MISSING,U-MODI-009,,,<WS>/examples/quickstart-emir/auth030-tar.xml,,corporate_sector classifier missing
+DQI_UNPAIRED_TRADES_RATE,U-A-3,LEIA0000000000000001,,<WS>/examples/emir/recon_stats/auth091-sample.xml,UNPAIRED,TR flagged this trade as UNPAIRED with the counterparty
+DQI_UNPAIRED_TRADES_RATE,U-A-4,LEIA0000000000000001,,<WS>/examples/emir/recon_stats/auth091-sample.xml,UNPAIRED,TR flagged this trade as UNPAIRED with the counterparty
 DQI_VAL_MISSING,OPENDQI-TSR-NOVAL-0003,12345678901234567890,,<WS>/examples/quickstart-emir/auth107-tsr.xml,,valuation_amount is missing or zero on an outstanding trade
 DQI_VAL_STALE,OPENDQI-TSR-CLEAN-0001,12345678901234567890,,<WS>/examples/quickstart-emir/auth107-tsr.xml,2026-05-13T07:00:00+00:00,valuation_timestamp older than 1 TARGET2 business day(s) vs as_of 2026-05-21
 DQI_VAL_STALE,OPENDQI-TSR-DUP-0006,12345678901234567890,,<WS>/examples/quickstart-emir/auth107-tsr.xml,2026-05-12T15:00:00+00:00,valuation_timestamp older than 1 TARGET2 business day(s) vs as_of 2026-05-21

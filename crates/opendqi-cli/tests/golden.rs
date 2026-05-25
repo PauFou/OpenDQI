@@ -398,6 +398,11 @@ fn emir_data_quality_pack() {
         // exercises 4 Position DQIs + 4 EMIR.POS.* granular checks.
         "--positions",
         &ex("examples/emir/positions/auth090-sample.xml"),
+        // v0.18 F1: add auth.091 Reconciliation Statistics —
+        // dual-purpose parse activates the 7 cross-CP DQIs that
+        // self-reported `not_applicable` since v0.16 B1.
+        "--recon-stats",
+        &ex("examples/emir/recon_stats/auth091-sample.xml"),
         "--as-of",
         "2026-05-21",
     ])

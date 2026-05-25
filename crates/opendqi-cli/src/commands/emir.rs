@@ -371,6 +371,19 @@ pub enum EmirAction {
         /// 4 position-set kinds (v0.18+).
         #[arg(long)]
         positions: Option<PathBuf>,
+        /// Path to the `auth.091` Reconciliation Statistics XML.
+        /// **Dual-purpose**: parses both the per-counterparty
+        /// `ReconStatsRecord` rows AND the per-transaction
+        /// `ReconciliationRecord` detail from the same file,
+        /// activating the 4 v0.16 B1 cross-CP DQIs (PAIRING_RATE,
+        /// RECONCILIATION_RATE, UNPAIRED_TRADES_RATE,
+        /// FIELD_MISMATCH_RATE) plus the 3 v0.16 B4 reconciliation-
+        /// driven DQIs (NOTIONAL_INCONSISTENT,
+        /// MARGIN_INCONSISTENT_PRE_HAIRCUT,
+        /// MARGIN_INCONSISTENT_POST_HAIRCUT) — 7 DQIs that
+        /// self-report `not_applicable` until this flag is set.
+        #[arg(long)]
+        recon_stats: Option<PathBuf>,
         /// Optional YAML thresholds configuration (overrides the
         /// shipped DQI defaults via the `dqi:` block).
         #[arg(long)]
@@ -562,6 +575,7 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
             mar,
             feedback,
             positions,
+            recon_stats,
             config,
             as_of,
             out,
@@ -574,6 +588,7 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
                 mar.as_deref(),
                 feedback.as_deref(),
                 positions.as_deref(),
+                recon_stats.as_deref(),
                 config.as_deref(),
                 as_of.as_deref(),
                 &out,
@@ -2476,6 +2491,7 @@ fn run_data_quality_pack(
     mar_path: Option<&Path>,
     feedback_path: Option<&Path>,
     positions_path: Option<&Path>,
+    recon_stats_path: Option<&Path>,
     config_path: Option<&Path>,
     as_of_str: Option<&str>,
     out: &Path,
@@ -2487,10 +2503,11 @@ fn run_data_quality_pack(
         && mar_path.is_none()
         && feedback_path.is_none()
         && positions_path.is_none()
+        && recon_stats_path.is_none()
     {
         return Err(anyhow!(
             "data-quality-pack: at least one of --tsr / --tar / --msr / --mar / \
-             --feedback / --positions is required"
+             --feedback / --positions / --recon-stats is required"
         ));
     }
 
@@ -2578,6 +2595,24 @@ fn run_data_quality_pack(
         }
         None => Vec::new(),
     };
+    // v0.18 F1: EMIR auth.091 Reconciliation Statistics — single
+    // parse populates BOTH recon_stats (per-CP rates) AND
+    // reconciliation (per-tx detail) slots. Activates 7 EMIR
+    // cross-CP DQIs that have self-reported `not_applicable`
+    // since v0.16 B1.
+    let (recon_stats_records, reconciliation_records) = match recon_stats_path {
+        Some(p) => {
+            let outcome = read_emir_recon_stats_xml(p)
+                .with_context(|| format!("reading EMIR auth.091 recon stats {}", p.display()))?;
+            info!(
+                stats = outcome.records.len(),
+                reconciliations = outcome.reconciliation_records.len(),
+                "loaded EMIR auth.091 (recon stats + per-tx reconciliation)"
+            );
+            (outcome.records, outcome.reconciliation_records)
+        }
+        None => (Vec::new(), Vec::new()),
+    };
 
     // Detect raw_fields presence for the 2 gated indicators.
     // (Conservative: any record carries the key with a non-empty
@@ -2626,12 +2661,19 @@ fn run_data_quality_pack(
         } else {
             None
         },
-        // v0.16 B1 — recon_stats + reconciliation inputs are not
-        // yet exposed as CLI flags ; the new cross-CP DQIs will
-        // self-report NotApplicable until a follow-up commit
-        // wires --recon-stats / --reconciliation through.
-        recon_stats: None,
-        reconciliation: None,
+        // v0.18 F1 — recon_stats + reconciliation BOTH wired
+        // through the single --recon-stats flag (one auth.091
+        // file -> two slot vectors from the same parse).
+        recon_stats: if recon_stats_path.is_some() {
+            Some(&recon_stats_records)
+        } else {
+            None
+        },
+        reconciliation: if recon_stats_path.is_some() {
+            Some(&reconciliation_records)
+        } else {
+            None
+        },
         // v0.18 E7 — positions slot wired through --positions flag.
         positions: if positions_path.is_some() {
             Some(&position_records)
@@ -2651,6 +2693,7 @@ fn run_data_quality_pack(
         ("MAR", mar_path),
         ("Feedback", feedback_path),
         ("Positions", positions_path),
+        ("ReconStats", recon_stats_path),
     ] {
         if let Some(path) = p {
             sources.push(format!("{lbl}: {}", path.display()));

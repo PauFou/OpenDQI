@@ -556,7 +556,7 @@ pub fn book_reconcile<'py>(
 /// `DQI_REC_STATUS_UNPAIRED` indicator computes. Otherwise it
 /// reports `status: not_applicable` with no rate.
 #[pyfunction]
-#[pyo3(signature = (*, tsr=None, tar=None, msr=None, mar=None, feedback=None, positions=None, mappings=None, as_of=None))]
+#[pyo3(signature = (*, tsr=None, tar=None, msr=None, mar=None, feedback=None, positions=None, recon_stats=None, mappings=None, as_of=None))]
 #[allow(clippy::too_many_arguments)]
 pub fn data_quality_pack<'py>(
     tsr: Option<&Bound<'py, PyAny>>,
@@ -565,6 +565,7 @@ pub fn data_quality_pack<'py>(
     mar: Option<&Bound<'py, PyAny>>,
     feedback: Option<&Bound<'py, PyAny>>,
     positions: Option<&str>,
+    recon_stats: Option<&str>,
     mappings: Option<HashMap<String, HashMap<String, String>>>,
     as_of: Option<&str>,
 ) -> PyResult<PyDqiPackResult> {
@@ -574,10 +575,11 @@ pub fn data_quality_pack<'py>(
         && mar.is_none()
         && feedback.is_none()
         && positions.is_none()
+        && recon_stats.is_none()
     {
         return Err(pyo3::exceptions::PyValueError::new_err(
             "data_quality_pack: at least one of tsr / tar / msr / mar / feedback / \
-             positions is required",
+             positions / recon_stats is required",
         ));
     }
 
@@ -632,6 +634,16 @@ pub fn data_quality_pack<'py>(
         }
         None => Vec::new(),
     };
+    // v0.18 F1: auth.091 dual-purpose parse (str path only;
+    // populates BOTH recon_stats + reconciliation slots).
+    let (recon_stats_records, reconciliation_records) = match recon_stats {
+        Some(p) => {
+            let outcome = opendqi_xml::read_emir_recon_stats_xml(Path::new(p))
+                .map_err(to_py_err)?;
+            (outcome.records, outcome.reconciliation_records)
+        }
+        None => (Vec::new(), Vec::new()),
+    };
 
     // Detect raw_fields presence for the 2 gated indicators
     // (same heuristic as the CLI run_data_quality_pack).
@@ -663,8 +675,11 @@ pub fn data_quality_pack<'py>(
         // DQIs self-report NotApplicable until a follow-up
         // commit threads --recon-stats / --reconciliation
         // through both the CLI and the Python binding.
-        recon_stats: None,
-        reconciliation: None,
+        // v0.18 F1 — recon_stats + reconciliation BOTH wired
+        // from the single `recon_stats=` kwarg (one auth.091
+        // file -> two slot vectors).
+        recon_stats: recon_stats.map(|_| recon_stats_records.as_slice()),
+        reconciliation: recon_stats.map(|_| reconciliation_records.as_slice()),
         // v0.18 E7 — positions slot wired through `positions=` kwarg.
         positions: positions.map(|_| position_records.as_slice()),
     };
