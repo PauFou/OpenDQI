@@ -1,0 +1,61 @@
+# CLA (Contributor License Agreement) check via cla-assistant.io.
+#
+# Triggered on every external PR (and on PR-comment events so the
+# signing reply is detected immediately without waiting for a push).
+# The contributor-assistant/github-action posts a comment with a
+# signing link when an unsigned contributor opens a PR, watches for
+# the reply phrase, and records signatures in
+# `signatures/v1/cla.json` on the dedicated `cla-signatures` branch.
+#
+# Allowlisted contributors (@PauFou and known bots) bypass the check
+# entirely; the action returns success without posting any comment.
+#
+# REQUIRES the repository secret `CLA_BOT_PAT` to be set to a
+# fine-grained personal access token with Contents: Read/Write and
+# Pull requests: Read/Write on this repository. Without it, the
+# action can still post the comment but cannot commit the signature
+# to the cla-signatures branch — the PR will stay blocked. Generate
+# at https://github.com/settings/personal-access-tokens/new and add
+# at Settings → Secrets and variables → Actions → New repository
+# secret (name = CLA_BOT_PAT).
+
+name: CLA
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_target:
+    types: [opened, closed, synchronize]
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  statuses: write
+
+jobs:
+  cla:
+    runs-on: ubuntu-latest
+    # Avoid running on bot comments (the bot replies to itself create
+    # a feedback loop).
+    if: (github.event.comment.body != null && contains(github.event.comment.body, 'I have read the CLA Document and I hereby sign the CLA')) || github.event_name == 'pull_request_target'
+    steps:
+      - name: CLA Assistant
+        uses: contributor-assistant/github-action@v2.6.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PAT is required for writing to the `cla-signatures`
+          # branch. See header comment for setup.
+          PERSONAL_ACCESS_TOKEN: ${{ secrets.CLA_BOT_PAT }}
+        with:
+          path-to-signatures: 'signatures/v1/cla.json'
+          path-to-document: 'https://github.com/PauFou/OpenDQI/blob/main/CLA.md'
+          branch: 'cla-signatures'
+          allowlist: PauFou,dependabot[bot]
+          # Customise the bot's signing-request comment to point at
+          # the OpenDQI CLA explicitly.
+          custom-pr-sign-comment: 'I have read the OpenDQI CLA Document and I hereby sign the CLA'
+          custom-allsigned-prcomment: 'All contributors have signed the OpenDQI CLA. ✓'
+          custom-notsigned-prcomment: 'Thank you for your PR! Please sign the [OpenDQI CLA](https://github.com/PauFou/OpenDQI/blob/main/CLA.md) by posting the following comment on this PR:'
+          create-file-commit-message: 'docs(cla): record contributor signature'
+          signed-commit-message: 'docs(cla): @$contributorName signed the CLA in PR #$pullRequestNo'
