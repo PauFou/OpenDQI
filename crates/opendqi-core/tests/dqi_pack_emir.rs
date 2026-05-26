@@ -17,14 +17,20 @@ fn as_of() -> NaiveDate {
 }
 
 #[test]
-fn empty_inputs_yield_10_indicators_all_not_applicable() {
+fn empty_inputs_yield_28_indicators_all_not_applicable() {
     let result: DqiPackResult = compute_emir_dqi_pack(
         EmirDqiInputs::default(),
         MappingPresence::default(),
         &Thresholds::default(),
         as_of(),
     );
-    assert_eq!(result.indicators.len(), 24);
+    // 28 = 10 (v0.15 baseline) + 7 (v0.16 auth.091 cross-CP) +
+    //       4 (v0.16 presence) + 3 (v0.16 final) + 4 (v0.18 EMIR.POS.*).
+    // The test was at 24 from v0.16 onward and missed the +4 EMIR.POS.*
+    // bump during v0.18's preflight (a parallel empty-inputs test got
+    // the update; this one didn't). Bumped here as the v0.19 release
+    // hygiene pass — same pattern as v0.18's pre-tag style/fmt fix.
+    assert_eq!(result.indicators.len(), 28);
     assert!(result
         .indicators
         .iter()
