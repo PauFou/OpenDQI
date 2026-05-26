@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/PauFou/OpenDQI/actions/workflows/ci.yml/badge.svg)](https://github.com/PauFou/OpenDQI/actions/workflows/ci.yml)
 [![Security audit](https://github.com/PauFou/OpenDQI/actions/workflows/deny.yml/badge.svg)](https://github.com/PauFou/OpenDQI/actions/workflows/deny.yml)
+[![License: FSL-1.1-Apache-2.0](https://img.shields.io/badge/license-FSL--1.1--Apache--2.0-blue)](LICENSE.md)
 
 **Turn EMIR/SFTR Trade Repository files into deterministic data quality reports and Arrow tables — locally, reproducibly, from your existing data stack.**
 
@@ -188,4 +189,22 @@ Users remain responsible for their regulatory reporting obligations and should v
 
 ## License
 
-Licensed under the Apache License, Version 2.0. See [`LICENSE`](LICENSE).
+OpenDQI is **source-available** under [FSL-1.1-Apache-2.0](LICENSE.md)
+starting with **v0.19.0**. Two years after each release tag, that
+release converts automatically to Apache-2.0 — no action required from
+you, no relicensing announcement, the conversion is written into the
+license text itself.
+
+**Releases v0.1.0 through v0.18.0 remain under Apache-2.0** as tagged
+(immutable). They are not affected by the new license.
+
+See [COMPETING.md](COMPETING.md) for the explicit definition of
+"Competing Use" for OpenDQI (EMIR/SFTR data-quality engine resale), and
+the matching list of explicitly-permitted uses (internal use by a
+reporting firm, professional services to a single licensee, bundling
+where DQ is not the primary value proposition, education / research /
+regulatory work).
+
+Contributors must sign the [Contributor License Agreement](CLA.md). The
+[`cla-assistant.io`](https://cla-assistant.io) bot posts the signing
+link automatically on every external PR.

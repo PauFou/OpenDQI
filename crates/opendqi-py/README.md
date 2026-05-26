@@ -72,6 +72,12 @@ result.normalized     # pyarrow.Table | None
 
 ## License
 
-Apache-2.0 — same as the parent
-[`OpenDQI`](https://github.com/PauFou/OpenDQI) repository. See
-`../../LICENSE`.
+From v0.19.0: **FSL-1.1-Apache-2.0** (source-available, converts
+automatically to Apache-2.0 two years after each release tag) — same
+licence as the parent [`OpenDQI`](https://github.com/PauFou/OpenDQI)
+repository. See [`LICENSE.md`](LICENSE.md) (kept in sync with the
+repo-root `../../LICENSE.md` by `scripts/release-license-bump.sh` on
+every release commit) and [`../../COMPETING.md`](../../COMPETING.md).
+
+Releases v0.1.0 through v0.18.0 on PyPI were shipped under Apache-2.0
+and remain so.
