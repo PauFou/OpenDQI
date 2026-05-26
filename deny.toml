@@ -47,6 +47,15 @@ allow = [
 confidence-threshold = 0.93
 exceptions = []
 
+# Skip licence checks for our own workspace crates. All OpenDQI
+# crates ship with `publish = false` and from v0.19.0 carry
+# `license = "LicenseRef-FSL-1.1-Apache-2.0"`, which is not on
+# the SPDX licence list (FSL is source-available, not OSI-
+# approved). The licence-file alongside (LICENSE.md) is the
+# canonical text; external consumers see it directly. The allow
+# list above governs only third-party dependencies.
+private = { ignore = true }
+
 [bans]
 # The arrow / parquet / tokio ecosystems carry legitimate duplicate
 # versions (e.g. hashbrown 0.14 alongside 0.15) that we can't easily

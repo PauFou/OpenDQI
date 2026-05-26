@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-05-26
+
 ### Changed
 
 - **License: Apache-2.0 → FSL-1.1-Apache-2.0** (effective v0.19.0).
@@ -41,6 +43,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `LICENSE` file (Apache-2.0 text) — superseded by `LICENSE.md`
   (FSL-1.1-Apache-2.0). The Apache-2.0 text remains in every tagged
   commit for releases v0.1.0–v0.18.0.
+
+### Fixed
+
+- `dqi_pack_emir` empty-inputs test assertion bumped 24 → 28 to match
+  the actual count after the v0.18 EMIR.POS.* expansion (parallel
+  test had been updated; this one missed the bump). Function renamed
+  to `empty_inputs_yield_28_indicators_all_not_applicable` for
+  honesty.
 
 ## [0.18.0] - 2026-05-26
 
