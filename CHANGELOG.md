@@ -7,11 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
 ### Changed
 
+- **License: Apache-2.0 → FSL-1.1-Apache-2.0** (effective v0.19.0).
+  Releases v0.1.0 through v0.18.0 remain Apache-2.0 as tagged
+  (immutable). Each FSL release auto-converts to Apache-2.0 two years
+  after its tag date — written into the licence text itself, no
+  separate relicensing announcement. See [LICENSE.md](LICENSE.md),
+  [COMPETING.md](COMPETING.md), and the
+  [License & contributions](CONTRIBUTING.md#license--contributions)
+  section of `CONTRIBUTING.md`.
+
+### Added
+
+- [CLA.md](CLA.md) — Individual Contributor License Agreement v1.0,
+  including the FSL-specific "Right to Relicense" clause necessary
+  for the 2-year auto-conversion.
+- `.github/workflows/cla.yml` — `cla-assistant.io` bot integration.
+  Allowlists `@PauFou` and `dependabot[bot]`. Requires one-shot
+  `CLA_BOT_PAT` repository secret (documented in the workflow header).
+- `scripts/release-license-bump.sh` — POSIX, cross-platform (macOS
+  BSD + Linux GNU date) script that bumps the LICENSE.md
+  `Change Date` field to today+2y in both repo-root and
+  `crates/opendqi-py/` copies atomically. Documented in the new
+  "Release ritual" section of `CONTRIBUTING.md`.
+- [COMPETING.md](COMPETING.md) — explicit, domain-specific definition
+  of "Competing Use" for OpenDQI (EMIR/SFTR DQ engine resale) plus
+  the matching list of explicitly-permitted uses.
+- README license badge.
+
 ### Removed
+
+- `LICENSE` file (Apache-2.0 text) — superseded by `LICENSE.md`
+  (FSL-1.1-Apache-2.0). The Apache-2.0 text remains in every tagged
+  commit for releases v0.1.0–v0.18.0.
 
 ## [0.18.0] - 2026-05-26
 
