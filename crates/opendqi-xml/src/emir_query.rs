@@ -160,7 +160,7 @@ fn parse(path: &Path) -> anyhow::Result<EmirQueryXmlReadOutcome> {
     loop {
         match reader.read_resolved_event_into(&mut buf)? {
             (_, Event::Start(e)) => {
-                let local = local_name(&e.name().as_ref());
+                let local = local_name(e.name().as_ref());
                 push_element(&mut pile, &mut is_leaf, local.clone());
                 text_buf.clear();
                 if local == "DerivsTradRptQry" {
@@ -172,7 +172,7 @@ fn parse(path: &Path) -> anyhow::Result<EmirQueryXmlReadOutcome> {
                 }
             }
             (_, Event::Empty(e)) => {
-                let local = local_name(&e.name().as_ref());
+                let local = local_name(e.name().as_ref());
                 push_element(&mut pile, &mut is_leaf, local);
                 pop_element(&mut pile, &mut is_leaf);
                 text_buf.clear();

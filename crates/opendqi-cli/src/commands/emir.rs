@@ -426,11 +426,12 @@ pub enum EmirAction {
     /// (ISO 20022 `auth.031`) and produce `EMIR.ACK.*` envelope-
     /// sanity issues. auth.031 is a TR -> firm ack envelope (no
     /// derivatives payload); the only check that fires is
-    /// `EMIR.ACK.ENVELOPE_WELLFORMED` (submission_id + ack_status
-    /// + ack_timestamp presence). For first-class rejection-reason
-    /// signal use `opendqi emir feedback` on auth.092 instead.
-    /// Outputs `summary.json`, `status_advice_issues.csv`,
-    /// `status_advice_report.html`. v0.20.
+    /// `EMIR.ACK.ENVELOPE_WELLFORMED` (presence of `submission_id`,
+    /// `ack_status` and `ack_timestamp`). For first-class
+    /// rejection-reason signal use `opendqi emir feedback` on
+    /// auth.092 instead. Outputs `summary.json`,
+    /// `status_advice_issues.csv`, `status_advice_report.html`.
+    /// v0.20.
     StatusAdviceScan {
         /// Path to the `auth.031` XML file.
         input: PathBuf,
@@ -2821,11 +2822,7 @@ fn run_data_quality_pack(
 // from v0.20 A5.
 // -----------------------------------------------------------------
 
-fn run_emir_query_scan(
-    input: &Path,
-    out: &Path,
-    email_config_path: Option<&Path>,
-) -> Result<()> {
+fn run_emir_query_scan(input: &Path, out: &Path, email_config_path: Option<&Path>) -> Result<()> {
     let started_at = Utc::now();
     let outcome = read_emir_query_xml(input)
         .with_context(|| format!("reading EMIR Query file {}", input.display()))?;
@@ -2873,7 +2870,11 @@ fn run_emir_query_scan(
             &out.join("query_issues.csv"),
         )?;
     }
-    let crit = summary.issues_by_severity.get(&Severity::Critical).copied().unwrap_or(0);
+    let crit = summary
+        .issues_by_severity
+        .get(&Severity::Critical)
+        .copied()
+        .unwrap_or(0);
     println!(
         "Scanned {} EMIR Query record(s). {} issues ({} critical). Score: {:.1}/100.",
         summary.records_processed, summary.issues_total, crit, summary.quality_score
@@ -2923,7 +2924,12 @@ fn run_emir_status_advice_scan(
         sorted.inspect(|issue| top.offer(issue)),
     )?;
     let top = top.into_sorted();
-    write_report_html(&out.join("status_advice_report.html"), &summary, &top, &sources)?;
+    write_report_html(
+        &out.join("status_advice_report.html"),
+        &summary,
+        &top,
+        &sources,
+    )?;
     if let Some(path) = email_config_path {
         let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
         opendqi_report::send_report_email(
@@ -2934,11 +2940,18 @@ fn run_emir_status_advice_scan(
             &out.join("status_advice_issues.csv"),
         )?;
     }
-    let crit = summary.issues_by_severity.get(&Severity::Critical).copied().unwrap_or(0);
+    let crit = summary
+        .issues_by_severity
+        .get(&Severity::Critical)
+        .copied()
+        .unwrap_or(0);
     println!(
         "Scanned {} EMIR Status Advice ack(s). {} issues ({} critical). Score: {:.1}/100.",
         summary.records_processed, summary.issues_total, crit, summary.quality_score
     );
-    println!("Report: {}", out.join("status_advice_report.html").display());
+    println!(
+        "Report: {}",
+        out.join("status_advice_report.html").display()
+    );
     Ok(())
 }

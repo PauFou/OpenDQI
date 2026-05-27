@@ -2279,11 +2279,7 @@ fn run_data_quality_pack(
 // name (mar_/msr_/reuse_activity_/reuse_state_/tr_status_advice_).
 // -----------------------------------------------------------------
 
-fn run_sftr_mar_scan(
-    input: &Path,
-    out: &Path,
-    email_config_path: Option<&Path>,
-) -> Result<()> {
+fn run_sftr_mar_scan(input: &Path, out: &Path, email_config_path: Option<&Path>) -> Result<()> {
     let started_at = Utc::now();
     let outcome = read_sftr_margin_activity_xml(input)
         .with_context(|| format!("reading SFTR MAR file {}", input.display()))?;
@@ -2338,8 +2334,16 @@ fn run_sftr_mar_scan(
             &out.join("mar_issues.csv"),
         )?;
     }
-    let crit = summary.issues_by_severity.get(&Severity::Critical).copied().unwrap_or(0);
-    let high = summary.issues_by_severity.get(&Severity::High).copied().unwrap_or(0);
+    let crit = summary
+        .issues_by_severity
+        .get(&Severity::Critical)
+        .copied()
+        .unwrap_or(0);
+    let high = summary
+        .issues_by_severity
+        .get(&Severity::High)
+        .copied()
+        .unwrap_or(0);
     println!(
         "Scanned {} SFTR MAR record(s). {} issues ({} critical, {} high). Score: {:.1}/100.",
         summary.records_processed, summary.issues_total, crit, high, summary.quality_score
@@ -2348,11 +2352,7 @@ fn run_sftr_mar_scan(
     Ok(())
 }
 
-fn run_sftr_msr_scan(
-    input: &Path,
-    out: &Path,
-    email_config_path: Option<&Path>,
-) -> Result<()> {
+fn run_sftr_msr_scan(input: &Path, out: &Path, email_config_path: Option<&Path>) -> Result<()> {
     let started_at = Utc::now();
     let outcome = read_sftr_margin_state_xml(input)
         .with_context(|| format!("reading SFTR MSR file {}", input.display()))?;
@@ -2400,8 +2400,16 @@ fn run_sftr_msr_scan(
             &out.join("msr_issues.csv"),
         )?;
     }
-    let crit = summary.issues_by_severity.get(&Severity::Critical).copied().unwrap_or(0);
-    let high = summary.issues_by_severity.get(&Severity::High).copied().unwrap_or(0);
+    let crit = summary
+        .issues_by_severity
+        .get(&Severity::Critical)
+        .copied()
+        .unwrap_or(0);
+    let high = summary
+        .issues_by_severity
+        .get(&Severity::High)
+        .copied()
+        .unwrap_or(0);
     println!(
         "Scanned {} SFTR MSR record(s). {} issues ({} critical, {} high). Score: {:.1}/100.",
         summary.records_processed, summary.issues_total, crit, high, summary.quality_score
@@ -2451,7 +2459,12 @@ fn run_sftr_tr_status_advice_scan(
         sorted.inspect(|issue| top.offer(issue)),
     )?;
     let top = top.into_sorted();
-    write_report_html(&out.join("tr_status_advice_report.html"), &summary, &top, &sources)?;
+    write_report_html(
+        &out.join("tr_status_advice_report.html"),
+        &summary,
+        &top,
+        &sources,
+    )?;
     if let Some(path) = email_config_path {
         let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
         opendqi_report::send_report_email(
@@ -2466,7 +2479,10 @@ fn run_sftr_tr_status_advice_scan(
         "Scanned {} SFTR Status Advice record(s). {} issues. Score: {:.1}/100.",
         summary.records_processed, summary.issues_total, summary.quality_score
     );
-    println!("Report: {}", out.join("tr_status_advice_report.html").display());
+    println!(
+        "Report: {}",
+        out.join("tr_status_advice_report.html").display()
+    );
     Ok(())
 }
 
@@ -2511,7 +2527,12 @@ fn run_sftr_reuse_activity_scan(
         sorted.inspect(|issue| top.offer(issue)),
     )?;
     let top = top.into_sorted();
-    write_report_html(&out.join("reuse_activity_report.html"), &summary, &top, &sources)?;
+    write_report_html(
+        &out.join("reuse_activity_report.html"),
+        &summary,
+        &top,
+        &sources,
+    )?;
     if let Some(path) = email_config_path {
         let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
         opendqi_report::send_report_email(
@@ -2522,13 +2543,24 @@ fn run_sftr_reuse_activity_scan(
             &out.join("reuse_activity_issues.csv"),
         )?;
     }
-    let crit = summary.issues_by_severity.get(&Severity::Critical).copied().unwrap_or(0);
-    let high = summary.issues_by_severity.get(&Severity::High).copied().unwrap_or(0);
+    let crit = summary
+        .issues_by_severity
+        .get(&Severity::Critical)
+        .copied()
+        .unwrap_or(0);
+    let high = summary
+        .issues_by_severity
+        .get(&Severity::High)
+        .copied()
+        .unwrap_or(0);
     println!(
         "Scanned {} SFTR Reuse Activity record(s). {} issues ({} critical, {} high). Score: {:.1}/100.",
         summary.records_processed, summary.issues_total, crit, high, summary.quality_score
     );
-    println!("Report: {}", out.join("reuse_activity_report.html").display());
+    println!(
+        "Report: {}",
+        out.join("reuse_activity_report.html").display()
+    );
     Ok(())
 }
 
@@ -2573,7 +2605,12 @@ fn run_sftr_reuse_state_scan(
         sorted.inspect(|issue| top.offer(issue)),
     )?;
     let top = top.into_sorted();
-    write_report_html(&out.join("reuse_state_report.html"), &summary, &top, &sources)?;
+    write_report_html(
+        &out.join("reuse_state_report.html"),
+        &summary,
+        &top,
+        &sources,
+    )?;
     if let Some(path) = email_config_path {
         let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
         opendqi_report::send_report_email(
@@ -2584,8 +2621,16 @@ fn run_sftr_reuse_state_scan(
             &out.join("reuse_state_issues.csv"),
         )?;
     }
-    let crit = summary.issues_by_severity.get(&Severity::Critical).copied().unwrap_or(0);
-    let high = summary.issues_by_severity.get(&Severity::High).copied().unwrap_or(0);
+    let crit = summary
+        .issues_by_severity
+        .get(&Severity::Critical)
+        .copied()
+        .unwrap_or(0);
+    let high = summary
+        .issues_by_severity
+        .get(&Severity::High)
+        .copied()
+        .unwrap_or(0);
     println!(
         "Scanned {} SFTR Reuse State record(s). {} issues ({} critical, {} high). Score: {:.1}/100.",
         summary.records_processed, summary.issues_total, crit, high, summary.quality_score

@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-05-27
+
+### Added
+
+- **2 new EMIR parsers** for the last actually-existing ESMA messages:
+  - `auth.029` (`DerivativesTradeReportQueryV04`) — firm-side
+    query envelope. New `EmirQueryRecord`, `emir_query.rs` parser,
+    `examples/emir/query/auth029-sample.xml` fixture.
+  - `auth.031` (`FinancialInstrumentReportingStatusAdviceV01`) —
+    TR -> firm ack envelope (multi-ack per file with timestamp
+    fallback). New `EmirStatusAdviceRecord`, `emir_status_advice.rs`
+    parser, `examples/emir/status_advice/auth031-sample.xml`.
+- **2 new EMIR.{QRY,ACK}.ENVELOPE_WELLFORMED sanity checks**
+  (granular check count 216 -> 218). Both auth.029 and auth.031
+  carry no derivatives payload, so envelope sanity is the entire
+  DQ surface for them — honest scope documented in
+  [`docs/auth-messages/emir-auth029.md`](docs/auth-messages/emir-auth029.md)
+  + [`emir-auth031.md`](docs/auth-messages/emir-auth031.md).
+- **`docs/auth-messages/emir-auth078.md`** documents the
+  non-existence of `auth.078` in the ESMA bundle (v0.18 plan D
+  pivoted to `auth.084` for this reason).
+- **5 new SFTR standalone CLI subcommands** matching EMIR
+  per-layer ergonomy:
+  - `opendqi sftr mar-scan` (auth.070)
+  - `opendqi sftr msr-scan` (auth.085)
+  - `opendqi sftr tr-status-advice-scan` (auth.084)
+  - `opendqi sftr reuse-activity-scan` (auth.071)
+  - `opendqi sftr reuse-state-scan` (auth.086)
+  Each writes `summary.json` + a layer-prefixed `*_issues.csv` +
+  `*_report.html`. SFTR standalone CLI subcommands: 10 -> 15.
+- **2 new EMIR CLI subcommands** wiring the auth.029/031 parsers:
+  - `opendqi emir query-scan` (auth.029)
+  - `opendqi emir status-advice-scan` (auth.031)
+  EMIR standalone CLI subcommands: 14 -> 16.
+- **7 new EMIR Python wrappers** reaching parity with the matching
+  CLI subcommands: `opendqi.emir.{mar_scan, msr_scan, recon_stats,
+  warnings, feedback, query_scan, status_advice_scan}`. `recon_stats`
+  accepts an optional `prior=` kwarg for the batch-over-batch
+  pairing-rate-trend check. EMIR Python entry points: 9 -> 16.
+- **14 new pytest tests** in `crates/opendqi-py/tests/test_v020_layer_parity.py`
+  covering both the 7 EMIR Python wrappers and the 5 SFTR CLI
+  subcommands (via subprocess). Pytest total: 142 -> 156.
+
+### Changed
+
+- **EMIR ISO 20022 coverage** declared 8/11 -> **10/10
+  actually-existing** in [`docs/auth-messages.md`](docs/auth-messages.md)
+  and [`README.md`](README.md). `auth.078` was never published by
+  ESMA (the "11" tally was based on a conjectured message name
+  that does not appear in the official XSD index).
+- **README header**: "12 ISO 20022 messages parsed" ->
+  "20 ISO 20022 messages parsed (10 EMIR + 10 SFTR — every
+  actually-existing EMIR + SFTR message in the ESMA bundle as of
+  v0.20)".
+- **Coverage table** EMIR row: 151 -> 153 granular checks
+  (+2 envelope-sanity).
+
 ## [0.19.0] - 2026-05-26
 
 ### Changed

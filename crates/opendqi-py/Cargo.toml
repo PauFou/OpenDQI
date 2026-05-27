@@ -7,7 +7,7 @@
 
 [package]
 name         = "opendqi-py"
-version      = "0.19.0"
+version      = "0.20.0"
 edition      = "2021"
 rust-version = "1.87.0"
 # From v0.19.0: source-available under FSL-1.1-Apache-2.0 (see the
