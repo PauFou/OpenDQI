@@ -2,8 +2,8 @@
 
 The Data Quality Pack is OpenDQI's **committee-readable**
 view on top of the granular check catalogue. Where the
-per-row `DqIssue` stream is forensic (234 checks across 6
-dimensions in v0.18 : 155 EMIR + 79 SFTR), the DQI pack rolls
+per-row `DqIssue` stream is forensic (**218 checks** across 6
+dimensions as of v0.20 : 153 EMIR + 65 SFTR), the DQI pack rolls
 them up into **52 regulator-style indicators** — 28 EMIR + 24
 SFTR — each with `numerator / denominator / rate / threshold
 / status`, plus drill-down evidence.
