@@ -51,7 +51,7 @@ Runs all three workflows above against the synthetic kit at [`examples/quickstar
 
 ## Install
 
-Pick the channel that matches how you work — same engine, same 216 checks, same v1.0 Arrow output contract behind each.
+Pick the channel that matches how you work — same engine, same 218 checks, same v1.0 Arrow output contract behind each.
 
 ### Python (recommended for data teams)
 
@@ -126,9 +126,9 @@ The full Python surface (v0.12 → v0.16) adds **15 entry points**: `scan_parque
 |---|---:|---:|---:|
 | Single-batch DQ checks (6 dimensions) | 89 | 44 | 133 |
 | TR-layer & cross-message (TSR · TAR · MAR · MSR · Recon · Warnings · Missing-collat · Audit · Collateral-audit · Book-vs-TR · Lifecycle · Feedback · Pre-submission) | 62 | 21 | 83 |
-| **Live catalog (post-v0.10.0)** | **151** | **65** | **216** |
+| **Live catalog (post-v0.20.0)** | **153** | **65** | **218** |
 
-12 ISO 20022 messages parsed against the real ESMA XSD subset, gated locally by `OPENDQI_XSD_DIR` (SWIFT-licensed XSDs never redistributed). Full catalogues: [`docs/emir-checks.md`](docs/emir-checks.md) · [`docs/sftr-checks.md`](docs/sftr-checks.md). Per-message coverage notes: [`docs/auth-messages/`](docs/auth-messages/).
+**20 ISO 20022 messages parsed** (10 EMIR + 10 SFTR — every actually-existing EMIR + SFTR message in the ESMA bundle as of v0.20; `auth.078` was vapour, see [`docs/auth-messages/emir-auth078.md`](docs/auth-messages/emir-auth078.md)). Real ESMA XSD subset, gated locally by `OPENDQI_XSD_DIR` (SWIFT-licensed XSDs never redistributed). Full catalogues: [`docs/emir-checks.md`](docs/emir-checks.md) · [`docs/sftr-checks.md`](docs/sftr-checks.md). Per-message coverage notes: [`docs/auth-messages/`](docs/auth-messages/).
 
 ## Documentation
 
@@ -148,8 +148,11 @@ CSV (with YAML mapping), ISO 20022 XML (12 supported messages — see above), di
 
 | Version | Theme |
 |---|---|
-| **v0.16.0** (current) | **DQI expansion + SFTR pack v1** — 10 → 28 indicators (24 EMIR + 4 SFTR T2-layer), TARGET2 business-day calendar for stale-data DQIs, new `opendqi sftr data-quality-pack` CLI + `opendqi.sftr.data_quality_pack` Python ; v1.0 stable Arrow schemas unchanged (added rows, not columns). See [`docs/data-quality-pack.md`](docs/data-quality-pack.md). |
-| **v0.15.0** | **EMIR Data Quality Pack v1** — 10 regulator-style indicators above the 216 checks ; `opendqi emir data-quality-pack` CLI + `opendqi.emir.data_quality_pack` Python ; v1.0 stable Arrow schemas for indicators + evidence. |
+| **v0.20.0** (current) | **Perfect ESMA mirror + SFTR/EMIR parity (CLI + Python)** — EMIR coverage 8/11 → 10/10 actually-existing messages (auth.029 + auth.031 envelope-only parsers, auth.078 documented as non-existent in the ESMA bundle). 5 new SFTR standalone CLI subcommands (mar/msr/tr-status-advice/reuse-activity/reuse-state) + 2 new EMIR (query/status-advice). 7 new EMIR Python wrappers reaching parity with their CLI counterparts (`mar_scan`, `msr_scan`, `recon_stats`, `warnings`, `feedback`, `query_scan`, `status_advice_scan`). Granular checks 216 → 218 (+2 EMIR.{QRY,ACK}.ENVELOPE_WELLFORMED). |
+| **v0.19.0** | License flip Apache-2.0 → FSL-1.1-Apache-2.0 (effective v0.19+; releases v0.1.0–v0.18.0 stay Apache-2.0 immutable). CLA bot, release-license-bump.sh script. |
+| **v0.18.0** | Full ESMA mirror — 5 new parsers (SFTR auth.070/071/078/086 + EMIR auth.090), 12 new DQIs (40 → 53). |
+| **v0.16.0** | **DQI expansion + SFTR pack v1** — 10 → 28 indicators (24 EMIR + 4 SFTR T2-layer), TARGET2 business-day calendar for stale-data DQIs, new `opendqi sftr data-quality-pack` CLI + `opendqi.sftr.data_quality_pack` Python ; v1.0 stable Arrow schemas unchanged (added rows, not columns). See [`docs/data-quality-pack.md`](docs/data-quality-pack.md). |
+| **v0.15.0** | **EMIR Data Quality Pack v1** — 10 regulator-style indicators above the 218 checks ; `opendqi emir data-quality-pack` CLI + `opendqi.emir.data_quality_pack` Python ; v1.0 stable Arrow schemas for indicators + evidence. |
 | **v0.14.0** | Native Spark `mapInPandas` UDF + Polars LazyFrame fast path + `pip install opendqi[spark,polars,all]` |
 | **v0.13.0** | Python feature expansion — 10 new entry points (multi-file + cross-message + Spark experimental) |
 | **v0.12.0** | **Python/Arrow bindings preview** — `opendqi.emir.scan_parquet` + `scan_table(arrow_tbl, mapping)`, issues as `pyarrow.Table` |

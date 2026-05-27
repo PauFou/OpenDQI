@@ -1,7 +1,31 @@
 # EMIR data-quality checks
 
-OpenDQI currently ships **89 EMIR single-batch data-quality checks**
-covering all six DQ dimensions. Most are aligned with the official
+OpenDQI currently ships **153 EMIR data-quality checks** (post-v0.20)
+across single-batch, cross-batch, cross-message, and per-message
+envelope sanity surfaces. The 89 single-batch checks documented in
+detail below are the core ; the remaining 64 are per-message families
+documented in their own pages (`tr-state-checks.md`,
+`tr-activity-checks.md`, `tr-feedback.md`, `tr-audit.md`,
+`collateral-audit.md`, `emir-mar-msr.md`, `emir-recon-stats.md`,
+`emir-warnings.md`).
+
+v0.20 adds 2 envelope-sanity checks for the structural-only
+`auth.029` / `auth.031` messages:
+
+| Check ID | Dimension | Severity | Trigger |
+|---|---|---|---|
+| `EMIR.QRY.ENVELOPE_WELLFORMED` | validity | critical | auth.029 query record missing `query_id` and/or `requesting_lei` |
+| `EMIR.ACK.ENVELOPE_WELLFORMED` | validity | critical | auth.031 ack record missing any of `submission_id`, `ack_status`, `ack_timestamp` |
+
+Both are 1-check-per-message — auth.029/031 carry no derivatives
+payload (see [`auth-messages/emir-auth029.md`](auth-messages/emir-auth029.md)
++ [`auth-messages/emir-auth031.md`](auth-messages/emir-auth031.md)),
+so envelope sanity is the entire DQ surface for them.
+
+---
+
+The **89 single-batch EMIR checks** documented below cover all six
+DQ dimensions. Most are aligned with the official
 ESMA EMIR Refit Validation Rules (`EMIR-VR-*`). Each check is a
 pure function from a slice of `EmirRecord` to a list of `DqIssue`.
 The full registry is exposed through
