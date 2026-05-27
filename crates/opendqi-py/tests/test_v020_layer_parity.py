@@ -246,3 +246,63 @@ def test_sftr_reuse_state_scan_cli(tmp_path):
         "reuse_state",
         tmp_path,
     )
+
+
+# =================================================================
+# (c) SFTR Python wrappers — 5 functions, 1 test each (v0.21 P1).
+#     Mirror of group (a) above; reuses _assert_pyscan_shape helper.
+# =================================================================
+
+
+def test_sftr_mar_scan():
+    _require(SFTR_FIXTURES["mar"])
+    import opendqi
+    result = opendqi.sftr.mar_scan(str(SFTR_FIXTURES["mar"]))
+    _assert_pyscan_shape(result, "sftr", min_records=1)
+
+
+def test_sftr_msr_scan():
+    _require(SFTR_FIXTURES["msr"])
+    import opendqi
+    result = opendqi.sftr.msr_scan(str(SFTR_FIXTURES["msr"]))
+    _assert_pyscan_shape(result, "sftr", min_records=1)
+
+
+def test_sftr_reuse_activity_scan():
+    _require(SFTR_FIXTURES["reu_a"])
+    import opendqi
+    result = opendqi.sftr.reuse_activity_scan(str(SFTR_FIXTURES["reu_a"]))
+    _assert_pyscan_shape(result, "sftr", min_records=1)
+
+
+def test_sftr_reuse_state_scan():
+    _require(SFTR_FIXTURES["reu_s"])
+    import opendqi
+    result = opendqi.sftr.reuse_state_scan(str(SFTR_FIXTURES["reu_s"]))
+    _assert_pyscan_shape(result, "sftr", min_records=1)
+
+
+def test_sftr_tr_status_advice_scan():
+    """auth.084 has no per-record SFTR.TSA.* trait family —
+    DQI_REJ_RATE_SFTR rolls it up in the DQI pack; only parse-format
+    issues fire from this standalone scan, so the synthetic fixture
+    is expected to score 100/100."""
+    _require(SFTR_FIXTURES["tsa"])
+    import opendqi
+    result = opendqi.sftr.tr_status_advice_scan(str(SFTR_FIXTURES["tsa"]))
+    _assert_pyscan_shape(result, "sftr", min_records=1)
+    assert result.summary["issues_total"] == 0
+    assert result.summary["quality_score"] == 100.0
+
+
+def test_sftr_module_lists_all_v021_entry_points():
+    """Surface-level guarantee: every v0.21 SFTR wrapper is registered on the module."""
+    import opendqi
+    for fn_name in (
+        "mar_scan",
+        "msr_scan",
+        "reuse_activity_scan",
+        "reuse_state_scan",
+        "tr_status_advice_scan",
+    ):
+        assert hasattr(opendqi.sftr, fn_name), f"opendqi.sftr.{fn_name} missing"
