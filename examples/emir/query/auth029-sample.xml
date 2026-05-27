@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  EMIR Trade Report Query (auth.029) — synthetic schema-shaped
+  fixture demonstrating a typical firm-side query envelope.
+
+  All values are synthetic. ESMA paths follow auth.029.001.04
+  = DerivativesTradeReportQueryV04.
+
+  Unlike the per-trade EMIR messages, auth.029 is a REQUEST the
+  firm sends *to* the TR to retrieve its own derivatives data.
+  It carries no derivatives payload itself — only:
+    - MsgHdr (query id + timestamp)
+    - one or more TradRptQryCrit (filter blocks)
+    - RqstngPty (requesting firm LEI)
+
+  This sample exercises a two-filter query: a trade-date range
+  AND an asset-class restriction (CRDT). The OpenDQI parser
+  collapses each TradRptQryCrit subtree into one opaque
+  filter_descriptions string (joined as `tail/leaf=value;...`).
+
+  No business DQ signal in this message beyond the
+  EMIR.QRY.ENVELOPE_WELLFORMED sanity check — see
+  docs/auth-messages/emir-auth029.md for the rationale.
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.029.001.04">
+  <DerivsTradRptQry>
+    <MsgHdr>
+      <MsgId>QRY-OPENDQI-2026-001</MsgId>
+      <CreDtTm>2026-05-21T08:00:00Z</CreDtTm>
+    </MsgHdr>
+    <TradRptQryCrit>
+      <TradDt>
+        <FrDt>2026-05-01</FrDt>
+        <ToDt>2026-05-21</ToDt>
+      </TradDt>
+    </TradRptQryCrit>
+    <TradRptQryCrit>
+      <AsstClss>CRDT</AsstClss>
+    </TradRptQryCrit>
+    <RqstngPty>
+      <Id>
+        <LEI>549300ABCDEFGH123456</LEI>
+      </Id>
+    </RqstngPty>
+  </DerivsTradRptQry>
+</Document>
