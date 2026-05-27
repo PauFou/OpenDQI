@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-05-27
+
+Polish release closing the loose ends of v0.20: SFTR Python
+wrappers reach parity with their CLI counterparts, all 7 v0.20
+CLI subcommands gain byte-equality goldens, examples/{emir,sftr}/
+gain README index pages.
+
+### Added
+
+- **5 SFTR Python wrappers** mirroring v0.20 Phase B SFTR CLI
+  subcommands: `opendqi.sftr.mar_scan` (auth.070),
+  `msr_scan` (auth.085), `reuse_activity_scan` (auth.071),
+  `reuse_state_scan` (auth.086), `tr_status_advice_scan`
+  (auth.084). SFTR Python entry points: 9 -> 14.
+- **7 byte-equality goldens** for every v0.20 CLI subcommand
+  (`sftr-mar-scan`, `sftr-msr-scan`, `sftr-tr-status-advice-scan`,
+  `sftr-reuse-activity-scan`, `sftr-reuse-state-scan`,
+  `emir-query-scan`, `emir-status-advice-scan`). Golden test
+  count: 22 -> 29.
+- **6 new pytest tests** for the 5 SFTR Python wrappers + a
+  hasattr-check on `opendqi.sftr.*` registration. Pytest total:
+  156 -> 162.
+- **examples/emir/README.md + examples/sftr/README.md** indexing
+  every fixture subdirectory with its ISO 20022 message, use case,
+  and matching CLI command — discoverability win for new adopters.
+
+### Changed
+
+- Nothing. Pure additive polish — v1.0 Arrow contract unchanged,
+  216+2 granular checks unchanged, 53 DQIs unchanged.
+
 ## [0.20.0] - 2026-05-27
 
 ### Added
