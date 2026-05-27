@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  EMIR Financial Instrument Reporting Status Advice (auth.031)
+  — synthetic schema-shaped fixture exercising the 5 typical
+  status values + the per-ack vs envelope timestamp fallback.
+
+  All values are synthetic. ESMA paths follow auth.031.001.01
+  = FinancialInstrumentReportingStatusAdviceV01.
+
+  Unlike the per-trade EMIR messages, auth.031 is a STATUS
+  ENVELOPE the TR sends *to* the firm after receiving a
+  submission (e.g. auth.030 TAR). It carries no derivatives
+  payload — only the identifier of the submission being acked,
+  the status enum (ACPT/ACTC/RJCT/PDNG/PRTL), the ack timestamp,
+  and an optional error code when status is RJCT.
+
+  This sample exercises all 5 status values + the timestamp
+  fallback logic (per-ack CreDtTm on Ack-3 wins over envelope
+  CreDtTm; the others inherit the 08:00:00 envelope timestamp).
+
+  No business DQ signal in this message beyond the
+  EMIR.ACK.ENVELOPE_WELLFORMED sanity check — see
+  docs/auth-messages/emir-auth031.md for the rationale.
+
+  Record map:
+    Ack-1  ACPT  accepted, envelope timestamp
+    Ack-2  RJCT  rejected with ErrCd, envelope timestamp
+    Ack-3  PDNG  pending, per-ack CreDtTm 08:30:00 (wins)
+    Ack-4  ACTC  accepted-technical, envelope timestamp
+    Ack-5  PRTL  partial, envelope timestamp
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.031.001.01">
+  <FinInstrmRptgStsAdvc>
+    <MsgHdr>
+      <CreDtTm>2026-05-21T08:00:00Z</CreDtTm>
+    </MsgHdr>
+    <StsAdvc>
+      <OrgnlMsgId>SUB-2026-05-21-001</OrgnlMsgId>
+      <Sts>ACPT</Sts>
+    </StsAdvc>
+    <StsAdvc>
+      <OrgnlMsgId>SUB-2026-05-21-002</OrgnlMsgId>
+      <Sts>RJCT</Sts>
+      <ErrCd>ERR-3001</ErrCd>
+    </StsAdvc>
+    <StsAdvc>
+      <OrgnlMsgId>SUB-2026-05-21-003</OrgnlMsgId>
+      <Sts>PDNG</Sts>
+      <CreDtTm>2026-05-21T08:30:00Z</CreDtTm>
+    </StsAdvc>
+    <StsAdvc>
+      <OrgnlMsgId>SUB-2026-05-21-004</OrgnlMsgId>
+      <Sts>ACTC</Sts>
+    </StsAdvc>
+    <StsAdvc>
+      <OrgnlMsgId>SUB-2026-05-21-005</OrgnlMsgId>
+      <Sts>PRTL</Sts>
+    </StsAdvc>
+  </FinInstrmRptgStsAdvc>
+</Document>
