@@ -27,12 +27,13 @@ use pyo3::types::{PyAny, PyList};
 
 use opendqi_core::dq::{
     compute_book_reconcile_issues, compute_collateral_emir_issues, compute_tr_audit_emir_issues,
-    default_checks, default_feedback_checks, default_tr_state_checks, stream_checks_into,
-    stream_emir_checks_into, CheckContext,
+    default_checks, default_feedback_checks, default_margin_activity_checks,
+    default_margin_state_checks, default_recon_stats_checks, default_tr_state_checks,
+    default_warnings_checks, stream_checks_into, stream_emir_checks_into, CheckContext,
 };
 use opendqi_core::{
-    compute_emir_dqi_pack, EmirDqiInputs, EmirRecord, MappingPresence, Regime, SortedIssueSink,
-    Thresholds,
+    compute_emir_dqi_pack, default_emir_query_checks, default_emir_status_advice_checks,
+    EmirDqiInputs, EmirRecord, MappingPresence, Regime, SortedIssueSink, Thresholds,
 };
 use opendqi_io::CsvMapping;
 
@@ -795,6 +796,191 @@ fn load_feedback<'py>(
 }
 
 // =================================================================
+// v0.20 Phase C — per-layer Python wrappers (parity with CLI per-
+// layer subcommands). Each wrapper parses the layer XML, runs the
+// matching default_*_checks suite against the records, and returns
+// a PyScanResult identical in shape to the v0.12+ surface.
+// =================================================================
+
+/// `opendqi.emir.mar_scan(path: str) -> PyScanResult`. ISO 20022
+/// auth.108 EMIR Margin Activity Report. Mirror of `opendqi emir
+/// mar-scan` (no store / cross-batch lifecycle from Python in v0.20;
+/// the CLI handles the SQLite store path).
+#[pyfunction]
+pub fn mar_scan(path: &str) -> PyResult<PyScanResult> {
+    let started_at = Utc::now();
+    let outcome = opendqi_xml::read_emir_mar_xml(Path::new(path)).map_err(to_py_err)?;
+    let ctx = CheckContext::now_with_defaults();
+    let thresholds = Thresholds::default();
+    let sink = Mutex::new(SortedIssueSink::new(&thresholds, STREAM_SPILL_MAX_ISSUES));
+    sink.lock().expect("sink").push_batch(outcome.issues);
+    let prior: Vec<opendqi_core::MarginActivityRecord> = Vec::new();
+    stream_checks_into(&default_margin_activity_checks(), &sink, |c| {
+        c.run(&outcome.records, &prior, &ctx)
+    });
+    let n = outcome.records.len() as u32;
+    let (summary, sorted) = sink
+        .into_inner()
+        .expect("sink mutex")
+        .finish(Regime::Emir, 1, n, started_at, Utc::now());
+    let batch = issues_to_record_batch(sorted).map_err(to_py_err)?;
+    Ok(PyScanResult::new(summary, Some(batch), None))
+}
+
+/// `opendqi.emir.msr_scan(path: str) -> PyScanResult`. ISO 20022
+/// auth.109 EMIR Margin State Report. Mirror of `opendqi emir
+/// msr-scan`.
+#[pyfunction]
+pub fn msr_scan(path: &str) -> PyResult<PyScanResult> {
+    let started_at = Utc::now();
+    let outcome = opendqi_xml::read_emir_msr_xml(Path::new(path)).map_err(to_py_err)?;
+    let ctx = CheckContext::now_with_defaults();
+    let thresholds = Thresholds::default();
+    let sink = Mutex::new(SortedIssueSink::new(&thresholds, STREAM_SPILL_MAX_ISSUES));
+    sink.lock().expect("sink").push_batch(outcome.issues);
+    let prior: Vec<EmirRecord> = Vec::new();
+    stream_checks_into(&default_margin_state_checks(), &sink, |c| {
+        c.run(&outcome.records, &prior, &ctx)
+    });
+    let n = outcome.records.len() as u32;
+    let (summary, sorted) = sink
+        .into_inner()
+        .expect("sink mutex")
+        .finish(Regime::Emir, 1, n, started_at, Utc::now());
+    let batch = issues_to_record_batch(sorted).map_err(to_py_err)?;
+    Ok(PyScanResult::new(summary, Some(batch), None))
+}
+
+/// `opendqi.emir.recon_stats(path: str, *, prior: str | None = None)
+/// -> PyScanResult`. ISO 20022 auth.091 EMIR Reconciliation
+/// Statistical Report. Optional `prior=` kwarg activates the
+/// batch-over-batch pairing-rate-trend check.
+#[pyfunction]
+#[pyo3(signature = (path, *, prior = None))]
+pub fn recon_stats(path: &str, prior: Option<&str>) -> PyResult<PyScanResult> {
+    let started_at = Utc::now();
+    let outcome = opendqi_xml::read_emir_recon_stats_xml(Path::new(path)).map_err(to_py_err)?;
+    let prior_records = match prior {
+        Some(p) => {
+            opendqi_xml::read_emir_recon_stats_xml(Path::new(p))
+                .map_err(to_py_err)?
+                .records
+        }
+        None => Vec::new(),
+    };
+    let ctx = CheckContext::now_with_defaults();
+    let thresholds = Thresholds::default();
+    let sink = Mutex::new(SortedIssueSink::new(&thresholds, STREAM_SPILL_MAX_ISSUES));
+    sink.lock().expect("sink").push_batch(outcome.issues);
+    stream_checks_into(&default_recon_stats_checks(), &sink, |c| {
+        c.run(&outcome.records, &prior_records, &ctx)
+    });
+    let n = outcome.records.len() as u32;
+    let (summary, sorted) = sink
+        .into_inner()
+        .expect("sink mutex")
+        .finish(Regime::Emir, 1, n, started_at, Utc::now());
+    let batch = issues_to_record_batch(sorted).map_err(to_py_err)?;
+    Ok(PyScanResult::new(summary, Some(batch), None))
+}
+
+/// `opendqi.emir.warnings(path: str) -> PyScanResult`. ISO 20022
+/// auth.106 EMIR Trade Warnings Report. Mirror of `opendqi emir
+/// warnings`.
+#[pyfunction]
+pub fn warnings(path: &str) -> PyResult<PyScanResult> {
+    let started_at = Utc::now();
+    let outcome = opendqi_xml::read_emir_warnings_xml(Path::new(path)).map_err(to_py_err)?;
+    let ctx = CheckContext::now_with_defaults();
+    let thresholds = Thresholds::default();
+    let sink = Mutex::new(SortedIssueSink::new(&thresholds, STREAM_SPILL_MAX_ISSUES));
+    sink.lock().expect("sink").push_batch(outcome.issues);
+    stream_checks_into(&default_warnings_checks(), &sink, |c| {
+        c.run(&outcome.records, &ctx)
+    });
+    let n = outcome.records.len() as u32;
+    let (summary, sorted) = sink
+        .into_inner()
+        .expect("sink mutex")
+        .finish(Regime::Emir, 1, n, started_at, Utc::now());
+    let batch = issues_to_record_batch(sorted).map_err(to_py_err)?;
+    Ok(PyScanResult::new(summary, Some(batch), None))
+}
+
+/// `opendqi.emir.feedback(path: str) -> PyScanResult`. ISO 20022
+/// auth.092 EMIR Trade Rejection Statistical Report. Python equivalent
+/// of `opendqi emir feedback` without the SQLite store integration
+/// (Python store wrapper deferred to v0.21+; for store-backed
+/// lifecycle use the CLI).
+#[pyfunction]
+pub fn feedback(path: &str) -> PyResult<PyScanResult> {
+    let started_at = Utc::now();
+    let outcome = opendqi_xml::read_emir_feedback_xml(Path::new(path)).map_err(to_py_err)?;
+    let ctx = CheckContext::now_with_defaults();
+    let thresholds = Thresholds::default();
+    let sink = Mutex::new(SortedIssueSink::new(&thresholds, STREAM_SPILL_MAX_ISSUES));
+    sink.lock().expect("sink").push_batch(outcome.issues);
+    let prior: Vec<EmirRecord> = Vec::new();
+    stream_checks_into(&default_feedback_checks(), &sink, |c| {
+        c.run(&outcome.records, &prior, &ctx)
+    });
+    let n = outcome.records.len() as u32;
+    let (summary, sorted) = sink
+        .into_inner()
+        .expect("sink mutex")
+        .finish(Regime::Emir, 1, n, started_at, Utc::now());
+    let batch = issues_to_record_batch(sorted).map_err(to_py_err)?;
+    Ok(PyScanResult::new(summary, Some(batch), None))
+}
+
+/// `opendqi.emir.query_scan(path: str) -> PyScanResult`. ISO 20022
+/// auth.029 EMIR Trade Report Query (firm-side query envelope).
+/// Envelope-only — fires only EMIR.QRY.ENVELOPE_WELLFORMED. v0.20.
+#[pyfunction]
+pub fn query_scan(path: &str) -> PyResult<PyScanResult> {
+    let started_at = Utc::now();
+    let outcome = opendqi_xml::read_emir_query_xml(Path::new(path)).map_err(to_py_err)?;
+    let ctx = CheckContext::now_with_defaults();
+    let thresholds = Thresholds::default();
+    let sink = Mutex::new(SortedIssueSink::new(&thresholds, STREAM_SPILL_MAX_ISSUES));
+    sink.lock().expect("sink").push_batch(outcome.issues);
+    stream_checks_into(&default_emir_query_checks(), &sink, |c| {
+        c.run(&outcome.records, &ctx)
+    });
+    let n = outcome.records.len() as u32;
+    let (summary, sorted) = sink
+        .into_inner()
+        .expect("sink mutex")
+        .finish(Regime::Emir, 1, n, started_at, Utc::now());
+    let batch = issues_to_record_batch(sorted).map_err(to_py_err)?;
+    Ok(PyScanResult::new(summary, Some(batch), None))
+}
+
+/// `opendqi.emir.status_advice_scan(path: str) -> PyScanResult`.
+/// ISO 20022 auth.031 EMIR Status Advice (TR → firm ack envelope).
+/// Envelope-only — fires only EMIR.ACK.ENVELOPE_WELLFORMED. v0.20.
+#[pyfunction]
+pub fn status_advice_scan(path: &str) -> PyResult<PyScanResult> {
+    let started_at = Utc::now();
+    let outcome =
+        opendqi_xml::read_emir_status_advice_xml(Path::new(path)).map_err(to_py_err)?;
+    let ctx = CheckContext::now_with_defaults();
+    let thresholds = Thresholds::default();
+    let sink = Mutex::new(SortedIssueSink::new(&thresholds, STREAM_SPILL_MAX_ISSUES));
+    sink.lock().expect("sink").push_batch(outcome.issues);
+    stream_checks_into(&default_emir_status_advice_checks(), &sink, |c| {
+        c.run(&outcome.records, &ctx)
+    });
+    let n = outcome.records.len() as u32;
+    let (summary, sorted) = sink
+        .into_inner()
+        .expect("sink mutex")
+        .finish(Regime::Emir, 1, n, started_at, Utc::now());
+    let batch = issues_to_record_batch(sorted).map_err(to_py_err)?;
+    Ok(PyScanResult::new(summary, Some(batch), None))
+}
+
+// =================================================================
 // Module registration
 // =================================================================
 
@@ -817,6 +1003,14 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(book_reconcile, &m)?)?;
     // Data Quality Pack (v0.15.0).
     m.add_function(wrap_pyfunction!(data_quality_pack, &m)?)?;
+    // Per-layer scan wrappers (v0.20 Phase C — parity with CLI).
+    m.add_function(wrap_pyfunction!(mar_scan, &m)?)?;
+    m.add_function(wrap_pyfunction!(msr_scan, &m)?)?;
+    m.add_function(wrap_pyfunction!(recon_stats, &m)?)?;
+    m.add_function(wrap_pyfunction!(warnings, &m)?)?;
+    m.add_function(wrap_pyfunction!(feedback, &m)?)?;
+    m.add_function(wrap_pyfunction!(query_scan, &m)?)?;
+    m.add_function(wrap_pyfunction!(status_advice_scan, &m)?)?;
     parent.add_submodule(&m)?;
     Ok(())
 }
