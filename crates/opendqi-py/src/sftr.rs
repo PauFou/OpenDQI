@@ -14,8 +14,9 @@ use opendqi_core::dq::{
     stream_checks_into, CheckContext,
 };
 use opendqi_core::{
-    compute_sftr_dqi_pack, MappingPresence, Regime, SftrDqiInputs, SftrRecord, SortedIssueSink,
-    Thresholds,
+    compute_sftr_dqi_pack, default_sftr_mar_checks, default_sftr_msr_checks,
+    default_sftr_reu_checks, default_sftr_reu_state_checks, MappingPresence, Regime,
+    SftrDqiInputs, SftrRecord, SortedIssueSink, Thresholds,
 };
 use opendqi_io::CsvMapping;
 
@@ -608,6 +609,138 @@ pub fn data_quality_pack(
 }
 
 // =================================================================
+// v0.21 P1 — per-layer SFTR Python wrappers (parity with the CLI
+// per-layer subcommands shipped in v0.20 Phase B). Mirror of v0.20
+// Phase C EMIR wrappers; each wrapper parses the layer XML, runs
+// the matching default_sftr_*_checks suite, returns a PyScanResult.
+// =================================================================
+
+/// `opendqi.sftr.mar_scan(path: str) -> PyScanResult`. ISO 20022
+/// auth.070 SFTR Margin Activity Report. Mirror of `opendqi sftr
+/// mar-scan`. Fires the 4 default SFTR.MAR.* per-record checks.
+#[pyfunction]
+pub fn mar_scan(path: &str) -> PyResult<PyScanResult> {
+    let started_at = Utc::now();
+    let outcome =
+        opendqi_xml::read_sftr_margin_activity_xml(Path::new(path)).map_err(to_py_err)?;
+    let ctx = CheckContext::now_with_defaults();
+    let thresholds = Thresholds::default();
+    let sink = Mutex::new(SortedIssueSink::new(&thresholds, STREAM_SPILL_MAX_ISSUES));
+    sink.lock().expect("sink").push_batch(outcome.issues);
+    stream_checks_into(&default_sftr_mar_checks(), &sink, |c| {
+        c.run(&outcome.records, &ctx)
+    });
+    let n = outcome.records.len() as u32;
+    let (summary, sorted) = sink
+        .into_inner()
+        .expect("sink mutex")
+        .finish(Regime::Sftr, 1, n, started_at, Utc::now());
+    let batch = issues_to_record_batch(sorted).map_err(to_py_err)?;
+    Ok(PyScanResult::new(summary, Some(batch), None))
+}
+
+/// `opendqi.sftr.msr_scan(path: str) -> PyScanResult`. ISO 20022
+/// auth.085 SFTR Margin State Report (CCP-cleared portfolios).
+/// Mirror of `opendqi sftr msr-scan`. Fires the 6 SFTR.T3.* checks.
+#[pyfunction]
+pub fn msr_scan(path: &str) -> PyResult<PyScanResult> {
+    let started_at = Utc::now();
+    let outcome =
+        opendqi_xml::read_sftr_margin_state_xml(Path::new(path)).map_err(to_py_err)?;
+    let ctx = CheckContext::now_with_defaults();
+    let thresholds = Thresholds::default();
+    let sink = Mutex::new(SortedIssueSink::new(&thresholds, STREAM_SPILL_MAX_ISSUES));
+    sink.lock().expect("sink").push_batch(outcome.issues);
+    stream_checks_into(&default_sftr_msr_checks(), &sink, |c| {
+        c.run(&outcome.records, &ctx)
+    });
+    let n = outcome.records.len() as u32;
+    let (summary, sorted) = sink
+        .into_inner()
+        .expect("sink mutex")
+        .finish(Regime::Sftr, 1, n, started_at, Utc::now());
+    let batch = issues_to_record_batch(sorted).map_err(to_py_err)?;
+    Ok(PyScanResult::new(summary, Some(batch), None))
+}
+
+/// `opendqi.sftr.reuse_activity_scan(path: str) -> PyScanResult`.
+/// ISO 20022 auth.071 SFTR Reused Collateral Data Report. Mirror
+/// of `opendqi sftr reuse-activity-scan`. Fires the 2 SFTR.REU.*
+/// checks (missing reuse currency, rate outside plausible band).
+#[pyfunction]
+pub fn reuse_activity_scan(path: &str) -> PyResult<PyScanResult> {
+    let started_at = Utc::now();
+    let outcome =
+        opendqi_xml::read_sftr_reuse_activity_xml(Path::new(path)).map_err(to_py_err)?;
+    let ctx = CheckContext::now_with_defaults();
+    let thresholds = Thresholds::default();
+    let sink = Mutex::new(SortedIssueSink::new(&thresholds, STREAM_SPILL_MAX_ISSUES));
+    sink.lock().expect("sink").push_batch(outcome.issues);
+    stream_checks_into(&default_sftr_reu_checks(), &sink, |c| {
+        c.run(&outcome.records, &ctx)
+    });
+    let n = outcome.records.len() as u32;
+    let (summary, sorted) = sink
+        .into_inner()
+        .expect("sink mutex")
+        .finish(Regime::Sftr, 1, n, started_at, Utc::now());
+    let batch = issues_to_record_batch(sorted).map_err(to_py_err)?;
+    Ok(PyScanResult::new(summary, Some(batch), None))
+}
+
+/// `opendqi.sftr.reuse_state_scan(path: str) -> PyScanResult`.
+/// ISO 20022 auth.086 SFTR Reused Collateral Data Transaction
+/// State Report. Mirror of `opendqi sftr reuse-state-scan`. Fires
+/// the 2 SFTR.REU.STATE.* checks.
+#[pyfunction]
+pub fn reuse_state_scan(path: &str) -> PyResult<PyScanResult> {
+    let started_at = Utc::now();
+    let outcome =
+        opendqi_xml::read_sftr_reuse_state_xml(Path::new(path)).map_err(to_py_err)?;
+    let ctx = CheckContext::now_with_defaults();
+    let thresholds = Thresholds::default();
+    let sink = Mutex::new(SortedIssueSink::new(&thresholds, STREAM_SPILL_MAX_ISSUES));
+    sink.lock().expect("sink").push_batch(outcome.issues);
+    stream_checks_into(&default_sftr_reu_state_checks(), &sink, |c| {
+        c.run(&outcome.records, &ctx)
+    });
+    let n = outcome.records.len() as u32;
+    let (summary, sorted) = sink
+        .into_inner()
+        .expect("sink mutex")
+        .finish(Regime::Sftr, 1, n, started_at, Utc::now());
+    let batch = issues_to_record_batch(sorted).map_err(to_py_err)?;
+    Ok(PyScanResult::new(summary, Some(batch), None))
+}
+
+/// `opendqi.sftr.tr_status_advice_scan(path: str) -> PyScanResult`.
+/// ISO 20022 auth.084 SFTR Transaction Status Advice. Mirror of
+/// `opendqi sftr tr-status-advice-scan`. auth.084 has no per-record
+/// SFTR.TSA.* check trait family — DQI_REJ_RATE_SFTR rolls it up
+/// in the DQI pack; only parse-format issues fire from this scan.
+#[pyfunction]
+pub fn tr_status_advice_scan(path: &str) -> PyResult<PyScanResult> {
+    let started_at = Utc::now();
+    let outcome =
+        opendqi_xml::read_sftr_tr_status_advice_xml(Path::new(path)).map_err(to_py_err)?;
+    let ctx = CheckContext::now_with_defaults();
+    let thresholds = Thresholds::default();
+    let sink = Mutex::new(SortedIssueSink::new(&thresholds, STREAM_SPILL_MAX_ISSUES));
+    sink.lock().expect("sink").push_batch(outcome.issues);
+    // No per-record check suite — drop straight into finish so any
+    // parse-format issues land in the result and that's the entire
+    // DQ surface for this layer.
+    let _ = ctx;
+    let n = outcome.records.len() as u32;
+    let (summary, sorted) = sink
+        .into_inner()
+        .expect("sink mutex")
+        .finish(Regime::Sftr, 1, n, started_at, Utc::now());
+    let batch = issues_to_record_batch(sorted).map_err(to_py_err)?;
+    Ok(PyScanResult::new(summary, Some(batch), None))
+}
+
+// =================================================================
 // Module registration
 // =================================================================
 
@@ -630,6 +763,12 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(book_reconcile, &m)?)?;
     // Data Quality Pack (v0.16.0).
     m.add_function(wrap_pyfunction!(data_quality_pack, &m)?)?;
+    // Per-layer scan wrappers (v0.21 P1 — parity with CLI).
+    m.add_function(wrap_pyfunction!(mar_scan, &m)?)?;
+    m.add_function(wrap_pyfunction!(msr_scan, &m)?)?;
+    m.add_function(wrap_pyfunction!(reuse_activity_scan, &m)?)?;
+    m.add_function(wrap_pyfunction!(reuse_state_scan, &m)?)?;
+    m.add_function(wrap_pyfunction!(tr_status_advice_scan, &m)?)?;
     parent.add_submodule(&m)?;
     Ok(())
 }
