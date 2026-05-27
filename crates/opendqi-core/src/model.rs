@@ -1273,6 +1273,74 @@ impl Default for EmirQueryRecord {
     }
 }
 
+/// One ack from an EMIR Financial Instrument Reporting Status
+/// Advice (ISO 20022 `auth.031`) — a TR -> firm acknowledgement
+/// the TR sends to the firm after receiving a submission
+/// (auth.030 TAR, etc.).
+///
+/// Unlike the report messages OpenDQI normally ingests (which
+/// carry derivatives payload), auth.031 is a **status envelope**:
+/// it confirms whether the TR accepted, rejected, or is still
+/// processing a previously-submitted report. It carries no
+/// derivatives payload — only the submission id being acked, the
+/// status enum, the ack timestamp, and an optional error code if
+/// the status is REJECTED.
+///
+/// We therefore model only the envelope-level fields here. There
+/// is no business DQ signal beyond an `ENVELOPE_WELLFORMED`
+/// sanity check verifying that the ack carries the minimum
+/// identifying information (submission id + status + timestamp).
+/// See [`crate::dq::emir_status_advice`] for the check and
+/// `docs/auth-messages/emir-auth031.md` for the rationale.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmirStatusAdviceRecord {
+    /// Source file path (or other origin label).
+    pub source_file: Option<String>,
+    /// Synthetic stable identifier (`<source>#Ack-<index>`).
+    /// One auth.031 envelope can contain multiple per-submission
+    /// acks; the parser stamps a 1-based index per ack.
+    pub record_id: Option<String>,
+    /// Regulatory regime — always `Regime::Emir`.
+    pub regime: Regime,
+    /// Identifier of the submission being acked, as reported by
+    /// the TR (`OrgnlMsgId`, `MsgId`, or the equivalent reference
+    /// field — the parser promotes whichever is present).
+    pub submission_id: Option<String>,
+    /// Free-form ack status string as reported by the TR.
+    /// Expected values per XSD are `ACPT`/`ACTC` (accepted),
+    /// `RJCT` (rejected), `PDNG`/`PRTL` (in processing/partial).
+    /// Stored as `Option<String>` rather than an enum so the parser
+    /// stays forward-compatible with code variants we do not yet
+    /// recognise; the sanity check verifies presence not value.
+    pub ack_status: Option<String>,
+    /// Timestamp the TR emitted the ack
+    /// (`CreDtTm` or equivalent), the third required field
+    /// for the `ENVELOPE_WELLFORMED` check.
+    pub ack_timestamp: Option<DateTime<Utc>>,
+    /// Optional error code accompanying a REJECTED ack
+    /// (TR-specific code; not promoted to a typed enum because
+    /// every TR uses its own dictionary).
+    pub error_code: Option<String>,
+    /// Catch-all of XML leaves not promoted to typed fields.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub raw_fields: BTreeMap<String, String>,
+}
+
+impl Default for EmirStatusAdviceRecord {
+    fn default() -> Self {
+        Self {
+            source_file: None,
+            record_id: None,
+            regime: Regime::Emir,
+            submission_id: None,
+            ack_status: None,
+            ack_timestamp: None,
+            error_code: None,
+            raw_fields: BTreeMap::new(),
+        }
+    }
+}
+
 /// One line from an EMIR Margin Activity Report (MAR) — the
 /// history of margin calls / postings / collections for a portfolio
 /// (ISO 20022 `auth.108`). Activity-oriented, mirrors `EmirRecord`
@@ -2466,5 +2534,64 @@ mod tests {
         assert_eq!(back.query_timestamp, r.query_timestamp);
         assert_eq!(back.requesting_lei, r.requesting_lei);
         assert_eq!(back.filter_descriptions, r.filter_descriptions);
+    }
+
+    // -- v0.20 A3: EmirStatusAdviceRecord (auth.031) -----------
+
+    #[test]
+    fn emir_status_advice_record_default_is_emir_with_all_options_none() {
+        let r = EmirStatusAdviceRecord::default();
+        assert_eq!(r.regime, Regime::Emir);
+        assert!(r.source_file.is_none());
+        assert!(r.record_id.is_none());
+        assert!(r.submission_id.is_none());
+        assert!(r.ack_status.is_none());
+        assert!(r.ack_timestamp.is_none());
+        assert!(r.error_code.is_none());
+        assert!(r.raw_fields.is_empty());
+    }
+
+    #[test]
+    fn emir_status_advice_record_serde_always_emits_metadata_keys_when_none() {
+        let r = EmirStatusAdviceRecord::default();
+        let j = serde_json::to_string(&r).unwrap();
+        for required_key in [
+            "source_file",
+            "record_id",
+            "submission_id",
+            "ack_status",
+            "ack_timestamp",
+            "error_code",
+        ] {
+            assert!(
+                j.contains(&format!("\"{required_key}\":null")),
+                "key {required_key} should serialise as null on default, json was {j}"
+            );
+        }
+        assert!(!j.contains("\"raw_fields\""));
+    }
+
+    #[test]
+    fn emir_status_advice_record_round_trip_populated() {
+        use chrono::TimeZone;
+        let r = EmirStatusAdviceRecord {
+            source_file: Some("auth031.xml".into()),
+            record_id: Some("auth031.xml#Ack-1".into()),
+            regime: Regime::Emir,
+            submission_id: Some("SUB-2026-05-21-001".into()),
+            ack_status: Some("RJCT".into()),
+            ack_timestamp: Some(Utc.with_ymd_and_hms(2026, 5, 21, 8, 5, 0).unwrap()),
+            error_code: Some("ERR-3001".into()),
+            ..EmirStatusAdviceRecord::default()
+        };
+        let j = serde_json::to_string(&r).unwrap();
+        let back: EmirStatusAdviceRecord = serde_json::from_str(&j).unwrap();
+        assert_eq!(back.source_file, r.source_file);
+        assert_eq!(back.record_id, r.record_id);
+        assert_eq!(back.regime, r.regime);
+        assert_eq!(back.submission_id, r.submission_id);
+        assert_eq!(back.ack_status, r.ack_status);
+        assert_eq!(back.ack_timestamp, r.ack_timestamp);
+        assert_eq!(back.error_code, r.error_code);
     }
 }
