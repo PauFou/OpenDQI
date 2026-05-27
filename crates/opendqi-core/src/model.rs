@@ -1207,6 +1207,72 @@ impl Default for EmirPositionSetRecord {
     }
 }
 
+/// One query record from an EMIR Derivatives Trade Report Query
+/// (ISO 20022 `auth.029`) — a firm-side request the firm sends to
+/// the TR to retrieve its own derivatives data.
+///
+/// Unlike the report messages OpenDQI normally ingests (TR → firm
+/// flows : auth.030, auth.107, auth.092, auth.106, …), auth.029
+/// is a **request envelope** the firm sends *to* the TR. It carries
+/// no derivatives payload itself — only the identifier of the
+/// querying firm, the timestamp of the request, and the filter
+/// criteria that scope which trades the TR should return.
+///
+/// We therefore model only the envelope-level fields here. There
+/// is no business DQ signal beyond an `ENVELOPE_WELLFORMED`
+/// sanity check verifying that a query carries the minimum
+/// identifying information (query id + requesting LEI). See
+/// [`crate::dq::emir_query`] for the check and
+/// `docs/auth-messages/emir-auth029.md` for the rationale.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmirQueryRecord {
+    /// Source file path (or other origin label).
+    pub source_file: Option<String>,
+    /// Synthetic stable identifier (`<source>#Qry-<index>`).
+    /// auth.029 has no per-record id at the XSD level; the
+    /// parser stamps one based on file + 1-based index.
+    pub record_id: Option<String>,
+    /// Regulatory regime — always `Regime::Emir`.
+    pub regime: Regime,
+    /// Query-level identifier reported by the firm (when present).
+    /// Optional because the XSD allows queries to be sent without
+    /// an explicit id, in which case the parser leaves this `None`
+    /// and only `record_id` is populated.
+    pub query_id: Option<String>,
+    /// Timestamp the query was emitted by the firm
+    /// (`MsgHdr/CreDtTm` or the request-time equivalent).
+    pub query_timestamp: Option<DateTime<Utc>>,
+    /// LEI of the entity issuing the query
+    /// (`ReqstngPty/.../LEI` or equivalent), used as the
+    /// minimum-identity field for the `ENVELOPE_WELLFORMED` check.
+    pub requesting_lei: Option<String>,
+    /// Free-form descriptions of the filter criteria that scope
+    /// the query (date range, UTI list, counterparty filters, …).
+    /// One string per filter element observed; format is left
+    /// opaque because the XSD allows many alternates and the
+    /// content is not used for DQ checks.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub filter_descriptions: Vec<String>,
+    /// Catch-all of XML leaves not promoted to typed fields.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub raw_fields: BTreeMap<String, String>,
+}
+
+impl Default for EmirQueryRecord {
+    fn default() -> Self {
+        Self {
+            source_file: None,
+            record_id: None,
+            regime: Regime::Emir,
+            query_id: None,
+            query_timestamp: None,
+            requesting_lei: None,
+            filter_descriptions: Vec::new(),
+            raw_fields: BTreeMap::new(),
+        }
+    }
+}
+
 /// One line from an EMIR Margin Activity Report (MAR) — the
 /// history of margin calls / postings / collections for a portfolio
 /// (ISO 20022 `auth.108`). Activity-oriented, mirrors `EmirRecord`
@@ -2337,5 +2403,68 @@ mod tests {
         assert_eq!(back.notional, r.notional);
         assert_eq!(back.mark_to_market_value, r.mark_to_market_value);
         assert_eq!(back.collateral_value, r.collateral_value);
+    }
+
+    // -- v0.20 A1: EmirQueryRecord (auth.029) ------------------
+
+    #[test]
+    fn emir_query_record_default_is_emir_with_all_options_none() {
+        let r = EmirQueryRecord::default();
+        assert_eq!(r.regime, Regime::Emir);
+        assert!(r.source_file.is_none());
+        assert!(r.record_id.is_none());
+        assert!(r.query_id.is_none());
+        assert!(r.query_timestamp.is_none());
+        assert!(r.requesting_lei.is_none());
+        assert!(r.filter_descriptions.is_empty());
+        assert!(r.raw_fields.is_empty());
+    }
+
+    #[test]
+    fn emir_query_record_serde_always_emits_metadata_keys_when_none() {
+        let r = EmirQueryRecord::default();
+        let j = serde_json::to_string(&r).unwrap();
+        for required_key in [
+            "source_file",
+            "record_id",
+            "query_id",
+            "query_timestamp",
+            "requesting_lei",
+        ] {
+            assert!(
+                j.contains(&format!("\"{required_key}\":null")),
+                "key {required_key} should serialise as null on default, json was {j}"
+            );
+        }
+        // Vec / BTreeMap fields skip when empty.
+        assert!(!j.contains("\"filter_descriptions\""));
+        assert!(!j.contains("\"raw_fields\""));
+    }
+
+    #[test]
+    fn emir_query_record_round_trip_populated() {
+        use chrono::TimeZone;
+        let r = EmirQueryRecord {
+            source_file: Some("auth029.xml".into()),
+            record_id: Some("auth029.xml#Qry-1".into()),
+            regime: Regime::Emir,
+            query_id: Some("QRY-2026-001".into()),
+            query_timestamp: Some(Utc.with_ymd_and_hms(2026, 5, 21, 8, 0, 0).unwrap()),
+            requesting_lei: Some("549300ABCDEFGH123456".into()),
+            filter_descriptions: vec![
+                "date_range=2026-05-01..2026-05-21".into(),
+                "asset_class=CRDT".into(),
+            ],
+            ..EmirQueryRecord::default()
+        };
+        let j = serde_json::to_string(&r).unwrap();
+        let back: EmirQueryRecord = serde_json::from_str(&j).unwrap();
+        assert_eq!(back.source_file, r.source_file);
+        assert_eq!(back.record_id, r.record_id);
+        assert_eq!(back.regime, r.regime);
+        assert_eq!(back.query_id, r.query_id);
+        assert_eq!(back.query_timestamp, r.query_timestamp);
+        assert_eq!(back.requesting_lei, r.requesting_lei);
+        assert_eq!(back.filter_descriptions, r.filter_descriptions);
     }
 }
