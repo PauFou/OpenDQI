@@ -1,0 +1,2 @@
+check_id,regime,severity,dimension,record_id,uti,field,value,message,source_file,evidence_json
+SFTR.T3.MARGIN_NEGATIVE,sftr,critical,accuracy,REC-5,PORTFOLIO-005,initial_margin_posted,-50.00,initial_margin_posted is negative: -50.00,<WS>/examples/sftr/margin_state/auth085-sample.xml,

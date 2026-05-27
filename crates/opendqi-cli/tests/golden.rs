@@ -365,6 +365,29 @@ golden_test!(
         &ex("examples/emir/collateral_audit/msr.xml")
     ])
 );
+// v0.20 B6 — auth.029 query-scan envelope sanity (1 EMIR.QRY.*
+// check). The synthetic fixture is fully populated so issues = 0
+// and the golden captures the "all green" baseline.
+golden_test!(
+    emir_query_scan,
+    "emir-query-scan",
+    a(&[
+        "emir",
+        "query-scan",
+        &ex("examples/emir/query/auth029-sample.xml")
+    ])
+);
+// v0.20 B6 — auth.031 status-advice-scan envelope sanity
+// (1 EMIR.ACK.* check, per-ack timestamps).
+golden_test!(
+    emir_status_advice_scan,
+    "emir-status-advice-scan",
+    a(&[
+        "emir",
+        "status-advice-scan",
+        &ex("examples/emir/status_advice/auth031-sample.xml")
+    ])
+);
 
 // `emir data-quality-pack` writes FOUR artefacts (summary.json +
 // issues.csv + indicators.csv + evidence.csv) — the standard
@@ -518,6 +541,56 @@ golden_test!(
         &ex("examples/sftr/tr_state/auth079-sample.xml"),
         "--mapping",
         &ex("examples/sftr/book_reconcile/book_mapping.yml")
+    ])
+);
+// v0.20 B1-B5 — 5 SFTR standalone per-layer scans. Each fires
+// its layer-specific check suite (4 SFTR.MAR.*, 6 SFTR.T3.*, 2
+// SFTR.REU.*, 2 SFTR.REU.STATE.*; auth.084 has no per-record
+// trait family and the golden captures the "envelope-only,
+// parse-format issues only" baseline).
+golden_test!(
+    sftr_mar_scan,
+    "sftr-mar-scan",
+    a(&[
+        "sftr",
+        "mar-scan",
+        &ex("examples/sftr/margin_activity/auth070-sample.xml")
+    ])
+);
+golden_test!(
+    sftr_msr_scan,
+    "sftr-msr-scan",
+    a(&[
+        "sftr",
+        "msr-scan",
+        &ex("examples/sftr/margin_state/auth085-sample.xml")
+    ])
+);
+golden_test!(
+    sftr_tr_status_advice_scan,
+    "sftr-tr-status-advice-scan",
+    a(&[
+        "sftr",
+        "tr-status-advice-scan",
+        &ex("examples/sftr/tr_status_advice/auth084-sample.xml")
+    ])
+);
+golden_test!(
+    sftr_reuse_activity_scan,
+    "sftr-reuse-activity-scan",
+    a(&[
+        "sftr",
+        "reuse-activity-scan",
+        &ex("examples/sftr/reuse_activity/auth071-sample.xml")
+    ])
+);
+golden_test!(
+    sftr_reuse_state_scan,
+    "sftr-reuse-state-scan",
+    a(&[
+        "sftr",
+        "reuse-state-scan",
+        &ex("examples/sftr/reuse_state/auth086-sample.xml")
     ])
 );
 // Dedicated test for `opendqi sftr data-quality-pack` (mirror of
