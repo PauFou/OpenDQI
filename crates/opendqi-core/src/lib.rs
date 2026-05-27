@@ -38,11 +38,12 @@ pub use dq::dqi::{
     DqiThresholdPair, EmirDqiInputs, MappingPresence, SftrDqiInputs,
 };
 pub use dq::{
-    default_checks, default_emir_pos_checks, default_sftr_checks, default_sftr_mar_checks,
+    default_checks, default_emir_pos_checks, default_emir_query_checks,
+    default_emir_status_advice_checks, default_sftr_checks, default_sftr_mar_checks,
     default_sftr_msr_checks, default_sftr_reu_checks, default_sftr_reu_state_checks,
-    stream_checks_into, stream_emir_checks_into, Check, EmirPosCheck, IssueAggregator, SftrCheck,
-    SftrMarCheck, SftrMsrCheck, SftrReuCheck, SftrReuStateCheck, SortedIssueSink, SortedIssues,
-    STREAM_SPILL_MAX_ISSUES,
+    stream_checks_into, stream_emir_checks_into, Check, EmirPosCheck, EmirQueryCheck,
+    EmirStatusAdviceCheck, IssueAggregator, SftrCheck, SftrMarCheck, SftrMsrCheck, SftrReuCheck,
+    SftrReuStateCheck, SortedIssueSink, SortedIssues, STREAM_SPILL_MAX_ISSUES,
 };
 pub use model::{
     DqDimension, DqIssue, EmirPositionSetRecord, EmirQueryRecord, EmirRecord,

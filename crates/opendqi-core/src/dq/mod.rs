@@ -1194,6 +1194,46 @@ pub fn run_all_emir_pos(
     collect_finalize(checks, ctx, |c| c.run(records, ctx))
 }
 
+// ---- EMIR Trade Report Query (auth.029) checks -----------------
+
+mod emir_query;
+
+pub use emir_query::{EmirQueryCheck, EmirQueryEnvelopeWellformed};
+
+/// Default EMIR auth.029 query check registry (1 EMIR.QRY.* check).
+pub fn default_emir_query_checks() -> Vec<Box<dyn EmirQueryCheck>> {
+    vec![Box::new(EmirQueryEnvelopeWellformed)]
+}
+
+/// Run every EMIR query check over the provided records slice.
+pub fn run_all_emir_query(
+    checks: &[Box<dyn EmirQueryCheck>],
+    records: &[crate::model::EmirQueryRecord],
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    collect_finalize(checks, ctx, |c| c.run(records, ctx))
+}
+
+// ---- EMIR Status Advice (auth.031) checks ----------------------
+
+mod emir_status_advice;
+
+pub use emir_status_advice::{EmirStatusAdviceCheck, EmirStatusAdviceEnvelopeWellformed};
+
+/// Default EMIR auth.031 ack check registry (1 EMIR.ACK.* check).
+pub fn default_emir_status_advice_checks() -> Vec<Box<dyn EmirStatusAdviceCheck>> {
+    vec![Box::new(EmirStatusAdviceEnvelopeWellformed)]
+}
+
+/// Run every EMIR ack check over the provided records slice.
+pub fn run_all_emir_status_advice(
+    checks: &[Box<dyn EmirStatusAdviceCheck>],
+    records: &[crate::model::EmirStatusAdviceRecord],
+    ctx: &CheckContext,
+) -> Vec<DqIssue> {
+    collect_finalize(checks, ctx, |c| c.run(records, ctx))
+}
+
 // ---- SFTR Trade State Report (auth.079) checks ------------------
 
 pub use sftr::tr_state::{
