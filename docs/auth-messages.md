@@ -47,9 +47,16 @@ SWIFT-licensed XSDs are gitignored) — see
 
 ## EMIR
 
+OpenDQI parses **10 of 10 actually-existing EMIR ISO 20022 messages**
+as of v0.20 (auth.029 + auth.031 added in v0.20 as envelope-only
+structural parsers; auth.078 documented as non-existent in the
+ESMA bundle — see [`auth-messages/emir-auth078.md`](auth-messages/emir-auth078.md)).
+
 | auth id | ISO/ESMA name (best-effort) | Direction | Coverage | Parser / command |
 |---|---|---|---|---|
+| `auth.029.001.04` | Derivatives Trade Report Query | firm → TR | **schema-verified (subset, v0.20+, envelope-only)** | `opendqi emir query-scan` via `crates/opendqi-xml/src/emir_query.rs`. Firm-side query envelope (no derivatives payload). Powers 1 `EMIR.QRY.ENVELOPE_WELLFORMED` sanity check, no DQI roll-up. Honest scope and the absence-of-DQ-signal rationale in [`auth-messages/emir-auth029.md`](auth-messages/emir-auth029.md). |
 | `auth.030.001.03` | Derivatives Trade Report (TAR) | firm → TR (and TR → firm replays) | verified | Dual-use: `opendqi emir scan` for firm submissions, `opendqi emir tr-activity-scan` for TR replays. Same adapter `crates/opendqi-xml/src/emir/iso20022.rs`. |
+| `auth.031.001.01` | Financial Instrument Reporting Status Advice | TR → firm | **schema-verified (subset, v0.20+, envelope-only)** | `opendqi emir status-advice-scan` via `crates/opendqi-xml/src/emir_status_advice.rs`. Multi-ack envelope (1 record per `StsAdvc`). Powers 1 `EMIR.ACK.ENVELOPE_WELLFORMED` sanity check, no DQI roll-up; for first-class rejection-reason signal use `opendqi emir feedback` on auth.092 instead. Honest scope in [`auth-messages/emir-auth031.md`](auth-messages/emir-auth031.md). |
 | `auth.092.001.04` | Derivatives Trade Rejection Statistical Report (DATREJ) | TR → firm | **schema-verified (subset)** | `opendqi emir feedback` via `crates/opendqi-xml/src/feedback.rs`, aligned with `auth.092.001.04_ESMAUG_DATREJ_1.0.0`. Lossy projection onto the scalar `FeedbackRecord` (first validation rule only; `Missing`/`Inaccurate` unreachable). Extracted-subset map, limits and the naming caveat in [`auth-messages/emir-auth092.md`](auth-messages/emir-auth092.md). |
 | `auth.107.001.01` | Derivatives Trade State Report (TSR) | TR → firm | **schema-verified (subset)** | `opendqi emir tr-state-scan` via `crates/opendqi-xml/src/tr_state.rs`, aligned with `auth.107.001.01_ESMAUG_DATTSR_1.1.0`. Extracted-subset map, ignored branches and verification procedure in [`auth-messages/emir-auth107.md`](auth-messages/emir-auth107.md). Checks: [`tr-state-checks.md`](tr-state-checks.md). |
 | `auth.108.001.01` | Derivatives Trade Margin Data Report (MAR) | TR → firm | **schema-verified (subset)** | `opendqi emir mar-scan` via `crates/opendqi-xml/src/emir_mar.rs`, aligned with `auth.108.001.01_ESMAUG_DATMDA_1.1.0`; 8 `EMIR.MAR.*` checks. Extracted-subset map, ignored branches and verification in [`auth-messages/emir-auth108.md`](auth-messages/emir-auth108.md). Checks: [`emir-mar-msr.md`](emir-mar-msr.md). |
