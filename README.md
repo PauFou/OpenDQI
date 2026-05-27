@@ -65,7 +65,7 @@ pip install opendqi[all]           # + both
 ### CLI (recommended for ops / one-shot audits)
 
 ```bash
-curl -sSL https://github.com/PauFou/OpenDQI/releases/download/v0.16.0/opendqi-cli-installer.sh | sh
+curl -sSL https://github.com/PauFou/OpenDQI/releases/download/v0.21.0/opendqi-cli-installer.sh | sh
 ```
 
 Pre-built binaries for Linux x86_64 + ARM64 and macOS x86_64 + ARM64 from the [GitHub Releases](https://github.com/PauFou/OpenDQI/releases) page.
@@ -73,7 +73,7 @@ Pre-built binaries for Linux x86_64 + ARM64 and macOS x86_64 + ARM64 from the [G
 ### Rust source (build from a tag)
 
 ```bash
-cargo install --git https://github.com/PauFou/OpenDQI --tag v0.16.0 opendqi-cli
+cargo install --git https://github.com/PauFou/OpenDQI --tag v0.21.0 opendqi-cli
 ```
 
 ### Then 5 lines that work after either install
