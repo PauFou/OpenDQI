@@ -18,10 +18,10 @@ use opendqi_core::dq::{
     default_warnings_transaction_checks, run_all_lifecycle, run_all_pre_submission, CheckContext,
 };
 use opendqi_core::{
-    compute_emir_dqi_pack, stream_checks_into, stream_emir_checks_into, DqDimension, DqIssue,
-    EmirDqiInputs, EmirRecord, MappingPresence, MarginActivityRecord, MarginStateRecord, Regime,
-    Severity, SortedIssueSink, Thresholds, TrActivitySummary, TrStateRecord,
-    STREAM_SPILL_MAX_ISSUES,
+    compute_emir_dqi_pack, default_emir_query_checks, default_emir_status_advice_checks,
+    stream_checks_into, stream_emir_checks_into, DqDimension, DqIssue, EmirDqiInputs, EmirRecord,
+    MappingPresence, MarginActivityRecord, MarginStateRecord, Regime, Severity, SortedIssueSink,
+    Thresholds, TrActivitySummary, TrStateRecord, STREAM_SPILL_MAX_ISSUES,
 };
 use opendqi_io::{
     discover_emir_inputs, has_extension, read_emir_csv, read_emir_parquet, write_emir_parquet,
@@ -33,8 +33,9 @@ use opendqi_report::{
 };
 use opendqi_xml::{
     check_wellformedness, read_emir_feedback_xml, read_emir_mar_xml, read_emir_msr_xml,
-    read_emir_position_set_xml, read_emir_recon_stats_xml, read_emir_tr_state_xml,
-    read_emir_warnings_xml, read_emir_xml, ExternalXmllintValidator, XsdValidator, XsdViolation,
+    read_emir_position_set_xml, read_emir_query_xml, read_emir_recon_stats_xml,
+    read_emir_status_advice_xml, read_emir_tr_state_xml, read_emir_warnings_xml, read_emir_xml,
+    ExternalXmllintValidator, XsdValidator, XsdViolation,
 };
 use tracing::{info, warn};
 
@@ -404,6 +405,42 @@ pub enum EmirAction {
         #[arg(long, value_name = "PATH")]
         email_config: Option<PathBuf>,
     },
+    /// Ingest an EMIR Derivatives Trade Report Query (ISO 20022
+    /// `auth.029`) and produce `EMIR.QRY.*` envelope-sanity issues.
+    /// auth.029 is a firm-side query envelope (no derivatives
+    /// payload); the only check that fires is
+    /// `EMIR.QRY.ENVELOPE_WELLFORMED` (query_id + requesting_lei
+    /// presence). Outputs `summary.json`, `query_issues.csv`,
+    /// `query_report.html`. v0.20.
+    QueryScan {
+        /// Path to the `auth.029` XML file.
+        input: PathBuf,
+        /// Directory where reports are written.
+        #[arg(long)]
+        out: PathBuf,
+        /// Optional SMTP configuration YAML.
+        #[arg(long, value_name = "PATH")]
+        email_config: Option<PathBuf>,
+    },
+    /// Ingest an EMIR Financial Instrument Reporting Status Advice
+    /// (ISO 20022 `auth.031`) and produce `EMIR.ACK.*` envelope-
+    /// sanity issues. auth.031 is a TR -> firm ack envelope (no
+    /// derivatives payload); the only check that fires is
+    /// `EMIR.ACK.ENVELOPE_WELLFORMED` (submission_id + ack_status
+    /// + ack_timestamp presence). For first-class rejection-reason
+    /// signal use `opendqi emir feedback` on auth.092 instead.
+    /// Outputs `summary.json`, `status_advice_issues.csv`,
+    /// `status_advice_report.html`. v0.20.
+    StatusAdviceScan {
+        /// Path to the `auth.031` XML file.
+        input: PathBuf,
+        /// Directory where reports are written.
+        #[arg(long)]
+        out: PathBuf,
+        /// Optional SMTP configuration YAML.
+        #[arg(long, value_name = "PATH")]
+        email_config: Option<PathBuf>,
+    },
     /// Normalize EMIR XML/CSV input into a canonical Parquet file
     /// (Snappy-compressed). Schema is stable and analytics-friendly
     /// (DuckDB / Polars / PyArrow). See `docs/parquet-normalize.md`.
@@ -594,6 +631,22 @@ pub fn run(action: EmirAction) -> Result<ExitCode> {
                 &out,
                 email_config.as_deref(),
             )?;
+            Ok(ExitCode::SUCCESS)
+        }
+        EmirAction::QueryScan {
+            input,
+            out,
+            email_config,
+        } => {
+            run_emir_query_scan(&input, &out, email_config.as_deref())?;
+            Ok(ExitCode::SUCCESS)
+        }
+        EmirAction::StatusAdviceScan {
+            input,
+            out,
+            email_config,
+        } => {
+            run_emir_status_advice_scan(&input, &out, email_config.as_deref())?;
             Ok(ExitCode::SUCCESS)
         }
         EmirAction::Normalize {
@@ -2757,5 +2810,135 @@ fn run_data_quality_pack(
         pack.issues_summary.quality_score,
     );
     println!("Report: {}", out.join("report.html").display());
+    Ok(())
+}
+
+// -----------------------------------------------------------------
+// v0.20 Phase B6: EMIR auth.029 + auth.031 standalone scans.
+// Both messages are envelope-only (no derivatives payload — see
+// docs/auth-messages/emir-auth029.md + emir-auth031.md); the only
+// checks that fire are the 2 ENVELOPE_WELLFORMED sanity checks
+// from v0.20 A5.
+// -----------------------------------------------------------------
+
+fn run_emir_query_scan(
+    input: &Path,
+    out: &Path,
+    email_config_path: Option<&Path>,
+) -> Result<()> {
+    let started_at = Utc::now();
+    let outcome = read_emir_query_xml(input)
+        .with_context(|| format!("reading EMIR Query file {}", input.display()))?;
+    info!(file = %input.display(), records = outcome.records.len(), "loaded EMIR Query (auth.029)");
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+    let sources = vec![input.to_string_lossy().into_owned()];
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
+    ));
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(outcome.issues);
+    stream_checks_into(&default_emir_query_checks(), &sink, |c| {
+        c.run(&outcome.records, &ctx)
+    });
+    let (summary, sorted) = sink.into_inner().expect("issue sink mutex").finish(
+        Regime::Emir,
+        1,
+        outcome.records.len() as u32,
+        started_at,
+        Utc::now(),
+    );
+    std::fs::create_dir_all(out)?;
+    write_summary_json(&out.join("summary.json"), &summary)?;
+    let mut top = TopIssues::with_capacity(20);
+    write_issues_csv_from_iter(
+        &out.join("query_issues.csv"),
+        sorted.inspect(|issue| top.offer(issue)),
+    )?;
+    let top = top.into_sorted();
+    write_report_html(&out.join("query_report.html"), &summary, &top, &sources)?;
+    if let Some(path) = email_config_path {
+        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
+        opendqi_report::send_report_email(
+            &cfg,
+            &summary,
+            &out.join("query_report.html"),
+            &out.join("summary.json"),
+            &out.join("query_issues.csv"),
+        )?;
+    }
+    let crit = summary.issues_by_severity.get(&Severity::Critical).copied().unwrap_or(0);
+    println!(
+        "Scanned {} EMIR Query record(s). {} issues ({} critical). Score: {:.1}/100.",
+        summary.records_processed, summary.issues_total, crit, summary.quality_score
+    );
+    println!("Report: {}", out.join("query_report.html").display());
+    Ok(())
+}
+
+fn run_emir_status_advice_scan(
+    input: &Path,
+    out: &Path,
+    email_config_path: Option<&Path>,
+) -> Result<()> {
+    let started_at = Utc::now();
+    let outcome = read_emir_status_advice_xml(input)
+        .with_context(|| format!("reading EMIR Status Advice file {}", input.display()))?;
+    info!(file = %input.display(), records = outcome.records.len(), "loaded EMIR Status Advice (auth.031)");
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+    let sources = vec![input.to_string_lossy().into_owned()];
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
+    ));
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(outcome.issues);
+    stream_checks_into(&default_emir_status_advice_checks(), &sink, |c| {
+        c.run(&outcome.records, &ctx)
+    });
+    let (summary, sorted) = sink.into_inner().expect("issue sink mutex").finish(
+        Regime::Emir,
+        1,
+        outcome.records.len() as u32,
+        started_at,
+        Utc::now(),
+    );
+    std::fs::create_dir_all(out)?;
+    write_summary_json(&out.join("summary.json"), &summary)?;
+    let mut top = TopIssues::with_capacity(20);
+    write_issues_csv_from_iter(
+        &out.join("status_advice_issues.csv"),
+        sorted.inspect(|issue| top.offer(issue)),
+    )?;
+    let top = top.into_sorted();
+    write_report_html(&out.join("status_advice_report.html"), &summary, &top, &sources)?;
+    if let Some(path) = email_config_path {
+        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
+        opendqi_report::send_report_email(
+            &cfg,
+            &summary,
+            &out.join("status_advice_report.html"),
+            &out.join("summary.json"),
+            &out.join("status_advice_issues.csv"),
+        )?;
+    }
+    let crit = summary.issues_by_severity.get(&Severity::Critical).copied().unwrap_or(0);
+    println!(
+        "Scanned {} EMIR Status Advice ack(s). {} issues ({} critical). Score: {:.1}/100.",
+        summary.records_processed, summary.issues_total, crit, summary.quality_score
+    );
+    println!("Report: {}", out.join("status_advice_report.html").display());
     Ok(())
 }
