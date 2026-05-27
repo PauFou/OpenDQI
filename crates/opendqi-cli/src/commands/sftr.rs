@@ -16,9 +16,10 @@ use opendqi_core::dq::{
     CheckContext,
 };
 use opendqi_core::{
-    compute_sftr_dqi_pack, stream_checks_into, DqDimension, DqIssue, MappingPresence, Regime,
-    Severity, SftrDqiInputs, SftrRecord, SftrTrStateRecord, SortedIssueSink, Thresholds,
-    TrActivitySummary, STREAM_SPILL_MAX_ISSUES,
+    compute_sftr_dqi_pack, default_sftr_mar_checks, default_sftr_msr_checks,
+    default_sftr_reu_checks, default_sftr_reu_state_checks, stream_checks_into, DqDimension,
+    DqIssue, MappingPresence, Regime, Severity, SftrDqiInputs, SftrRecord, SftrTrStateRecord,
+    SortedIssueSink, Thresholds, TrActivitySummary, STREAM_SPILL_MAX_ISSUES,
 };
 use opendqi_io::{
     discover_emir_inputs, has_extension, read_sftr_csv, read_sftr_parquet, write_sftr_parquet,
@@ -323,6 +324,83 @@ pub enum SftrAction {
         #[arg(long, value_name = "PATH")]
         email_config: Option<PathBuf>,
     },
+    /// Ingest an SFTR Margin Activity Report (ISO 20022 `auth.070`)
+    /// and produce `SFTR.MAR.*` issues over the margin activity:
+    /// action-type enum, event-date in future, event without
+    /// portfolio, amount-currency missing. Outputs `summary.json`,
+    /// `mar_issues.csv`, `mar_report.html`. v0.20 SFTR parity with
+    /// `opendqi emir mar-scan`.
+    MarScan {
+        /// Path to the `auth.070` XML file.
+        input: PathBuf,
+        /// Directory where reports are written.
+        #[arg(long)]
+        out: PathBuf,
+        /// Optional SMTP configuration YAML — emails the MAR report.
+        #[arg(long, value_name = "PATH")]
+        email_config: Option<PathBuf>,
+    },
+    /// Ingest an SFTR Margin Data Transaction State Report (ISO
+    /// 20022 `auth.085`) and produce `SFTR.T3.*` issues over the
+    /// margin state. Outputs `summary.json`, `msr_issues.csv`,
+    /// `msr_report.html`. v0.20 SFTR parity with `opendqi emir
+    /// msr-scan`.
+    MsrScan {
+        /// Path to the `auth.085` XML file.
+        input: PathBuf,
+        /// Directory where reports are written.
+        #[arg(long)]
+        out: PathBuf,
+        /// Optional SMTP configuration YAML.
+        #[arg(long, value_name = "PATH")]
+        email_config: Option<PathBuf>,
+    },
+    /// Ingest an SFTR Transaction Status Advice (ISO 20022
+    /// `auth.084`) and write a summary + the parse-format issues.
+    /// auth.084 is an aggregate rejection statistics envelope (one
+    /// logical record per file: totals + per-error-code breakdown)
+    /// — DQI_REJ_RATE_SFTR rolls it up; there are no per-record
+    /// `SFTR.TSA.*` granular checks beyond parser-format issues. v0.20.
+    TrStatusAdviceScan {
+        /// Path to the `auth.084` XML file.
+        input: PathBuf,
+        /// Directory where reports are written.
+        #[arg(long)]
+        out: PathBuf,
+        /// Optional SMTP configuration YAML.
+        #[arg(long, value_name = "PATH")]
+        email_config: Option<PathBuf>,
+    },
+    /// Ingest an SFTR Reused Collateral Data Report (ISO 20022
+    /// `auth.071`) and produce `SFTR.REU.*` issues over reuse
+    /// activity: missing reuse currency, rate outside plausible band.
+    /// Outputs `summary.json`, `reuse_activity_issues.csv`,
+    /// `reuse_activity_report.html`. v0.20.
+    ReuseActivityScan {
+        /// Path to the `auth.071` XML file.
+        input: PathBuf,
+        /// Directory where reports are written.
+        #[arg(long)]
+        out: PathBuf,
+        /// Optional SMTP configuration YAML.
+        #[arg(long, value_name = "PATH")]
+        email_config: Option<PathBuf>,
+    },
+    /// Ingest an SFTR Reused Collateral Data Transaction State Report
+    /// (ISO 20022 `auth.086`) and produce `SFTR.REU.STATE.*` issues:
+    /// missing reuse currency, rate outside plausible band. Outputs
+    /// `summary.json`, `reuse_state_issues.csv`,
+    /// `reuse_state_report.html`. v0.20.
+    ReuseStateScan {
+        /// Path to the `auth.086` XML file.
+        input: PathBuf,
+        /// Directory where reports are written.
+        #[arg(long)]
+        out: PathBuf,
+        /// Optional SMTP configuration YAML.
+        #[arg(long, value_name = "PATH")]
+        email_config: Option<PathBuf>,
+    },
     /// Normalize SFTR XML/CSV input into a canonical Parquet file
     /// (Snappy-compressed). Schema is stable and analytics-friendly.
     /// See `docs/parquet-normalize.md`.
@@ -464,6 +542,46 @@ pub fn run(action: SftrAction) -> Result<ExitCode> {
                 &out,
                 email_config.as_deref(),
             )?;
+            Ok(ExitCode::SUCCESS)
+        }
+        SftrAction::MarScan {
+            input,
+            out,
+            email_config,
+        } => {
+            run_sftr_mar_scan(&input, &out, email_config.as_deref())?;
+            Ok(ExitCode::SUCCESS)
+        }
+        SftrAction::MsrScan {
+            input,
+            out,
+            email_config,
+        } => {
+            run_sftr_msr_scan(&input, &out, email_config.as_deref())?;
+            Ok(ExitCode::SUCCESS)
+        }
+        SftrAction::TrStatusAdviceScan {
+            input,
+            out,
+            email_config,
+        } => {
+            run_sftr_tr_status_advice_scan(&input, &out, email_config.as_deref())?;
+            Ok(ExitCode::SUCCESS)
+        }
+        SftrAction::ReuseActivityScan {
+            input,
+            out,
+            email_config,
+        } => {
+            run_sftr_reuse_activity_scan(&input, &out, email_config.as_deref())?;
+            Ok(ExitCode::SUCCESS)
+        }
+        SftrAction::ReuseStateScan {
+            input,
+            out,
+            email_config,
+        } => {
+            run_sftr_reuse_state_scan(&input, &out, email_config.as_deref())?;
             Ok(ExitCode::SUCCESS)
         }
         SftrAction::Normalize {
@@ -2151,5 +2269,327 @@ fn run_data_quality_pack(
         pack.issues_summary.quality_score,
     );
     println!("Report: {}", out.join("report.html").display());
+    Ok(())
+}
+
+// -----------------------------------------------------------------
+// v0.20 Phase B: SFTR standalone subcommands. Each mirrors the EMIR
+// equivalent (emir.rs::run_mar_scan etc.) so SFTR adopters have the
+// same per-layer ergonomy. Output filename prefix matches the layer
+// name (mar_/msr_/reuse_activity_/reuse_state_/tr_status_advice_).
+// -----------------------------------------------------------------
+
+fn run_sftr_mar_scan(
+    input: &Path,
+    out: &Path,
+    email_config_path: Option<&Path>,
+) -> Result<()> {
+    let started_at = Utc::now();
+    let outcome = read_sftr_margin_activity_xml(input)
+        .with_context(|| format!("reading SFTR MAR file {}", input.display()))?;
+    info!(
+        file = %input.display(),
+        records = outcome.records.len(),
+        format_issues = outcome.issues.len(),
+        "loaded SFTR MAR XML (auth.070)",
+    );
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+    let inputs = [input.to_path_buf()];
+    let sources = vec![input.to_string_lossy().into_owned()];
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
+    ));
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(outcome.issues);
+    stream_checks_into(&default_sftr_mar_checks(), &sink, |c| {
+        c.run(&outcome.records, &ctx)
+    });
+    let (summary, sorted) = sink.into_inner().expect("issue sink mutex").finish(
+        Regime::Sftr,
+        inputs.len() as u32,
+        outcome.records.len() as u32,
+        started_at,
+        Utc::now(),
+    );
+    std::fs::create_dir_all(out)
+        .with_context(|| format!("creating output directory {}", out.display()))?;
+    write_summary_json(&out.join("summary.json"), &summary)?;
+    let mut top = TopIssues::with_capacity(20);
+    write_issues_csv_from_iter(
+        &out.join("mar_issues.csv"),
+        sorted.inspect(|issue| top.offer(issue)),
+    )?;
+    let top = top.into_sorted();
+    write_report_html(&out.join("mar_report.html"), &summary, &top, &sources)?;
+    if let Some(path) = email_config_path {
+        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
+        opendqi_report::send_report_email(
+            &cfg,
+            &summary,
+            &out.join("mar_report.html"),
+            &out.join("summary.json"),
+            &out.join("mar_issues.csv"),
+        )?;
+    }
+    let crit = summary.issues_by_severity.get(&Severity::Critical).copied().unwrap_or(0);
+    let high = summary.issues_by_severity.get(&Severity::High).copied().unwrap_or(0);
+    println!(
+        "Scanned {} SFTR MAR record(s). {} issues ({} critical, {} high). Score: {:.1}/100.",
+        summary.records_processed, summary.issues_total, crit, high, summary.quality_score
+    );
+    println!("Report: {}", out.join("mar_report.html").display());
+    Ok(())
+}
+
+fn run_sftr_msr_scan(
+    input: &Path,
+    out: &Path,
+    email_config_path: Option<&Path>,
+) -> Result<()> {
+    let started_at = Utc::now();
+    let outcome = read_sftr_margin_state_xml(input)
+        .with_context(|| format!("reading SFTR MSR file {}", input.display()))?;
+    info!(file = %input.display(), records = outcome.records.len(), "loaded SFTR MSR XML (auth.085)");
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+    let sources = vec![input.to_string_lossy().into_owned()];
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
+    ));
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(outcome.issues);
+    stream_checks_into(&default_sftr_msr_checks(), &sink, |c| {
+        c.run(&outcome.records, &ctx)
+    });
+    let (summary, sorted) = sink.into_inner().expect("issue sink mutex").finish(
+        Regime::Sftr,
+        1,
+        outcome.records.len() as u32,
+        started_at,
+        Utc::now(),
+    );
+    std::fs::create_dir_all(out)?;
+    write_summary_json(&out.join("summary.json"), &summary)?;
+    let mut top = TopIssues::with_capacity(20);
+    write_issues_csv_from_iter(
+        &out.join("msr_issues.csv"),
+        sorted.inspect(|issue| top.offer(issue)),
+    )?;
+    let top = top.into_sorted();
+    write_report_html(&out.join("msr_report.html"), &summary, &top, &sources)?;
+    if let Some(path) = email_config_path {
+        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
+        opendqi_report::send_report_email(
+            &cfg,
+            &summary,
+            &out.join("msr_report.html"),
+            &out.join("summary.json"),
+            &out.join("msr_issues.csv"),
+        )?;
+    }
+    let crit = summary.issues_by_severity.get(&Severity::Critical).copied().unwrap_or(0);
+    let high = summary.issues_by_severity.get(&Severity::High).copied().unwrap_or(0);
+    println!(
+        "Scanned {} SFTR MSR record(s). {} issues ({} critical, {} high). Score: {:.1}/100.",
+        summary.records_processed, summary.issues_total, crit, high, summary.quality_score
+    );
+    println!("Report: {}", out.join("msr_report.html").display());
+    Ok(())
+}
+
+fn run_sftr_tr_status_advice_scan(
+    input: &Path,
+    out: &Path,
+    email_config_path: Option<&Path>,
+) -> Result<()> {
+    let started_at = Utc::now();
+    let outcome = read_sftr_tr_status_advice_xml(input)
+        .with_context(|| format!("reading SFTR Status Advice file {}", input.display()))?;
+    info!(file = %input.display(), records = outcome.records.len(), "loaded SFTR TR Status Advice (auth.084)");
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+    let sources = vec![input.to_string_lossy().into_owned()];
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
+    ));
+    // auth.084 has no per-record SFTR.TSA.* check trait family —
+    // DQI_REJ_RATE_SFTR rolls it up in the DQI pack. Only parse-
+    // format issues land here.
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(outcome.issues);
+    let (summary, sorted) = sink.into_inner().expect("issue sink mutex").finish(
+        Regime::Sftr,
+        1,
+        outcome.records.len() as u32,
+        started_at,
+        Utc::now(),
+    );
+    std::fs::create_dir_all(out)?;
+    write_summary_json(&out.join("summary.json"), &summary)?;
+    let mut top = TopIssues::with_capacity(20);
+    write_issues_csv_from_iter(
+        &out.join("tr_status_advice_issues.csv"),
+        sorted.inspect(|issue| top.offer(issue)),
+    )?;
+    let top = top.into_sorted();
+    write_report_html(&out.join("tr_status_advice_report.html"), &summary, &top, &sources)?;
+    if let Some(path) = email_config_path {
+        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
+        opendqi_report::send_report_email(
+            &cfg,
+            &summary,
+            &out.join("tr_status_advice_report.html"),
+            &out.join("summary.json"),
+            &out.join("tr_status_advice_issues.csv"),
+        )?;
+    }
+    println!(
+        "Scanned {} SFTR Status Advice record(s). {} issues. Score: {:.1}/100.",
+        summary.records_processed, summary.issues_total, summary.quality_score
+    );
+    println!("Report: {}", out.join("tr_status_advice_report.html").display());
+    Ok(())
+}
+
+fn run_sftr_reuse_activity_scan(
+    input: &Path,
+    out: &Path,
+    email_config_path: Option<&Path>,
+) -> Result<()> {
+    let started_at = Utc::now();
+    let outcome = read_sftr_reuse_activity_xml(input)
+        .with_context(|| format!("reading SFTR Reuse Activity file {}", input.display()))?;
+    info!(file = %input.display(), records = outcome.records.len(), "loaded SFTR Reuse Activity (auth.071)");
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+    let sources = vec![input.to_string_lossy().into_owned()];
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
+    ));
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(outcome.issues);
+    stream_checks_into(&default_sftr_reu_checks(), &sink, |c| {
+        c.run(&outcome.records, &ctx)
+    });
+    let (summary, sorted) = sink.into_inner().expect("issue sink mutex").finish(
+        Regime::Sftr,
+        1,
+        outcome.records.len() as u32,
+        started_at,
+        Utc::now(),
+    );
+    std::fs::create_dir_all(out)?;
+    write_summary_json(&out.join("summary.json"), &summary)?;
+    let mut top = TopIssues::with_capacity(20);
+    write_issues_csv_from_iter(
+        &out.join("reuse_activity_issues.csv"),
+        sorted.inspect(|issue| top.offer(issue)),
+    )?;
+    let top = top.into_sorted();
+    write_report_html(&out.join("reuse_activity_report.html"), &summary, &top, &sources)?;
+    if let Some(path) = email_config_path {
+        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
+        opendqi_report::send_report_email(
+            &cfg,
+            &summary,
+            &out.join("reuse_activity_report.html"),
+            &out.join("summary.json"),
+            &out.join("reuse_activity_issues.csv"),
+        )?;
+    }
+    let crit = summary.issues_by_severity.get(&Severity::Critical).copied().unwrap_or(0);
+    let high = summary.issues_by_severity.get(&Severity::High).copied().unwrap_or(0);
+    println!(
+        "Scanned {} SFTR Reuse Activity record(s). {} issues ({} critical, {} high). Score: {:.1}/100.",
+        summary.records_processed, summary.issues_total, crit, high, summary.quality_score
+    );
+    println!("Report: {}", out.join("reuse_activity_report.html").display());
+    Ok(())
+}
+
+fn run_sftr_reuse_state_scan(
+    input: &Path,
+    out: &Path,
+    email_config_path: Option<&Path>,
+) -> Result<()> {
+    let started_at = Utc::now();
+    let outcome = read_sftr_reuse_state_xml(input)
+        .with_context(|| format!("reading SFTR Reuse State file {}", input.display()))?;
+    info!(file = %input.display(), records = outcome.records.len(), "loaded SFTR Reuse State (auth.086)");
+    let now = Utc::now();
+    let ctx = CheckContext {
+        thresholds: Thresholds::default(),
+        today: now.date_naive(),
+        now,
+    };
+    let sources = vec![input.to_string_lossy().into_owned()];
+    let sink = std::sync::Mutex::new(SortedIssueSink::new(
+        &ctx.thresholds,
+        STREAM_SPILL_MAX_ISSUES,
+    ));
+    sink.lock()
+        .expect("issue sink mutex")
+        .push_batch(outcome.issues);
+    stream_checks_into(&default_sftr_reu_state_checks(), &sink, |c| {
+        c.run(&outcome.records, &ctx)
+    });
+    let (summary, sorted) = sink.into_inner().expect("issue sink mutex").finish(
+        Regime::Sftr,
+        1,
+        outcome.records.len() as u32,
+        started_at,
+        Utc::now(),
+    );
+    std::fs::create_dir_all(out)?;
+    write_summary_json(&out.join("summary.json"), &summary)?;
+    let mut top = TopIssues::with_capacity(20);
+    write_issues_csv_from_iter(
+        &out.join("reuse_state_issues.csv"),
+        sorted.inspect(|issue| top.offer(issue)),
+    )?;
+    let top = top.into_sorted();
+    write_report_html(&out.join("reuse_state_report.html"), &summary, &top, &sources)?;
+    if let Some(path) = email_config_path {
+        let cfg = opendqi_report::SmtpConfig::from_yaml_file(path)?;
+        opendqi_report::send_report_email(
+            &cfg,
+            &summary,
+            &out.join("reuse_state_report.html"),
+            &out.join("summary.json"),
+            &out.join("reuse_state_issues.csv"),
+        )?;
+    }
+    let crit = summary.issues_by_severity.get(&Severity::Critical).copied().unwrap_or(0);
+    let high = summary.issues_by_severity.get(&Severity::High).copied().unwrap_or(0);
+    println!(
+        "Scanned {} SFTR Reuse State record(s). {} issues ({} critical, {} high). Score: {:.1}/100.",
+        summary.records_processed, summary.issues_total, crit, high, summary.quality_score
+    );
+    println!("Report: {}", out.join("reuse_state_report.html").display());
     Ok(())
 }
