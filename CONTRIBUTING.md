@@ -92,6 +92,49 @@ Out of scope for now:
 - regulatory certification claims
 - cloud-hosted variants
 
+## Code of conduct
+
+This project adopts the [Contributor Covenant v2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/)
+as its code of conduct. The full text is incorporated by
+reference in [`.github/CODE_OF_CONDUCT.md`](.github/CODE_OF_CONDUCT.md);
+report unacceptable behaviour privately to
+`pfournier597@gmail.com`.
+
+## Issue / PR templates
+
+When opening an issue, GitHub will offer you a chooser between
+**Bug report** and **Feature request** templates (in
+[`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/)). Blank
+issues are disabled; vulnerability reports are routed to a
+private channel (see [SECURITY.md](SECURITY.md)).
+
+PRs auto-load [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md)
+with a preflight + CHANGELOG + docs + tests checklist plus the
+CLA reminder for external contributors.
+
+## Branch protection on `main`
+
+`main` is protected with the following ruleset (enforced via the
+GitHub API, see commit `848341c+` in v0.22.0):
+
+- **Required status checks** before merge : `Test (ubuntu-latest)`,
+  `Test (macos-latest)`, `MSRV (1.87.0)`, `cargo deny`,
+  `cargo llvm-cov`. All five must be green.
+- **Strict** : branches must be up-to-date with `main` before
+  merge (rebase or merge from main first).
+- **No PR review required** — single maintainer pattern.
+- **Force-push** allowed for admins only (history rewrites
+  remain possible for the maintainer when needed, e.g. the
+  v0.18 → v0.19 `filter-branch` operation).
+- **Branch deletion** disabled.
+- **enforce_admins = false** : admins can override required
+  checks for emergency hotfixes.
+
+External PRs that fail any of the 5 status checks will be
+blocked until green. Internal direct-push to `main` still works
+for the maintainer (admin), but the same checks run via the
+push-triggered workflows and a red run signals the regression.
+
 ## License & contributions
 
 OpenDQI is licensed under **FSL-1.1-Apache-2.0** from v0.19.0 forward
