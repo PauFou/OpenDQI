@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/PauFou/OpenDQI/actions/workflows/ci.yml/badge.svg)](https://github.com/PauFou/OpenDQI/actions/workflows/ci.yml)
 [![Security audit](https://github.com/PauFou/OpenDQI/actions/workflows/deny.yml/badge.svg)](https://github.com/PauFou/OpenDQI/actions/workflows/deny.yml)
+[![PyPI](https://img.shields.io/pypi/v/opendqi.svg?label=pypi%20%7C%20opendqi&color=blue)](https://pypi.org/project/opendqi/)
 [![License: FSL-1.1-Apache-2.0](https://img.shields.io/badge/license-FSL--1.1--Apache--2.0-blue)](LICENSE.md)
 
 **Turn EMIR/SFTR Trade Repository files into deterministic data quality reports and Arrow tables — locally, reproducibly, from your existing data stack.**
