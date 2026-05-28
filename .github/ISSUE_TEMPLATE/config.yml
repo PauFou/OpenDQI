@@ -1,0 +1,17 @@
+# Issue template chooser config — disables blank issues and
+# routes vulnerability reports to the SECURITY.md private flow
+# instead of public issues.
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/PauFou/OpenDQI/security/advisories/new
+    about: >-
+      Report a vulnerability privately via GitHub Security
+      Advisory (preferred), not as a public issue. See
+      SECURITY.md for the full disclosure process.
+  - name: Question / discussion
+    url: https://github.com/PauFou/OpenDQI/discussions
+    about: >-
+      For questions, ideas, or open-ended discussion, please
+      open a thread under the Discussions tab rather than an
+      issue.
