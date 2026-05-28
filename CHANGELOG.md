@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-05-28
+
+**Audit-driven polish release.** Closes 3 CRITICAL + 4 HIGH + 3
+MEDIUM + 1 LOW findings from the post-v0.21 audit (security +
+correctness + hygiene/process, in 3 parallel passes). **ZERO
+code logic change** — pure docs + CI + process tightening +
+edge case test coverage. v1.0 Arrow contract unchanged, 218
+granular checks unchanged, 52 DQIs unchanged.
+
+### Added
+
+- `.github/CODE_OF_CONDUCT.md` — Contributor Covenant v2.1 by
+  reference (canonical URL + enforcement contact + scope).
+- `.github/ISSUE_TEMPLATE/{bug_report,feature_request}.md` +
+  `config.yml` (disables blank issues, routes vulnerability
+  reports to private GitHub Security Advisory, questions to
+  Discussions).
+- `.github/PULL_REQUEST_TEMPLATE.md` — preflight + CHANGELOG +
+  docs + tests + confidentiality checklist plus CLA reminder
+  for external contributors.
+- README PyPI version badge (auto-updates via shields.io).
+- 6 new edge case tests for the v0.20 EMIR parsers
+  (`emir_query`, `emir_status_advice`): empty document,
+  malformed XML, UTF-8 BOM prefix, zero-StsAdvc envelope,
+  malformed namespace, 1000-ack volume scaling.
+- `CONTRIBUTING.md` gains sections "Code of conduct", "Issue /
+  PR templates", and "Branch protection on `main`" documenting
+  the new repo hygiene.
+- TODO annotations on the 5 SFTR + 2 EMIR `run_*_scan`
+  duplicate functions, documenting the deferred refactor
+  (audit HIGH #4) and the natural forcing function (a new
+  layer joining triggers the trait extraction).
+
+### Changed
+
+- **README install links** bumped from stale `v0.16.0` to
+  `v0.21.0` (5 releases out of date, adopters got the wrong
+  version) — audit CRITICAL #1.
+- **`docs/data-quality-pack.md` header** corrected from stale
+  "234 checks (155 EMIR + 79 SFTR)" to the source-of-truth
+  "218 checks (153 EMIR + 65 SFTR)" — audit CRITICAL #2.
+- **README roadmap** `(current)` marker moved from v0.20.0 to
+  v0.22.0; v0.21.0 row added.
+- **`.github/workflows/ci.yml` MSRV job** pins
+  `dtolnay/rust-toolchain@1.87.0` (per-version branch) instead
+  of `@master` + explicit `toolchain` field — fewer floating
+  moving parts.
+- **`examples/{emir,sftr}/README.md`** add explicit
+  "test-suite-only, not documented here" notes enumerating the
+  unlisted subdirectories (broken/, conformance/,
+  rejection_profile/, etc.).
+- **Branch protection on `main`** enabled via GitHub API: 5
+  required status checks (`Test (ubuntu-latest)`,
+  `Test (macos-latest)`, `MSRV (1.87.0)`, `cargo deny`,
+  `cargo llvm-cov`), strict (up-to-date before merge), no PR
+  review required (single maintainer), force-push admin-OK,
+  branch deletion disabled.
+
 ## [0.21.0] - 2026-05-27
 
 Polish release closing the loose ends of v0.20: SFTR Python

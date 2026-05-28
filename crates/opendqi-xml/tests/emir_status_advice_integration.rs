@@ -93,10 +93,7 @@ use std::fs::write;
 
 fn write_tmp(name: &str, content: &[u8]) -> PathBuf {
     let mut p = std::env::temp_dir();
-    p.push(format!(
-        "opendqi-v022-{}-{name}",
-        std::process::id()
-    ));
+    p.push(format!("opendqi-v022-{}-{name}", std::process::id()));
     write(&p, content).unwrap();
     p
 }

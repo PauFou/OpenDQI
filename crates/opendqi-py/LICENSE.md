@@ -15,7 +15,7 @@ Copyright 2026 Paul Fournier <pfournier597@gmail.com>
 | Software          | OpenDQI                                                     |
 | Licensor          | Paul Fournier <pfournier597@gmail.com>                      |
 | Permitted Purpose | Any purpose other than a Competing Use (see COMPETING.md).  |
-| Change Date       | 2028-05-27                                                  |
+| Change Date       | 2028-05-28                                                  |
 | Change License    | Apache License, Version 2.0                                 |
 
 Each release tag of OpenDQI carries its own Change Date = release date + 2
