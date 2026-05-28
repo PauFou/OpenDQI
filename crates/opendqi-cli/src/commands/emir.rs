@@ -2820,6 +2820,10 @@ fn run_data_quality_pack(
 // docs/auth-messages/emir-auth029.md + emir-auth031.md); the only
 // checks that fire are the 2 ENVELOPE_WELLFORMED sanity checks
 // from v0.20 A5.
+//
+// TODO(v0.23+): see sftr.rs near run_sftr_mar_scan for the shared
+// duplication note (~500 LOC across 7 run_*_scan fns, deferred
+// refactor per audit finding HIGH #4, user choice 2026-05-27).
 // -----------------------------------------------------------------
 
 fn run_emir_query_scan(input: &Path, out: &Path, email_config_path: Option<&Path>) -> Result<()> {

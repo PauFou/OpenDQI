@@ -2277,6 +2277,15 @@ fn run_data_quality_pack(
 // equivalent (emir.rs::run_mar_scan etc.) so SFTR adopters have the
 // same per-layer ergonomy. Output filename prefix matches the layer
 // name (mar_/msr_/reuse_activity_/reuse_state_/tr_status_advice_).
+//
+// TODO(v0.23+): the 5 run_sftr_*_scan + 2 run_emir_{query,status_advice}_scan
+// fns below + in emir.rs share a near-identical ~80-line body
+// (parse XML -> stream_checks_into -> finish -> write
+// summary.json + <prefix>_issues.csv + <prefix>_report.html).
+// ~500 LOC duplication, deferred refactor per audit finding
+// HIGH #4 (user choice 2026-05-27). Goldens lock the per-fn
+// output so a future trait ScanLayer extraction is safe; do
+// it when a new layer joins (natural forcing function).
 // -----------------------------------------------------------------
 
 fn run_sftr_mar_scan(input: &Path, out: &Path, email_config_path: Option<&Path>) -> Result<()> {
