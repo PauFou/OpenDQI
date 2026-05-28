@@ -23,6 +23,17 @@ counterparties, UTIs, or notionals.
 
 **Honest scope notes:**
 
+- The table above lists **user-facing scan inputs only**. The
+  following subdirectories also exist in `examples/emir/` but are
+  test-suite-only (used by integration / XSD-conformance /
+  pre-submission rejection harnesses) and are **not documented
+  here** because they are not meant to be invoked directly:
+  `broken/`, `conformance/`, `iso20022/` (sample-only),
+  `rejection_profile/`, `risk_mitigation/`, `schemas/`,
+  plus the loose CSV / YAML files (`extended-checks.yml`,
+  `margin-and-enums.{csv,yml}`, `sample.{csv,xml}`,
+  `sample_mapping.yml`, `tier2.{csv,yml}`,
+  `violates-schema.xml`).
 - `query/` and `status_advice/` are **envelope-only** messages (no
   derivatives payload). They fire one sanity check each
   (`EMIR.QRY.ENVELOPE_WELLFORMED` / `EMIR.ACK.ENVELOPE_WELLFORMED`)
@@ -34,9 +45,6 @@ counterparties, UTIs, or notionals.
   messages" tally elsewhere was based on a conjectured message
   name). See [`../../docs/auth-messages/emir-auth078.md`](../../docs/auth-messages/emir-auth078.md)
   for the full investigation.
-- `broken/`, `conformance/`, `risk_mitigation/`, `schemas/`,
-  `rejection_profile/` hold test fixtures used by integration and
-  XSD-conformance suites (not user-facing scan inputs).
 
 For a fast end-to-end walk-through of the 3 primary EMIR
 workflows, run [`../../scripts/demo.sh`](../../scripts/demo.sh).

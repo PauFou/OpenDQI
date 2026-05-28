@@ -19,8 +19,15 @@ parser OpenDQI ships. All values are synthetic.
 | `reuse_state/auth086-*.xml` | `auth.086.001.02` (Reused Collateral State) | Reused collateral state snapshot (v0.18+) | `opendqi sftr reuse-state-scan` (v0.20+) or `--reuse-state` flag |
 | various combined | multi-message | Full DQI Pack (9 layers) | `opendqi sftr data-quality-pack --tsr ... --mar ... --msr ... ...` |
 
-**SFTR vs EMIR asymmetries:**
+**SFTR vs EMIR asymmetries + scope notes:**
 
+- The table above lists **user-facing scan inputs only**. The
+  following subdirectories also exist in `examples/sftr/` but are
+  test-suite-only (used by integration / XSD-conformance harnesses)
+  and are **not documented here** because they are not meant to be
+  invoked directly: `conformance/`, `iso20022/` (sample-only),
+  `rejection_profile/`, plus the loose CSV / YAML files
+  (`tier2.{csv,yml}`).
 - No `auth.092`-equivalent for SFTR (rejection feedback). The ESMA
   did not publish an SFTR rejection-statistics message; the
   closest is `auth.080` (reconciliation status advice), already
@@ -31,9 +38,6 @@ parser OpenDQI ships. All values are synthetic.
 - v0.20 brings full per-layer SFTR CLI standalone ergonomy
   (every layer above can now be scanned in isolation, mirror of
   EMIR's `mar-scan` / `msr-scan` / etc.).
-- `conformance/` and `rejection_profile/` hold fixtures used by
-  integration and XSD-conformance suites (not user-facing scan
-  inputs).
 
 For Python equivalents, see
 [`../../docs/python.md`](../../docs/python.md) and the matching
